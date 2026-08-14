@@ -2,21 +2,57 @@
 
 Guidelines for humans and AI agents that contribute to garmin-mcp.
 
-## Project Overview
+**How to read this file.** Sections marked **[NOW]** describe code and
+configuration that exist in the repository today. Sections marked **[TARGET]**
+describe the architecture being built. A [TARGET] statement is a binding design
+decision, never a claim that the code exists. Do not cite a [TARGET] section as
+evidence that something works.
 
-garmin-mcp is a Model Context Protocol (MCP) server that exposes Garmin Connect
-data and operations as MCP tools. It is a native Go rewrite: no Python, no Garth,
-no Python subprocess.
+## Project Overview [TARGET]
+
+garmin-mcp is being built as a Model Context Protocol (MCP) server that exposes
+Garmin Connect data and operations as MCP tools. It is a native Go rewrite: no
+Python, no Garth, no Python subprocess.
 
 - Go module: `github.com/tamcore/garmin-mcp`.
 - MCP layer: the official `modelcontextprotocol/go-sdk` (not `mark3labs/mcp-go`).
+  Not yet added to `go.mod`; the version is pinned by ADR 0002.
 - Transports: stdio for local single-user use, Streamable HTTP for remote
   multi-user use.
 - Garmin Connect is an unofficial, undocumented private API. Endpoints, schemas,
   and WAF behavior can drift. Never add CAPTCHA bypasses, browser automation, or
-  credential harvesting.
+  credential harvesting. This rule applies now, not later.
 
-Two authorization boundaries stay separate at all times:
+## Current state [NOW]
+
+As of 2026-08-14 the repository contains only the following Go code:
+
+| Path | What is there |
+|------|---------------|
+| `cmd/garmin-mcp/main.go` | Bare `main` with the ldflags-injected `version` and `commit` variables. No command tree |
+| `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, and the login response classifier (JSON and widget HTML). No I/O |
+| `internal/testkit` | Scripted fake Garmin service, fake clock, fixtures |
+| `e2e/doc.go` | Build tag `e2e` and a package clause. No tests |
+
+Everything else in the repository is documentation, contract manifests
+(`compat/`), and CI, lint, pre-commit, GoReleaser, and container configuration.
+
+There is **no** MCP server, no MCP SDK dependency (`go.mod` has no
+requirements), no stdio or HTTP transport, no OAuth authorization server, no
+registered tool or resource, no Cobra command tree, no configuration package, no
+store, no crypto, no `LoginTransport` type, and no `garminlive` command.
+
+`docs/implementation-status.md` is the authoritative task and gap list. Read it
+with this file before any work. Where this file and the repository disagree, the
+repository wins, and fixing the file is part of the next commit.
+
+The upstream baseline is `python-garminconnect` 0.3.10. The security behaviors
+that release adds are required work for the auth and session slice, and they are
+listed in `docs/upstream-pins.md`.
+
+## Authorization model [TARGET]
+
+These boundaries stay separate at all times:
 
 | Boundary | Credential | Rule |
 |----------|-----------|------|
@@ -24,7 +60,7 @@ Two authorization boundaries stay separate at all times:
 | This server to Garmin | Per-principal Garmin DI token set | Never returned to the MCP client |
 | Browser to login transaction | One-time cookie plus server-side transaction state | Credentials never become MCP tool arguments |
 
-### Safety model
+### Safety model [TARGET]
 
 - Read-only tools are always registered. Write and destructive tools need the
   **intersection** of operator enablement and granted OAuth scope. Operator
@@ -37,7 +73,7 @@ Two authorization boundaries stay separate at all times:
 - Every principal owns its own Garmin client, token set, cookie jar, cache
   entry, and tool results. No global cross-user client exists.
 
-## Development Workflow
+## Development Workflow [NOW]
 
 1. **Plan** before writing code for non-trivial changes.
 2. **TDD** per behavior — write the failing test (RED), implement the smallest
@@ -65,38 +101,42 @@ A cold agent run resumes from `AGENTS.md` plus `docs/implementation-status.md`
 alone. If those two files are not sufficient to resume correctly, fix that
 before any further feature work.
 
-## Package Layout
+## Target Package Layout [TARGET]
+
+This is the layout to build toward, not the current tree. `exists` marks a path
+that is present today; every other path must still be created. Do not import or
+reference a path marked `planned` — it will not compile.
 
 ```
-cmd/garmin-mcp/          main package only
+cmd/garmin-mcp/          main package only                                    exists (bare main)
 internal/
-  cmd/                   Cobra commands: serve, auth, doctor, tools, migrate, version
-  config/                parsing, precedence, validation, redacted output
-  garmin/protocol/       endpoints, client identities, pacing, failure classifier
-  garmin/auth/           native login/MFA strategies and DI exchange
-  garmin/client/         authenticated HTTP, refresh, retry, typed errors
-  garmin/api/            domain clients: activity, health, workout, device, ...
-  mcpserver/             server, transports, middleware wiring
-  tools/                 one file per MCP tool + register.go RegisterAll
-  resources/             MCP resource templates and handlers
-  mcplog/                structured MCP logging, level mapping, transport sink
-  ratelimit/             limiter + handler middleware, keyed per principal
-  identity/              principal and request-context resolution
-  oauthserver/           MCP-facing OAuth AS/RS integration and consent
-  loginweb/              embedded templates and one-time login transactions
-  store/                 storage interfaces, SQLite implementation, migrations
-  cryptostore/           versioned envelope encryption and key rotation
-  policy/                scopes, write/destructive gates, limits
-  observability/         redacted logging, metrics, tracing hooks
-  testkit/               fake Garmin, fake clock, fixtures, test keys
-e2e/                     end-to-end tests (build tag: e2e)
-web/                     embedded HTML/CSS; no remote JS dependency
-migrations/              embedded, monotonic database migrations
-compat/                  pinned tool and resource contract manifests
-docs/adr/                consequential design records
+  cmd/                   Cobra commands: serve, auth, doctor, tools, migrate, version   planned
+  config/                parsing, precedence, validation, redacted output      planned
+  garmin/protocol/       endpoints, client identities, pacing, failure classifier  exists
+  garmin/auth/           native login/MFA strategies and DI exchange           planned
+  garmin/client/         authenticated HTTP, refresh, retry, typed errors      planned
+  garmin/api/            domain clients: activity, health, workout, device, ...  planned
+  mcpserver/             server, transports, middleware wiring                 planned
+  tools/                 one file per MCP tool + register.go RegisterAll       planned
+  resources/             MCP resource templates and handlers                   planned
+  mcplog/                structured MCP logging, level mapping, transport sink  planned
+  ratelimit/             limiter + handler middleware, keyed per principal     planned
+  identity/              principal and request-context resolution              planned
+  oauthserver/           MCP-facing OAuth AS/RS integration and consent        planned
+  loginweb/              embedded templates and one-time login transactions    planned
+  store/                 storage interfaces, SQLite implementation, migrations  planned
+  cryptostore/           versioned envelope encryption and key rotation        planned
+  policy/                scopes, write/destructive gates, limits               planned
+  observability/         redacted logging, metrics, tracing hooks              planned
+  testkit/               fake Garmin, fake clock, fixtures, test keys          exists
+e2e/                     end-to-end tests (build tag: e2e)                     exists (empty)
+web/                     embedded HTML/CSS; no remote JS dependency            planned
+migrations/              embedded, monotonic database migrations                planned
+compat/                  pinned tool and resource contract manifests           exists
+docs/adr/                consequential design records                          exists
 ```
 
-File discipline:
+File discipline, in force now:
 
 - All real code lives under `internal/`. `cmd/garmin-mcp/` holds only `main`.
 - Every non-trivial `.go` file has a sibling `_test.go` in the same package.
@@ -106,7 +146,12 @@ File discipline:
   loggers explicitly.
 - Interfaces live with the consumer, not in a global interfaces package.
 
-## Adding a New MCP Tool
+## Adding a New MCP Tool [TARGET]
+
+No tool exists yet, and steps 3 to 7 name packages that must still be created.
+This is the procedure to follow once the MCP layer exists, and it is also the
+specification that layer must satisfy. Step 1 is already possible today, because
+`compat/tools.json` exists.
 
 1. Add the contract to `compat/tools.json` (name, description, input schema,
    sensitivity, effect, scope) before you write the handler.
@@ -145,19 +190,23 @@ File discipline:
 
 ## Testing
 
-Four layers. The first three run in CI, each with its own job.
+Four layers. The first three have a CI job each.
 
-| Layer | Command | Build tag | What it tests |
-|-------|---------|-----------|---------------|
-| Unit | `go test -race -count=1 ./...` | *(none)* | Logic, handlers, policy, crypto, state machines with fakes |
-| Fake-service integration | `go test -race -count=1 -tags=fakegarmin ./...` | `fakegarmin` | Login strategies, MFA, DI refresh, retries, API decoding against the scripted fake Garmin |
-| E2E | `go test -tags=e2e -timeout=10m ./e2e/...` | `e2e` | stdio and Streamable HTTP MCP, OAuth flow, browser login form, tenant isolation |
-| Live (opt-in) | `go test -tags=garminlive -count=1 ./...` | `garminlive` | Real Garmin login drift detection. Never in CI |
+| Layer | Command | Build tag | What it tests | State |
+|-------|---------|-----------|---------------|-------|
+| Unit | `go test -race -count=1 ./...` | *(none)* | Logic, handlers, policy, crypto, state machines with fakes | **[NOW]** real tests in `internal/garmin/protocol` and `internal/testkit` |
+| Fake-service integration | `go test -race -count=1 -tags=fakegarmin ./...` | `fakegarmin` | Login strategies, MFA, DI refresh, retries, API decoding against the scripted fake Garmin | **[TARGET]** no file carries the tag yet, so the job passes vacuously |
+| E2E | `go test -tags=e2e -timeout=10m ./e2e/...` | `e2e` | stdio and Streamable HTTP MCP, OAuth flow, browser login form, tenant isolation | **[TARGET]** only `e2e/doc.go` carries the tag, so the job passes vacuously |
+| Live (opt-in) | `go test -tags=garminlive -count=1 ./...` | `garminlive` | Real Garmin login drift detection. Never in CI | **[TARGET]** nothing carries the tag |
+
+A vacuous pass is a defect, not a green light. When a tagged suite is created,
+its CI job must also be made to fail when the expected suite is absent.
 
 Rules:
 
 - Always run Go tests with `-race`.
-- 80%+ coverage on new code.
+- 80%+ coverage on new code. CI prints a coverage summary but does not yet
+  enforce a threshold, so this is a review duty until it does.
 - No test may reach the public Garmin service by default.
 - Live tests need the `garminlive` tag, an explicit environment
   acknowledgement, and a dedicated non-primary account. They never mutate
@@ -167,27 +216,32 @@ Rules:
 - Missing live credentials never block unit, fake-service, contract, auth, or
   MCP work. Record live status as `not run — credentials unavailable`.
 
-## CI Pipeline
+## CI Pipeline [NOW]
 
-All workflows run on push to the default branch and on pull requests, with
+Two workflows exist: `ci.yaml` and `release.yaml`. CI runs on push to `master`,
+on pull requests, and by `workflow_call` from the release workflow, with
 top-level `permissions: contents: read` and a cancel-in-progress concurrency
 group keyed on workflow and ref.
 
 | Workflow | Jobs |
 |----------|------|
-| CI | `gofmt`/`goimports` verify, `go mod tidy` verify, `go vet`, golangci-lint (pinned version), unit tests with coverage, `govulncheck`, cross-platform build |
-| Integration | fake-service integration, MCP conformance suite, fake-Garmin E2E, bounded fuzz smoke |
-| Release checks | `goreleaser check`, snapshot release, container build, non-root/read-only container smoke test |
-| Release | `v*` tags only, narrowest write permission needed |
+| CI (`ci.yaml`) | `verify` (gofmt, `go mod tidy`, `go vet`), `lint` (golangci-lint plus `golangci-lint fmt --diff`), `test` (race, coverage profile, coverage summary), `test-fakegarmin`, `e2e`, `vulncheck`, `build` (3 OS x 2 arch), `goreleaser` (`check` plus snapshot with `--skip=sign,sbom,docker`), `container` (build the image from a prepared context, then hardening smoke test) |
+| Release (`release.yaml`) | `v*` tags only. `gates` re-runs the whole CI workflow against the tagged commit, then `release` runs GoReleaser with the narrowest write permissions plus `id-token: write` for keyless cosign |
 
 Every third-party action is pinned to a full commit SHA with the intended
-version in a trailing comment. `golangci-lint` and GoReleaser use explicit
-pinned versions, never `latest`. Secrets are never exposed to forked pull
-requests.
+version in a trailing comment. `golangci-lint`, GoReleaser, `govulncheck`,
+cosign, and syft use explicit pinned versions, never `latest`. Secrets are never
+exposed to forked pull requests.
 
-## Quality Gates
+Jobs the target pipeline still needs: a bounded fuzz smoke job, the pinned MCP
+conformance suite, a coverage threshold gate, and a two-clean-build
+reproducibility check. None exists. Add each one with the subsystem that makes
+it meaningful, and see `docs/implementation-status.md` for the current
+supply-chain coverage.
 
-These must pass before any tag:
+## Quality Gates [NOW]
+
+These must pass before any tag, and every one of them is runnable today:
 
 ```sh
 go build ./...
@@ -201,14 +255,18 @@ goreleaser release --snapshot --clean
 
 Plus:
 
-- The container image builds and passes the non-root/read-only smoke test.
+- The container image builds and passes the non-root/read-only smoke test. The
+  image needs a binary in the build context; see ADR 0006 for why the
+  `Dockerfile` is runtime-only.
 - `docs/implementation-status.md` matches reality and `git status --short` is
   clean.
 - No placeholder or `not implemented` handler is counted as working behavior.
 - Pre-commit hooks may mutate the worktree; CI only verifies and fails on a
   dirty diff.
 
-## Code Conventions
+## Code Conventions [NOW]
+
+These apply to every commit, including the code that already exists.
 
 - Immutability: return new values, do not mutate shared state in place.
 - `context.Context` end to end. Carry cancellation and deadlines into every

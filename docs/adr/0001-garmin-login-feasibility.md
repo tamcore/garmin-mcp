@@ -9,17 +9,25 @@ re-establish this decision, and do not ask for credentials.
 ## Context
 
 The whole project depends on one unproven assumption: that a native Go HTTP
-client can complete a Garmin Connect login. The pinned reference,
+client can complete a Garmin Connect login. The reference pinned at gate time,
 `python-garminconnect` 0.3.8, reaches Garmin through `curl_cffi`, which applies
 browser TLS impersonation, and it paces the GET to POST sequence by a randomized
 10 to 20 seconds. Standard Go TLS cannot reproduce a `curl_cffi` fingerprint.
 Everything in the later auth, remote-OAuth, and tool-breadth phases is worthless
-if plain `net/http` cannot log in.
+if plain `net/http` cannot log in. The baseline has since moved to 0.3.10, which
+changes none of the transport behavior this gate tested. See
+`docs/upstream-pins.md`.
 
-The gate scope was minimal: the `LoginTransport` interface, a plain `net/http`
-implementation, the mobile-iOS, widget, and portal request shapes from the pinned
-source, the failure classifier, and an opt-in live check behind the `garminlive`
-build tag.
+The gate was run with a throwaway `net/http` probe, not with repository code. The
+probe issued the mobile-iOS, widget, and portal request shapes taken from the
+pinned source, and it was discarded afterwards. It was not committed, and it is
+not the implementation.
+
+Of the pieces this ADR names, only the failure classifier exists today, in
+`internal/garmin/protocol`, and it is still incomplete. The `LoginTransport`
+interface and the opt-in `garminlive` check do **not** exist. They describe the
+required shape of the future implementation, decided here so that the transport
+choice cannot be re-litigated silently.
 
 ### Evidence
 
@@ -59,8 +67,9 @@ Credential stage:
 
 ## Decision
 
-Implement `net/http` only as the login transport, behind the injectable
-`LoginTransport` interface. Keep `CGO_ENABLED=0`.
+Implement `net/http` only as the login transport, behind an injectable
+`LoginTransport` interface that the auth slice must introduce. Keep
+`CGO_ENABLED=0`.
 
 Do not add utls, curl-impersonate, cgo, Python, or browser automation. Never
 subprocess a `curl-impersonate` binary, never ship an unpinned prebuilt blob, and
@@ -68,17 +77,21 @@ never attempt to bypass CAPTCHA or WAF controls.
 
 Because of the unsettled parts:
 
-- Keep the GET to POST pacing behavior configurable.
-- Keep the failure classifier exhaustive: success, invalid credentials, MFA
+- Make the GET to POST pacing behavior configurable.
+- Make the failure classifier exhaustive: success, invalid credentials, MFA
   required, CAPTCHA/WAF/forbidden, rate limited, and temporary transport error.
   Stop the strategy fallback on definitive invalid credentials.
-- Keep this gate re-runnable as an opt-in `garminlive` command and test for drift
-  detection, with an explicit environment acknowledgement and a dedicated
-  non-primary account. It never runs in ordinary CI.
+  `internal/garmin/protocol` covers these outcomes already, but it does not yet
+  distinguish a rejected OTP.
+- Make this gate re-runnable, as an opt-in `garminlive` command and test for
+  drift detection, with an explicit environment acknowledgement and a dedicated
+  non-primary account. Neither the command nor the tagged test exists yet. When
+  they are added they never run in ordinary CI.
 
 The fingerprint-transport ladder stays documented contingency, not planned work.
-If the opt-in live check later fails while the same request shape succeeds from a
-browser-fingerprinted client, re-enter this decision and work down the ladder,
+If the opt-in live check, once it exists, fails while the same request shape
+succeeds from a browser-fingerprinted client, re-enter this decision and work
+down the ladder,
 stopping at the first rung that demonstrably logs in:
 
 1. pure-Go TLS fingerprinting (a `refraction-networking/utls`-class library),
@@ -97,12 +110,15 @@ dependency and security review recorded here as an amendment.
 - The default and only shipped transport is `net/http`. Release binaries stay
   `CGO_ENABLED=0` and the runtime image stays distroless static.
 - No transport ladder work is scheduled. The ladder is contingency only.
-- The `LoginTransport` interface must keep any future transport out of every
-  other package, and every transport must pass the same fake-service test suite.
+- The `LoginTransport` interface is required work in the auth slice. Once it
+  exists it must keep any future transport out of every other package, and every
+  transport must pass the same fake-service test suite.
+- The `garminlive` opt-in command and tagged test are required work. Until they
+  exist, drift against the live service is undetected.
 - MFA continuation correctness rests entirely on fake-service tests until a live
   MFA-enabled account is available.
 - CI and datacenter egress behavior is an accepted open risk. A failure there
   shows up as a classified CAPTCHA/WAF outcome, not as a silent bad-password
   error.
-- Phase 0 no longer blocks any milestone. The gate stays re-runnable, and a
+- Phase 0 no longer blocks any milestone. The gate must stay re-runnable, and a
   future live failure reopens this ADR.

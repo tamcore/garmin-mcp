@@ -6,6 +6,10 @@ Open, and permanently open. This ADR is a running register. Every intentional
 break from the pinned Taxuspt contract gets an entry here at the moment it is
 made.
 
+This register holds two kinds of entry: breaks from the pinned Taxuspt tool
+contract, and approved deviations from the literal wording of the build brief.
+Both are recorded so that no divergence is silent.
+
 ## Context
 
 The pinned Taxuspt commit defines the public tool surface: names, descriptions,
@@ -42,6 +46,43 @@ No entry yet. Entries are added by the phase that makes the break.
 | Upstream contract | Change | Reason | Precedence rule | Client-visible effect |
 |-------------------|--------|--------|-----------------|-----------------------|
 | *(none recorded)* | | | | |
+
+### Approved brief deviations
+
+Deviations from the literal wording of the build brief. Each one is approved and
+reasoned here, so it is documented rather than silently non-compliant.
+
+#### 1 — Runtime-only Dockerfile instead of multi-stage
+
+The brief asks for a multi-stage `Dockerfile`. `Dockerfile` in the repository
+root is runtime-only: it starts from a digest-pinned
+`gcr.io/distroless/static-debian12:nonroot`, and its single `COPY` takes an
+already-built binary from `${TARGETPLATFORM}/garmin-mcp` in the build context.
+The `dockers_v2` block in `.goreleaser.yaml` supplies that context at release
+time.
+
+Reasons:
+
+- **Single-source builds.** GoReleaser is the one build path. A `go build` stage
+  inside the image would be a second, divergent path, and release artifacts and
+  image contents could then differ.
+- **No compiler in the runtime image.** The final layer holds only the binary. No
+  toolchain, shell, or package manager is present, so nothing extra can be
+  reached in the container. A multi-stage build reaches the same end state but
+  keeps a builder stage in the build graph.
+- **Reproducible ldflags owned by GoReleaser.** `-trimpath`,
+  `-X main.version`, `-X main.commit`, and `mod_timestamp` are set once, in
+  `.goreleaser.yaml`. Duplicating them in a Dockerfile stage would let the image
+  report a different version from the archive.
+
+Consequences: a bare `docker build` of the repository root does not produce a
+working image. The build context must already hold the binary at
+`${TARGETPLATFORM}/garmin-mcp`. Releases get that context from GoReleaser
+`dockers_v2`. The CI container job prepares it itself, with a `go build` into
+`image-context/linux/amd64` followed by `docker build` on that directory, so the
+hardening smoke test does not need release credentials. That CI binary carries no
+version ldflags, which is acceptable because the job asserts image hardening
+only, never a reported version.
 
 ## Consequences
 

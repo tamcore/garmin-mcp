@@ -72,7 +72,7 @@ suites.
 ## Phase 5 — compatibility breadth (M3)
 
 Port the remaining Taxuspt tools and resources domain by domain. Contract tests
-come before handlers. Reconcile the 0.3.2 to 0.3.8 behavior changes that affect
+come before handlers. Reconcile the 0.3.2 to 0.3.10 behavior changes that affect
 those contracts and backlog the unrelated additions.
 
 ## Phase 6 — hardening and release

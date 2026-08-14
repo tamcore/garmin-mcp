@@ -3,10 +3,14 @@
   "extends": [
     "github>tamcore/renovate",
     "github>tamcore/renovate:go",
-    "github>tamcore/renovate:automerge-minor",
-    "github>tamcore/renovate:automerge-github-actions"
+    "github>tamcore/renovate:automerge-minor"
   ],
   "packageRules": [
+    {
+      "description": "Actions execute in CI with repository credentials. A bumped SHA is a code change and needs a human.",
+      "matchManagers": ["github-actions"],
+      "automerge": false
+    },
     {
       "description": "Authorization, storage, and crypto dependencies gate the security model. Review every bump by hand.",
       "matchManagers": ["gomod"],

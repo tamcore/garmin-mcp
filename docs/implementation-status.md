@@ -38,6 +38,10 @@ Phase definitions are in `docs/phases.md`.
 - [x] Scripted fake Garmin service in `internal/testkit`, plus
       `internal/garmin/protocol` with the endpoint/identity constants and the
       login failure classifier.
+- [x] Upstream `python-garminconnect` baseline re-pinned from 0.3.8 to 0.3.10 on
+      2026-08-14. The reconciliation window is now 0.3.2 to 0.3.10, and the
+      security behaviors that 0.3.10 adds are now required work. See
+      `docs/upstream-pins.md`.
 - [ ] Cobra command tree in `internal/cmd` (`serve`, `auth`, `doctor`, `tools`,
       `migrate`, `version`); `cmd/garmin-mcp` is still a bare main.
 - [ ] Official Go SDK and MCP spec version pinned; ADR 0002 decided.
@@ -46,13 +50,38 @@ Phase definitions are in `docs/phases.md`.
 
 These are deliberate and tracked, not silently dropped:
 
-- CI has no fuzz smoke job, no MCP conformance job, and no two-clean-build
-  reproducibility check. There are no fuzz targets, no MCP server, and no
-  reproducibility harness to point them at yet. Wire each one with the
-  subsystem that creates it.
-- Release signing covers the checksum file only. Container image signing and
-  SBOM attestation are configured but unverified, because the release workflow
-  cannot run outside a tag.
+- CI has no fuzz smoke job and no MCP conformance job. There are no fuzz targets
+  and no MCP server to point them at yet. Wire each one with the subsystem that
+  creates it.
+- Release supply-chain coverage is narrower than the brief asks for.
+  `.goreleaser.yaml` signs the **checksum file only** (`artifacts: checksum`,
+  keyless cosign `sign-blob`) and emits **archive SBOMs only**
+  (`sboms: artifacts: archive`). There is no image signing block, no container
+  image SBOM, no per-binary SBOM, and no build provenance attestation. There is
+  also no two-clean-build reproducibility check anywhere in CI. None of this is
+  "configured but unverified": it is not configured.
+- Coverage thresholds are not enforced. The CI unit job writes
+  `cover.out` with `-covermode=atomic`, but no job asserts a minimum
+  percentage, so the documented 80% rule is unenforced.
+- The `test-fakegarmin` and `e2e` CI jobs pass vacuously. No file carries the
+  `fakegarmin` tag, and the only `e2e`-tagged file is `e2e/doc.go`, which holds
+  no tests. Both jobs must be changed to **fail when the expected suite is
+  absent**, so an empty suite can never read as a pass.
+- The widget MFA classifier is incomplete. `ClassifyWidgetLogin` decides from the
+  HTTP status and the page title only. It does not parse the MFA variables
+  embedded in the widget page, and it reports the delivery method as the
+  hardcoded `MFAMethodEmail` default. There is no outcome distinct from
+  `OutcomeInvalidCredentials` for a rejected OTP, so a wrong code and a wrong
+  password cannot be told apart. No path or endpoint label models the explicit
+  MFA code request, so requirement 9 in `docs/upstream-pins.md` has nothing to
+  build on.
+- The 0.3.8 to 0.3.10 security behaviors are not implemented. See the required
+  list in `docs/upstream-pins.md`: host allowlist enforcement, sanitized
+  exception messages, login-error query redaction, symlink-rejecting token paths
+  with full ancestry checks, serialized refresh with atomic writes, JWT `exp`
+  validation and unsigned-payload rejection, server-driven pagination caps,
+  per-transaction pending MFA state, explicit widget MFA code delivery, and
+  segment-aware path-traversal guards.
 - GitHub-native secret scanning and dependency/license review are repository
   settings, not workflow files. They still need enabling.
 - The parity extractor scripts are not committed; `docs/parity.md` documents the
@@ -81,7 +110,7 @@ the phase-0 gate already recorded in ADR 0001.
 
 - [x] The phase-0 login gate is closed with a recorded outcome (go, or no-go
       with the selected transport implemented and reviewed). — GO, ADR 0001.
-- [ ] Native 0.3.8 login, MFA continuation, DI exchange, refresh with rotation,
+- [ ] Native 0.3.10 login, MFA continuation, DI exchange, refresh with rotation,
       `.com`/`.cn` host selection, and the full failure classification pass
       against the fake Garmin service.
 - [ ] `garmin-mcp serve --transport=stdio` binds exactly one principal from
@@ -133,8 +162,8 @@ the phase-0 gate already recorded in ADR 0001.
 - [ ] Every required contract has passing name/schema/behavior tests, or a
       documented exclusion with evidence that remains release-blocking until a
       maintainer approves it.
-- [ ] 0.3.2 to 0.3.8 behavior differences affecting those contracts are
-      reconciled and recorded; unrelated 0.3.8 additions are in the documented
+- [ ] 0.3.2 to 0.3.10 behavior differences affecting those contracts are
+      reconciled and recorded; unrelated 0.3.10 additions are in the documented
       backlog.
 
 ## Commands to run and report at every milestone
@@ -162,8 +191,18 @@ Plus the pinned MCP conformance command and the container and E2E targets.
 
 ## Next task
 
-Pin the official `modelcontextprotocol/go-sdk` stable release and its MCP
-specification date, decide ADR 0002, and write `docs/mcp-version-matrix.md`.
-The first failing test to write: `internal/cmd` asserting that `garmin-mcp
-version` prints the ldflags-injected version and commit, which forces the Cobra
-command tree into existence.
+Audit the ten required 0.3.8-to-0.3.10 security behaviors listed in
+`docs/upstream-pins.md` against the pinned 0.3.10 source, then implement them in
+the auth/session slice, and in parallel pin the official
+`modelcontextprotocol/go-sdk` stable release with its MCP specification date and
+decide ADR 0002.
+
+First failing tests to write, in this order:
+
+1. `internal/garmin/protocol` asserting that a host outside the `garmin.com` and
+   `garmin.cn` allowlist is rejected before a request URL is built.
+2. `internal/garmin/protocol` asserting a rejected OTP classifies to its own
+   outcome, distinct from invalid credentials.
+3. `internal/cmd` asserting that `garmin-mcp version` prints the
+   ldflags-injected version and commit, which forces the Cobra command tree into
+   existence.
