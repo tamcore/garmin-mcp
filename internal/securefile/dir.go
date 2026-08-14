@@ -185,6 +185,34 @@ func (d *dir) readFile(name string, limit int64) ([]byte, error) {
 	return raw, nil
 }
 
+// restrictExisting applies mode to an existing regular file relative to d.
+//
+// The sequence mirrors readFile: Lstat, non-blocking open, post-open identity
+// confirmation, and only then the permission change, which goes through the
+// descriptor rather than the pathname. A FIFO or a symlink planted at the name is
+// refused before any mode is touched.
+func (d *dir) restrictExisting(name string, mode fs.FileMode) error {
+	expected, err := d.root.Lstat(name)
+	if err != nil {
+		return d.pathError("inspect", name, err)
+	}
+	if !expected.Mode().IsRegular() {
+		return fmt.Errorf("securefile: %q is not a regular file (type %v): %w",
+			filepath.Join(d.path, name), expected.Mode().Type(), ErrInsecurePath)
+	}
+
+	file, err := d.root.OpenFile(name, os.O_RDONLY|nonBlockingFlag, 0)
+	if err != nil {
+		return d.pathError("open", name, err)
+	}
+	defer func() { _ = file.Close() }()
+
+	if err := d.confirmRegular(name, expected, file); err != nil {
+		return err
+	}
+	return restrictFile(file, filepath.Join(d.path, name), mode)
+}
+
 func (d *dir) confirmRegular(name string, expected fs.FileInfo, file *os.File) error {
 	opened, err := file.Stat()
 	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(expected, opened) {

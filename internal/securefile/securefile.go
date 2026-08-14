@@ -119,6 +119,28 @@ func InstallNewFile(path string, content []byte, mode fs.FileMode) error {
 	return parent.installNewFile(name, content, mode)
 }
 
+// RestrictExisting enforces mode on a file this package did not create.
+//
+// It exists for files a third-party library opens for itself — the SQLite
+// database, its write-ahead log and its shared-memory file — where the creation
+// mode was masked by the process umask. Changing the umask is not an option: it is
+// process-global mutable state, and a library that forks a helper would inherit
+// it. Tightening the file right after it appears is.
+//
+// The path is verified component by component like every other operation here, the
+// object must be a regular file whose identity does not change across the open,
+// and the chmod is applied to the open descriptor, so a symlink planted at the path
+// is refused rather than followed. An absent file reports ErrNotFound, which a
+// caller may ignore for a log file SQLite has not created yet.
+func RestrictExisting(path string, mode fs.FileMode) error {
+	parent, name, err := openParent(path)
+	if err != nil {
+		return err
+	}
+	defer parent.close()
+	return parent.restrictExisting(name, mode)
+}
+
 // Remove deletes path. An absent path, and an absent parent directory, are not
 // errors.
 func Remove(path string) error {

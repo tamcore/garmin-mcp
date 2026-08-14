@@ -38,7 +38,6 @@ func TestSensitiveResultsReportShapeToALogSink(t *testing.T) {
 	t.Parallel()
 
 	steps, heartRate := 9123, 52
-	latitude := 51.4779
 	serial := "SYNTH-0001"
 
 	cases := map[string]struct {
@@ -107,13 +106,25 @@ func TestSensitiveResultsReportShapeToALogSink(t *testing.T) {
 			}
 		})
 	}
-
-	_ = latitude
 }
 
+// logValue renders one record and drops the timestamp.
+//
+// The timestamp must go, or this assertion is a coin flip: the secrets under test
+// include short numbers such as a resting heart rate of 52, and a record stamped
+// at 23:52 contains those digits for a whole minute of every hour. The test would
+// then fail for a reason that has nothing to do with redaction.
 func logValue(value slog.LogValuer) string {
 	var buffer bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&buffer, nil))
+	options := &slog.HandlerOptions{
+		ReplaceAttr: func(_ []string, attr slog.Attr) slog.Attr {
+			if attr.Key == slog.TimeKey {
+				return slog.Attr{}
+			}
+			return attr
+		},
+	}
+	logger := slog.New(slog.NewTextHandler(&buffer, options))
 	logger.Info("probe", slog.Any("result", value))
 	return buffer.String()
 }
