@@ -54,16 +54,27 @@ func nullableString(value string) sql.NullString {
 	return sql.NullString{String: value, Valid: true}
 }
 
-// encodeScopes renders a scope list for storage, after validating it.
+// encodeScopes renders a non-empty scope list for storage, after validating it.
 //
 // The order the caller granted is preserved, because a consent screen and an
 // introspection response should show the same order every time. Duplicates are
 // refused rather than deduplicated: a duplicate means the caller built the list
 // wrong, and silently accepting it hides that.
+//
+// It refuses an empty list. The paths that may legitimately store an empty scope
+// set — a grant that authorizes nothing, which is a decision a user can make — use
+// encodeOptionalScopes instead, so the distinction is at the call site rather than
+// in a flag.
 func encodeScopes(scopes []string) (string, error) {
 	if len(scopes) == 0 {
 		return "", fmt.Errorf("store: empty scope list: %w", ErrInvalidArgument)
 	}
+	return encodeOptionalScopes(scopes)
+}
+
+// encodeOptionalScopes is encodeScopes with the empty list accepted, which encodes
+// as the empty string and decodes back to a nil slice.
+func encodeOptionalScopes(scopes []string) (string, error) {
 	if len(scopes) > maxScopeCount {
 		return "", fmt.Errorf("store: %d scopes, over the %d bound: %w",
 			len(scopes), maxScopeCount, ErrInvalidArgument)
@@ -106,8 +117,34 @@ func decodeScopes(encoded string) []string {
 	return strings.Split(encoded, " ")
 }
 
-// maxIdentifierLength bounds an identifier a caller supplies.
-const maxIdentifierLength = 256
+// maxIdentifierLength bounds an identifier a caller supplies, and maxLocatorLength
+// bounds a redirect URI or a resource indicator, which are URIs and are legitimately
+// longer than an identifier.
+const (
+	maxIdentifierLength = 256
+	maxLocatorLength    = 2048
+)
+
+// checkLocator bounds a redirect URI or a resource indicator and, unlike
+// checkIdentifier, accepts an empty one.
+//
+// Empty is a state rather than a missing value: an authorization request that names
+// no RFC 8707 resource, and a consent recorded without a redirect URI, are both
+// real. Refusing empty here would make a zero resource impossible to persist and
+// would force a caller to invent a placeholder, which is exactly the drift the
+// widened consent key exists to prevent.
+func checkLocator(kind, value string) error {
+	if len(value) > maxLocatorLength {
+		return fmt.Errorf("store: %s has length %d, over the %d bound: %w",
+			kind, len(value), maxLocatorLength, ErrInvalidArgument)
+	}
+	for _, char := range value {
+		if char < ' ' || char == 0x7f {
+			return fmt.Errorf("store: %s holds a control character: %w", kind, ErrInvalidArgument)
+		}
+	}
+	return nil
+}
 
 // checkIdentifier refuses an empty or oversized identifier a caller supplied.
 func checkIdentifier(kind, value string) error {

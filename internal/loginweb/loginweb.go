@@ -17,9 +17,17 @@
 //   - A fixed route without the run cookie and the form token answers a generic
 //     404. Discoverability is not a security boundary.
 //
-// This is the loopback profile: plain HTTP on 127.0.0.1, so the cookie carries
-// neither the __Host- prefix nor Secure, both of which require HTTPS. The remote
-// profile is a different one and is not built here.
+// The package ships two profiles of the same flow, and they share nothing but the
+// templates and the bounds:
+//
+//   - [Server] is the loopback profile: one run, plain HTTP on 127.0.0.1, so its
+//     cookie carries neither the __Host- prefix nor Secure, both of which require
+//     HTTPS, and it sends no HSTS.
+//   - [RemoteServer] is the public HTTPS profile, described in remote.go. Its
+//     cookie is __Host- prefixed and Secure, and every response carries HSTS.
+//
+// Neither profile can borrow the other's cookie or header policy: each builds its
+// own router with its own middleware and its own cookie writer.
 package loginweb
 
 import (
@@ -86,6 +94,11 @@ type Attempt struct {
 	DeliveryUncertain bool
 	// Strategy is the login flow that produced this outcome.
 	Strategy string
+	// Principal is the pseudonymous identifier of the principal the login
+	// resolved or created. The remote profile hands it to the authorization
+	// server; the loopback profile has a single local account and ignores it. It
+	// is an identifier, never a token and never an email address.
+	Principal string
 }
 
 // An Authenticator runs the Garmin login.

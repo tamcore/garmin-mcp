@@ -65,8 +65,21 @@ var (
 	// never returned even before the cleanup job runs.
 	ErrTransactionNotFound = errors.New("store: authorization transaction not found")
 
+	// ErrTransactionConflict means a compare-and-set on an authorization transaction
+	// lost: the row is still there, but something advanced its version first. It is
+	// distinct from ErrTransactionNotFound, which means the row is gone, because a
+	// caller retries the first and abandons the second.
+	ErrTransactionConflict = errors.New("store: authorization transaction version conflict")
+
 	// ErrCodeNotFound means the authorization code is unknown or has expired.
 	ErrCodeNotFound = errors.New("store: authorization code not found")
+
+	// ErrCodeExpired means the authorization code exists but its window has passed.
+	// It is always reported together with ErrCodeNotFound, so a caller that must not
+	// turn expiry into an oracle for whether a code ever existed keeps matching the
+	// sentinel it already matched, and a caller whose own contract names an expired
+	// code can still tell the two apart.
+	ErrCodeExpired = errors.New("store: authorization code has expired")
 
 	// ErrCodeAlreadyUsed means the authorization code was already redeemed. It is
 	// distinct from ErrCodeNotFound because a replay is a security event.

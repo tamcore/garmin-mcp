@@ -15,8 +15,9 @@ import (
 // Never the token. Only hex(HMAC(purposeKey, token)) under a per-kind purpose, so an
 // access token and a refresh token with identical bytes produce different lookup
 // values and neither can be presented as the other. Alongside it: the family, the
-// scopes, the audience, the issue and expiry instants, the consumption instant of a
-// rotated refresh token, and the revocation instant.
+// family's resource, the scopes, the audience, the generation within the family, the
+// issue and expiry instants, the consumption instant of a rotated refresh token, and
+// the revocation instant.
 //
 // # Rotation and reuse detection
 //
@@ -37,10 +38,16 @@ const (
 // token into a permanent credential.
 const maxTokenLifetime = 90 * 24 * time.Hour
 
-// TokenGrant is the material and metadata for one new token family.
+// TokenGrant is the material and metadata for one new token family, expressed as
+// lifetimes.
 //
 // The caller generates the token material — at least 256 bits from crypto/rand — and
 // this store only ever sees it long enough to hash it.
+//
+// A caller that holds records rather than lifetimes — one that already knows the
+// family id, the generation and the absolute instants, because it minted them —
+// wants IssueTokenFamilyRecord instead. Nothing here may be left empty: this shape
+// requires a scope list and an audience.
 type TokenGrant struct {
 	PrincipalID string
 	ClientID    string
@@ -68,24 +75,19 @@ type AccessGrant struct {
 	FamilyID    string
 	Scopes      []string
 	Audience    string
-	ExpiresAt   time.Time
-}
 
-// RefreshRotation is the input to RotateRefreshToken.
-type RefreshRotation struct {
-	// Presented is the refresh token the client sent.
-	Presented Secret
+	// Generation is how many rotations deep in its family the token is. The first
+	// pair of a family is generation 0.
+	Generation uint64
 
-	// NextAccessToken and NextRefreshToken are the freshly generated replacements.
-	NextAccessToken  Secret
-	NextRefreshToken Secret
-
-	AccessLifetime  time.Duration
-	RefreshLifetime time.Duration
+	// IssuedAt and ExpiresAt are the stored instants, not a lifetime applied at read
+	// time, so a caller can reproduce exactly what was written.
+	IssuedAt  time.Time
+	ExpiresAt time.Time
 }
 
 // IssueTokenFamily creates a family and its first access and refresh token, and
-// returns the family id.
+// returns the generated family id.
 //
 // It requires an active consent for the principal and client: a token issued without
 // one would outlive the user's decision. The whole thing is one transaction, so a
@@ -94,72 +96,41 @@ func (s *SQLiteStore) IssueTokenFamily(ctx context.Context, grant TokenGrant) (s
 	if err := checkStoreRequest(ctx); err != nil {
 		return "", err
 	}
-	prepared, err := s.prepareGrant(grant)
-	if err != nil {
+	if err := checkIdentifier("audience", grant.Audience); err != nil {
 		return "", err
 	}
-	familyID, err := newPrincipalID()
-	if err != nil {
+	if _, err := encodeScopes(grant.Scopes); err != nil {
 		return "", err
-	}
-
-	err = s.inTx(ctx, func(tx *sql.Tx) error {
-		if err := requireActiveConsent(ctx, tx, grant.PrincipalID, grant.ClientID); err != nil {
-			return err
-		}
-		if err := s.insertFamily(ctx, tx, familyID, grant.PrincipalID, grant.ClientID); err != nil {
-			return err
-		}
-		return s.insertTokenPair(ctx, tx, familyID, prepared)
-	})
-	if err != nil {
-		return "", err
-	}
-	return familyID, nil
-}
-
-// preparedGrant is a validated grant with its lookup values already computed.
-type preparedGrant struct {
-	accessHash  string
-	refreshHash string
-	scopes      string
-	audience    string
-	accessTTL   time.Duration
-	refreshTTL  time.Duration
-}
-
-// prepareGrant validates a grant and hashes its material.
-func (s *SQLiteStore) prepareGrant(grant TokenGrant) (preparedGrant, error) {
-	for kind, value := range map[string]string{
-		"principal id": grant.PrincipalID, "client id": grant.ClientID, "audience": grant.Audience,
-	} {
-		if err := checkIdentifier(kind, value); err != nil {
-			return preparedGrant{}, err
-		}
-	}
-	scopes, err := encodeScopes(grant.Scopes)
-	if err != nil {
-		return preparedGrant{}, err
 	}
 	if err := checkLifetimes(grant.AccessLifetime, grant.RefreshLifetime); err != nil {
-		return preparedGrant{}, err
+		return "", err
 	}
-	accessHash, err := s.keys.requireLookup(purposeAccessToken, grant.AccessToken)
-	if err != nil {
-		return preparedGrant{}, err
-	}
-	refreshHash, err := s.keys.requireLookup(purposeRefreshToken, grant.RefreshToken)
-	if err != nil {
-		return preparedGrant{}, err
-	}
-	return preparedGrant{
-		accessHash:  accessHash,
-		refreshHash: refreshHash,
-		scopes:      scopes,
-		audience:    grant.Audience,
-		accessTTL:   grant.AccessLifetime,
-		refreshTTL:  grant.RefreshLifetime,
-	}, nil
+
+	issuedAt := s.now().UTC()
+	return s.IssueTokenFamilyRecord(ctx, TokenFamilyGrant{
+		PrincipalID:      grant.PrincipalID,
+		ClientID:         grant.ClientID,
+		Scopes:           grant.Scopes,
+		Resource:         grant.Audience,
+		AccessToken:      grant.AccessToken,
+		RefreshToken:     grant.RefreshToken,
+		IssuedAt:         issuedAt,
+		AccessExpiresAt:  issuedAt.Add(grant.AccessLifetime),
+		RefreshExpiresAt: issuedAt.Add(grant.RefreshLifetime),
+	})
+}
+
+// preparedGrant is a validated grant with its lookup values already computed and its
+// instants already absolute.
+type preparedGrant struct {
+	accessHash       string
+	refreshHash      string
+	scopes           string
+	audience         string
+	generation       uint64
+	issuedAt         time.Time
+	accessExpiresAt  time.Time
+	refreshExpiresAt time.Time
 }
 
 // checkLifetimes refuses a non-positive or unbounded lifetime.
@@ -173,38 +144,22 @@ func checkLifetimes(access, refresh time.Duration) error {
 	return nil
 }
 
-// requireActiveConsent refuses to issue against a withdrawn or absent grant.
-func requireActiveConsent(ctx context.Context, tx *sql.Tx, principalID, clientID string) error {
-	var revokedAt sql.NullString
-	err := tx.QueryRowContext(ctx,
-		`SELECT revoked_at FROM consents WHERE principal_id = ? AND client_id = ?`,
-		principalID, clientID).Scan(&revokedAt)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return fmt.Errorf("store: principal %s has not granted client %s: %w",
-			principalID, clientID, ErrConsentNotFound)
-	case err != nil:
-		return fmt.Errorf("store: read consent: %w", err)
-	case revokedAt.Valid:
-		return fmt.Errorf("store: principal %s revoked client %s: %w",
-			principalID, clientID, ErrConsentNotFound)
-	}
-	return nil
-}
-
+// insertFamily writes the family row, including the resource its tokens are for.
 func (s *SQLiteStore) insertFamily(ctx context.Context, tx *sql.Tx,
-	familyID, principalID, clientID string,
+	familyID, principalID, clientID, resource string,
 ) error {
 	_, err := tx.ExecContext(ctx,
 		`INSERT INTO token_families
-		     (id, principal_id, client_id, created_at, revoked_at, revocation_reason)
-		 VALUES (?, ?, ?, ?, NULL, NULL)`,
-		familyID, principalID, clientID, formatTime(s.now()))
-	if err != nil {
-		if isForeignKeyViolation(err) {
-			return fmt.Errorf("store: principal %s or client %s does not exist: %w",
-				principalID, clientID, ErrPrincipalNotFound)
-		}
+		     (id, principal_id, client_id, resource, created_at, revoked_at, revocation_reason)
+		 VALUES (?, ?, ?, ?, ?, NULL, NULL)`,
+		familyID, principalID, clientID, resource, formatTime(s.now()))
+	switch {
+	case isUniqueViolation(err):
+		return fmt.Errorf("store: token family %s already exists: %w", familyID, ErrInvalidArgument)
+	case isForeignKeyViolation(err):
+		return fmt.Errorf("store: principal %s or client %s does not exist: %w",
+			principalID, clientID, ErrPrincipalNotFound)
+	case err != nil:
 		return fmt.Errorf("store: insert token family: %w", err)
 	}
 	return nil
@@ -214,24 +169,23 @@ func (s *SQLiteStore) insertFamily(ctx context.Context, tx *sql.Tx,
 func (s *SQLiteStore) insertTokenPair(ctx context.Context, tx *sql.Tx, familyID string,
 	prepared preparedGrant,
 ) error {
-	issuedAt := s.now().UTC()
 	rows := []struct {
-		hash     string
-		kind     string
-		lifetime time.Duration
+		hash      string
+		kind      string
+		expiresAt time.Time
 	}{
-		{prepared.accessHash, tokenKindAccess, prepared.accessTTL},
-		{prepared.refreshHash, tokenKindRefresh, prepared.refreshTTL},
+		{prepared.accessHash, tokenKindAccess, prepared.accessExpiresAt},
+		{prepared.refreshHash, tokenKindRefresh, prepared.refreshExpiresAt},
 	}
 
 	for _, row := range rows {
 		_, err := tx.ExecContext(ctx,
 			`INSERT INTO mcp_tokens
-			     (token_hash, family_id, kind, scopes, audience, issued_at, expires_at,
-			      consumed_at, revoked_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
+			     (token_hash, family_id, kind, scopes, audience, generation, issued_at,
+			      expires_at, consumed_at, revoked_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
 			row.hash, familyID, row.kind, prepared.scopes, prepared.audience,
-			formatTime(issuedAt), formatTime(issuedAt.Add(row.lifetime)))
+			int64(prepared.generation), formatTime(prepared.issuedAt), formatTime(row.expiresAt))
 		if err != nil {
 			if isUniqueViolation(err) {
 				return fmt.Errorf("store: %s token material is already stored: %w",
@@ -248,9 +202,13 @@ type storedToken struct {
 	familyID       string
 	principalID    string
 	clientID       string
+	resource       string
 	scopes         string
 	audience       string
+	generation     uint64
+	issuedAt       time.Time
 	expiresAt      time.Time
+	consumedAt     time.Time
 	consumed       bool
 	revoked        bool
 	familyRevoked  bool
@@ -258,13 +216,15 @@ type storedToken struct {
 }
 
 // selectTokenSQL reads a token with everything a decision needs, in one round trip.
-// The consent subquery coalesces to 1 — treated as revoked — when no consent row
-// exists at all, so a missing consent fails closed rather than reading as granted.
+// The consent test is "no active consent row exists for this principal and client",
+// so a missing consent and a fully revoked one both read as revoked and fail closed.
 const selectTokenSQL = `
-SELECT f.id, f.principal_id, f.client_id, t.scopes, t.audience, t.expires_at,
-       t.consumed_at IS NOT NULL, t.revoked_at IS NOT NULL, f.revoked_at IS NOT NULL,
-       coalesce((SELECT c.revoked_at IS NOT NULL FROM consents c
-                  WHERE c.principal_id = f.principal_id AND c.client_id = f.client_id), 1)
+SELECT f.id, f.principal_id, f.client_id, f.resource, t.scopes, t.audience, t.generation,
+       t.issued_at, t.expires_at, t.consumed_at, t.revoked_at IS NOT NULL,
+       f.revoked_at IS NOT NULL,
+       NOT EXISTS (SELECT 1 FROM consents c
+                    WHERE c.principal_id = f.principal_id AND c.client_id = f.client_id
+                      AND c.revoked_at IS NULL)
   FROM mcp_tokens t
   JOIN token_families f ON f.id = t.family_id
  WHERE t.token_hash = ? AND t.kind = ?`
@@ -273,22 +233,37 @@ SELECT f.id, f.principal_id, f.client_id, t.scopes, t.audience, t.expires_at,
 func readToken(ctx context.Context, q Querier, hash, kind string) (storedToken, error) {
 	var (
 		token       storedToken
+		generation  int64
+		issuedText  string
 		expiresText string
+		consumedAt  sql.NullString
 	)
 	err := q.QueryRowContext(ctx, selectTokenSQL, hash, kind).Scan(
-		&token.familyID, &token.principalID, &token.clientID, &token.scopes,
-		&token.audience, &expiresText, &token.consumed, &token.revoked,
+		&token.familyID, &token.principalID, &token.clientID, &token.resource, &token.scopes,
+		&token.audience, &generation, &issuedText, &expiresText, &consumedAt, &token.revoked,
 		&token.familyRevoked, &token.consentRevoked)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return storedToken{}, fmt.Errorf("store: no %s token matches: %w", kind, ErrTokenNotFound)
 	case err != nil:
 		return storedToken{}, fmt.Errorf("store: read %s token: %w", kind, err)
+	case generation < 0:
+		return storedToken{}, fmt.Errorf("store: token generation %d is negative: %w",
+			generation, ErrCorruptRecord)
 	}
+	token.generation = uint64(generation)
 
-	token.expiresAt, err = parseTime(expiresText)
-	if err != nil {
+	if token.issuedAt, err = parseTime(issuedText); err != nil {
 		return storedToken{}, err
+	}
+	if token.expiresAt, err = parseTime(expiresText); err != nil {
+		return storedToken{}, err
+	}
+	if consumedAt.Valid {
+		token.consumed = true
+		if token.consumedAt, err = parseTime(consumedAt.String); err != nil {
+			return storedToken{}, err
+		}
 	}
 	return token, nil
 }
@@ -301,6 +276,8 @@ func (t storedToken) grant() AccessGrant {
 		FamilyID:    t.familyID,
 		Scopes:      decodeScopes(t.scopes),
 		Audience:    t.audience,
+		Generation:  t.generation,
+		IssuedAt:    t.issuedAt,
 		ExpiresAt:   t.expiresAt,
 	}
 }
@@ -312,6 +289,9 @@ func (t storedToken) grant() AccessGrant {
 // a revoked family reports ErrTokenRevoked, and a token whose consent has since been
 // withdrawn reports ErrTokenRevoked too, because a live access token must not outlive
 // the consent that justified it.
+//
+// A caller that has to judge expiry itself — one whose interface says the record is
+// returned and the decision is the caller's — wants ReadAccessToken.
 func (s *SQLiteStore) LookupAccessToken(ctx context.Context, token Secret) (AccessGrant, error) {
 	if err := checkStoreRequest(ctx); err != nil {
 		return AccessGrant{}, err
@@ -332,116 +312,26 @@ func (s *SQLiteStore) LookupAccessToken(ctx context.Context, token Secret) (Acce
 
 // checkUsable applies the on-access revocation and expiry rules.
 func (s *SQLiteStore) checkUsable(stored storedToken) error {
-	switch {
-	case stored.revoked || stored.familyRevoked:
-		return fmt.Errorf("store: token family %s is revoked: %w", stored.familyID, ErrTokenRevoked)
-	case stored.consentRevoked:
-		return fmt.Errorf("store: consent for client %s is withdrawn: %w",
-			stored.clientID, ErrTokenRevoked)
-	case !stored.expiresAt.After(s.now().UTC()):
+	if err := checkNotRevoked(stored); err != nil {
+		return err
+	}
+	if !stored.expiresAt.After(s.now().UTC()) {
 		return fmt.Errorf("store: token expired at %s: %w",
 			stored.expiresAt.Format(timeLayout), ErrTokenExpired)
 	}
 	return nil
 }
 
-// RotateRefreshToken redeems a refresh token and issues the next generation into the
-// same family.
-//
-// Replaying a refresh token that was already rotated revokes the entire family and
-// reports ErrRefreshTokenReuse. The revocation is committed even though the call
-// returns an error, because the whole point is that the family must not survive the
-// replay. That is the one place in this package where a failed call still changes
-// state, and it is deliberate.
-func (s *SQLiteStore) RotateRefreshToken(ctx context.Context, rotation RefreshRotation,
-) (AccessGrant, error) {
-	if err := checkStoreRequest(ctx); err != nil {
-		return AccessGrant{}, err
+// checkNotRevoked is the revocation half of checkUsable, without the expiry half. The
+// reads that hand the expiry decision to the caller still refuse a revoked token,
+// because a revoked token is not a record a caller may judge for itself.
+func checkNotRevoked(stored storedToken) error {
+	switch {
+	case stored.revoked || stored.familyRevoked:
+		return fmt.Errorf("store: token family %s is revoked: %w", stored.familyID, ErrTokenRevoked)
+	case stored.consentRevoked:
+		return fmt.Errorf("store: consent for client %s is withdrawn: %w",
+			stored.clientID, ErrTokenRevoked)
 	}
-	presentedHash, err := s.keys.requireLookup(purposeRefreshToken, rotation.Presented)
-	if err != nil {
-		return AccessGrant{}, err
-	}
-
-	var issued AccessGrant
-	err = s.inTx(ctx, func(tx *sql.Tx) error {
-		grant, err := s.applyRotation(ctx, tx, presentedHash, rotation)
-		issued = grant
-		return err
-	})
-	if err != nil {
-		return AccessGrant{}, err
-	}
-	return issued, nil
-}
-
-// applyRotation is the transactional body of RotateRefreshToken.
-func (s *SQLiteStore) applyRotation(ctx context.Context, tx *sql.Tx, presentedHash string,
-	rotation RefreshRotation,
-) (AccessGrant, error) {
-	stored, err := readToken(ctx, tx, presentedHash, tokenKindRefresh)
-	if err != nil {
-		return AccessGrant{}, err
-	}
-	if stored.consumed {
-		return AccessGrant{}, s.revokeOnReuse(ctx, tx, stored.familyID)
-	}
-	if err := s.checkUsable(stored); err != nil {
-		return AccessGrant{}, err
-	}
-	return s.issueNextGeneration(ctx, tx, stored, presentedHash, rotation)
-}
-
-// revokeOnReuse revokes the family of a replayed refresh token and commits, so the
-// revocation survives the error this returns.
-func (s *SQLiteStore) revokeOnReuse(ctx context.Context, tx *sql.Tx, familyID string) error {
-	if _, err := s.revokeFamilyIn(ctx, tx, familyID, reasonRefreshReuse); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("store: commit reuse revocation: %w", err)
-	}
-	return fmt.Errorf("store: refresh token of family %s was already rotated, family revoked: %w",
-		familyID, ErrRefreshTokenReuse)
-}
-
-// issueNextGeneration consumes the presented row and writes the replacement pair.
-func (s *SQLiteStore) issueNextGeneration(ctx context.Context, tx *sql.Tx, stored storedToken,
-	presentedHash string, rotation RefreshRotation,
-) (AccessGrant, error) {
-	result, err := tx.ExecContext(ctx,
-		`UPDATE mcp_tokens SET consumed_at = ? WHERE token_hash = ? AND consumed_at IS NULL`,
-		formatTime(s.now()), presentedHash)
-	if err != nil {
-		return AccessGrant{}, fmt.Errorf("store: consume refresh token: %w", err)
-	}
-	// The WHERE clause repeats the not-consumed precondition, so two goroutines
-	// racing the same refresh token cannot both proceed: the loser matches no row.
-	err = requireOneRow(result, fmt.Errorf(
-		"store: refresh token of family %s was rotated concurrently: %w",
-		stored.familyID, ErrRefreshTokenReuse))
-	if err != nil {
-		return AccessGrant{}, err
-	}
-
-	prepared, err := s.prepareGrant(TokenGrant{
-		PrincipalID:     stored.principalID,
-		ClientID:        stored.clientID,
-		Scopes:          decodeScopes(stored.scopes),
-		Audience:        stored.audience,
-		AccessToken:     rotation.NextAccessToken,
-		RefreshToken:    rotation.NextRefreshToken,
-		AccessLifetime:  rotation.AccessLifetime,
-		RefreshLifetime: rotation.RefreshLifetime,
-	})
-	if err != nil {
-		return AccessGrant{}, err
-	}
-	if err := s.insertTokenPair(ctx, tx, stored.familyID, prepared); err != nil {
-		return AccessGrant{}, err
-	}
-
-	issued := stored.grant()
-	issued.ExpiresAt = s.now().UTC().Add(prepared.accessTTL)
-	return issued, nil
+	return nil
 }

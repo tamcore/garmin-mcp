@@ -25,4 +25,9 @@ var (
 	// ErrInvalidPrincipalID reports that an identifier is empty, padded,
 	// over-long, or carries a control character.
 	ErrInvalidPrincipalID = errors.New("identity: invalid principal identifier")
+
+	// ErrNoTokenSource reports that a bearer resolver was constructed without a
+	// VerifiedTokenSource. It is a wiring failure rather than a request failure:
+	// a resolver with nothing to consult could only invent a principal.
+	ErrNoTokenSource = errors.New("identity: no verified token source")
 )

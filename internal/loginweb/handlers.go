@@ -242,18 +242,34 @@ func (s *Server) notFound(w http.ResponseWriter) {
 // parseBoundedForm bounds the body before parsing it and reports whether the caller
 // may continue. An oversized body is answered with 413 and never parsed.
 func (s *Server) parseBoundedForm(w http.ResponseWriter, r *http.Request) bool {
+	switch err := readBoundedForm(w, r); {
+	case errors.Is(err, errBodyTooLarge):
+		s.pages.render(w, http.StatusRequestEntityTooLarge, pageNotFound, newPageData("", ""))
+		return false
+	case err != nil:
+		s.notFound(w)
+		return false
+	}
+	return true
+}
+
+// errBodyTooLarge reports a body over MaxRequestBytes, which is refused before it is
+// parsed rather than after.
+var errBodyTooLarge = errors.New("loginweb: the request body is too large")
+
+// readBoundedForm bounds the body and parses the form. Both profiles use it, because
+// a bound that only one of them applies is a bound one route will be missing.
+func readBoundedForm(w http.ResponseWriter, r *http.Request) error {
 	r.Body = http.MaxBytesReader(w, r.Body, MaxRequestBytes)
 
 	if err := r.ParseForm(); err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
-			s.pages.render(w, http.StatusRequestEntityTooLarge, pageNotFound, newPageData("", ""))
-			return false
+			return errBodyTooLarge
 		}
-		s.notFound(w)
-		return false
+		return errRefused
 	}
-	return true
+	return nil
 }
 
 // ended reports whether the run reached a terminal state.

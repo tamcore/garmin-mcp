@@ -24,4 +24,14 @@ var (
 	// a destructive tool that advertises itself as read-only would mislead every
 	// client that reads the hints.
 	ErrAnnotationMismatch = errors.New("mcpserver: annotations contradict the tool tier")
+
+	// ErrInvalidHTTPOptions reports a malformed Streamable HTTP option: a public
+	// URL that could not be an audience, an origin that is not a bare origin, or
+	// a trusted-proxy range that is not a CIDR.
+	ErrInvalidHTTPOptions = errors.New("mcpserver: invalid Streamable HTTP options")
+
+	// ErrInsecureBind reports a cleartext public deployment. Bearer tokens travel
+	// on every request, so serving them over cleartext on anything but loopback
+	// publishes them; it is refused unless the development override is set.
+	ErrInsecureBind = errors.New("mcpserver: refusing a cleartext public bind")
 )

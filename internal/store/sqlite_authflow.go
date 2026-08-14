@@ -8,12 +8,12 @@ import (
 	"time"
 )
 
-// Hashed authorization transactions and codes.
+// Hashed authorization transactions.
 //
-// Both the transaction handle the browser carries and the authorization code the
-// client redeems are opaque, caller-generated, high-entropy values. Neither is stored:
-// only its keyed-HMAC lookup value is, under its own purpose, so neither can be
-// recovered from the database and neither can be presented as the other.
+// The handle the browser carries is opaque, caller-generated, high-entropy material. It
+// is not stored: only its keyed-HMAC lookup value is, under its own purpose, so it
+// cannot be recovered from the database and cannot be presented as an authorization
+// code.
 //
 // Only state the flow cannot rebuild lives here. Cookie jars and MFA state stay in a
 // bounded in-memory registry by design, so a restart loses an in-flight login safely
@@ -21,6 +21,11 @@ import (
 //
 // PKCE is required: code_challenge_method is constrained to S256 by the schema, so a
 // plain challenge cannot be stored at all.
+//
+// The client's opaque state is the one value here that belongs to someone else. It is
+// echoed back byte for byte and is load-bearing for the client's own CSRF defence, so
+// it is sealed rather than stored in the clear, like every other third-party value in
+// this schema.
 
 // maxChallengeLength bounds a PKCE challenge. A base64url SHA-256 digest is 43
 // characters; the bound leaves room and refuses anything absurd.
@@ -47,11 +52,26 @@ type AuthTransactionDraft struct {
 
 	Scopes []string
 
+	// Resource is the RFC 8707 resource indicator the request named. It may be empty.
+	Resource string
+
+	// ClientState is the client's opaque state. It is sealed, never stored in the
+	// clear, and echoed back byte for byte. The zero Secret means the request carried
+	// no state.
+	ClientState Secret
+
 	// CodeChallenge is the PKCE S256 challenge.
 	CodeChallenge string
 
-	// Lifetime is how long the transaction may be resumed for.
+	// Lifetime is how long the transaction may be resumed for. It is used only when
+	// ExpiresAt is zero.
 	Lifetime time.Duration
+
+	// CreatedAt and ExpiresAt are the absolute instants of the record. A caller that
+	// already stamped its own record passes them, so the stored expiry cannot drift
+	// from what the caller returned; a caller with a lifetime leaves them zero.
+	CreatedAt time.Time
+	ExpiresAt time.Time
 }
 
 // AuthTransaction is stored authorization request state.
@@ -61,44 +81,48 @@ type AuthTransaction struct {
 	// PrincipalID is empty until the browser flow has identified the user.
 	PrincipalID string
 
-	RedirectURI   string
+	RedirectURI string
+
+	// Resource is the RFC 8707 resource indicator, empty when the request named none.
+	Resource string
+
 	Scopes        []string
 	CodeChallenge string
-	CreatedAt     time.Time
-	ExpiresAt     time.Time
+
+	// ClientState is the opaque client state, opened from its envelope. It is a
+	// Secret so a print or a log of the transaction cannot reveal it.
+	ClientState Secret
+
+	CreatedAt time.Time
+	ExpiresAt time.Time
+
+	// Version is the compare-and-set counter. A freshly created transaction is at
+	// version 0, and UpdateAuthTransaction advances it by one.
+	Version uint64
 }
+
+// IsExpired reports whether the transaction is past its expiry at now.
+func (t AuthTransaction) IsExpired(now time.Time) bool { return !now.Before(t.ExpiresAt) }
 
 // PutAuthTransaction stores authorization request state under the hash of its handle.
 func (s *SQLiteStore) PutAuthTransaction(ctx context.Context, draft AuthTransactionDraft) error {
 	if err := checkStoreRequest(ctx); err != nil {
 		return err
 	}
-	if err := checkIdentifier("client id", draft.ClientID); err != nil {
-		return err
-	}
-	if err := checkChallenge(draft.CodeChallenge); err != nil {
-		return err
-	}
-	if err := checkAuthLifetime(draft.Lifetime); err != nil {
-		return err
-	}
-	scopes, err := encodeScopes(draft.Scopes)
-	if err != nil {
-		return err
-	}
-	hash, err := s.keys.requireLookup(purposeTransaction, draft.Handle)
+	prepared, err := s.prepareTransaction(draft)
 	if err != nil {
 		return err
 	}
 
-	now := s.now().UTC()
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO auth_transactions
-		     (handle_hash, client_id, principal_id, redirect_uri, scopes,
-		      code_challenge, code_challenge_method, created_at, expires_at)
-		 VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
-		hash, draft.ClientID, draft.RedirectURI, scopes, draft.CodeChallenge,
-		challengeMethodS256, formatTime(now), formatTime(now.Add(draft.Lifetime)))
+		     (handle_hash, client_id, principal_id, redirect_uri, scopes, resource,
+		      code_challenge, code_challenge_method, client_state_sealed,
+		      client_state_key_version, version, created_at, expires_at)
+		 VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+		prepared.hash, draft.ClientID, draft.RedirectURI, prepared.scopes, draft.Resource,
+		draft.CodeChallenge, challengeMethodS256, prepared.sealedState, prepared.stateKeyVersion,
+		formatTime(prepared.createdAt), formatTime(prepared.expiresAt))
 	switch {
 	case isUniqueViolation(err):
 		return fmt.Errorf("store: transaction handle is already in use: %w", ErrInvalidArgument)
@@ -108,6 +132,79 @@ func (s *SQLiteStore) PutAuthTransaction(ctx context.Context, draft AuthTransact
 		return fmt.Errorf("store: insert authorization transaction: %w", err)
 	}
 	return nil
+}
+
+// preparedTransaction is a validated draft with its lookup value, its sealed state and
+// its absolute instants ready for the insert.
+type preparedTransaction struct {
+	hash            string
+	scopes          string
+	sealedState     []byte
+	stateKeyVersion sql.NullInt64
+	createdAt       time.Time
+	expiresAt       time.Time
+}
+
+// prepareTransaction validates a draft, hashes its handle and seals its client state.
+func (s *SQLiteStore) prepareTransaction(draft AuthTransactionDraft) (preparedTransaction, error) {
+	if err := checkIdentifier("client id", draft.ClientID); err != nil {
+		return preparedTransaction{}, err
+	}
+	if err := checkLocator("resource", draft.Resource); err != nil {
+		return preparedTransaction{}, err
+	}
+	if err := checkChallenge(draft.CodeChallenge); err != nil {
+		return preparedTransaction{}, err
+	}
+	scopes, err := encodeScopes(draft.Scopes)
+	if err != nil {
+		return preparedTransaction{}, err
+	}
+	hash, err := s.keys.requireLookup(purposeTransaction, draft.Handle)
+	if err != nil {
+		return preparedTransaction{}, err
+	}
+	createdAt, expiresAt, err := s.authWindow(draft.CreatedAt, draft.ExpiresAt, draft.Lifetime)
+	if err != nil {
+		return preparedTransaction{}, err
+	}
+	sealed, keyVersion, err := s.sealClientState(hash, draft.ClientState)
+	if err != nil {
+		return preparedTransaction{}, err
+	}
+	return preparedTransaction{
+		hash:            hash,
+		scopes:          scopes,
+		sealedState:     sealed,
+		stateKeyVersion: keyVersion,
+		createdAt:       createdAt,
+		expiresAt:       expiresAt,
+	}, nil
+}
+
+// authWindow resolves the created and expiry instants of a transaction or a code.
+//
+// Absolute instants win when the caller supplied them, so a record the caller already
+// stamped is stored exactly as stamped rather than re-derived from this store's clock
+// at whatever moment the call arrives. Otherwise the lifetime is applied to now.
+func (s *SQLiteStore) authWindow(createdAt, expiresAt time.Time, lifetime time.Duration,
+) (time.Time, time.Time, error) {
+	created := createdAt
+	if created.IsZero() {
+		created = s.now()
+	}
+	created = created.UTC()
+
+	if expiresAt.IsZero() {
+		if err := checkAuthLifetime(lifetime); err != nil {
+			return time.Time{}, time.Time{}, err
+		}
+		return created, created.Add(lifetime), nil
+	}
+	if err := checkAuthLifetime(expiresAt.Sub(created)); err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	return created, expiresAt.UTC(), nil
 }
 
 // checkChallenge requires a non-empty, bounded, base64url-shaped challenge.
@@ -136,12 +233,17 @@ func checkAuthLifetime(lifetime time.Duration) error {
 	return nil
 }
 
+// transactionColumns is the select list every transaction read shares.
+const transactionColumns = `client_id, principal_id, redirect_uri, scopes, resource,
+	code_challenge, client_state_sealed, version, created_at, expires_at`
+
 // AuthTransaction returns the state stored under a handle.
 //
 // The expiry predicate is in the query, so an expired transaction reports
 // ErrTransactionNotFound whether or not Cleanup has run. An expired transaction and an
 // unknown handle share one error: the distinction would tell a caller that a handle
-// once existed.
+// once existed. ConsumeAuthTransaction is the one read that returns an expired record,
+// because discarding it is the point of that call.
 func (s *SQLiteStore) AuthTransaction(ctx context.Context, handle Secret) (AuthTransaction, error) {
 	if err := checkStoreRequest(ctx); err != nil {
 		return AuthTransaction{}, err
@@ -151,30 +253,45 @@ func (s *SQLiteStore) AuthTransaction(ctx context.Context, handle Secret) (AuthT
 		return AuthTransaction{}, err
 	}
 
+	row := s.db.QueryRowContext(ctx,
+		`SELECT `+transactionColumns+`
+		   FROM auth_transactions
+		  WHERE handle_hash = ? AND expires_at > ?`,
+		hash, formatTime(s.now()))
+	return s.scanTransaction(hash, row)
+}
+
+// scanTransaction reads one transaction row and opens its sealed client state.
+func (s *SQLiteStore) scanTransaction(hash string, row *sql.Row) (AuthTransaction, error) {
 	var (
 		transaction AuthTransaction
 		principalID sql.NullString
 		scopes      string
+		sealedState []byte
+		version     int64
 		createdText string
 		expiresText string
 	)
-	err = s.db.QueryRowContext(ctx,
-		`SELECT client_id, principal_id, redirect_uri, scopes, code_challenge, created_at, expires_at
-		   FROM auth_transactions
-		  WHERE handle_hash = ? AND expires_at > ?`,
-		hash, formatTime(s.now())).Scan(
-		&transaction.ClientID, &principalID, &transaction.RedirectURI, &scopes,
-		&transaction.CodeChallenge, &createdText, &expiresText)
+	err := row.Scan(&transaction.ClientID, &principalID, &transaction.RedirectURI, &scopes,
+		&transaction.Resource, &transaction.CodeChallenge, &sealedState, &version,
+		&createdText, &expiresText)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return AuthTransaction{}, fmt.Errorf(
 			"store: no live authorization transaction matches: %w", ErrTransactionNotFound)
 	case err != nil:
 		return AuthTransaction{}, fmt.Errorf("store: read authorization transaction: %w", err)
+	case version < 0:
+		return AuthTransaction{}, fmt.Errorf("store: transaction version %d is negative: %w",
+			version, ErrCorruptRecord)
 	}
 
 	transaction.PrincipalID = principalID.String
 	transaction.Scopes = decodeScopes(scopes)
+	transaction.Version = uint64(version)
+	if transaction.ClientState, err = s.openClientState(hash, sealedState); err != nil {
+		return AuthTransaction{}, err
+	}
 	if transaction.CreatedAt, err = parseTime(createdText); err != nil {
 		return AuthTransaction{}, err
 	}
@@ -187,6 +304,10 @@ func (s *SQLiteStore) AuthTransaction(ctx context.Context, handle Secret) (AuthT
 // AttachPrincipal records which principal a transaction belongs to, once the browser
 // flow has identified one. An expired or unknown transaction reports
 // ErrTransactionNotFound.
+//
+// It does not take a version and does not advance one: it is the narrow write the
+// login flow needs. UpdateAuthTransaction is the compare-and-set for a caller that
+// holds a whole record.
 func (s *SQLiteStore) AttachPrincipal(ctx context.Context, handle Secret, principalID string) error {
 	if err := checkStoreRequest(ctx); err != nil {
 		return err
@@ -200,7 +321,7 @@ func (s *SQLiteStore) AttachPrincipal(ctx context.Context, handle Secret, princi
 	}
 
 	result, err := s.db.ExecContext(ctx,
-		`UPDATE auth_transactions SET principal_id = ?
+		`UPDATE auth_transactions SET principal_id = ?, version = version + 1
 		  WHERE handle_hash = ? AND expires_at > ?`,
 		principalID, hash, formatTime(s.now()))
 	if err != nil {
@@ -216,6 +337,10 @@ func (s *SQLiteStore) AttachPrincipal(ctx context.Context, handle Secret, princi
 
 // DeleteAuthTransaction removes a transaction. An absent one is not an error, so
 // cleaning up after a completed or abandoned flow is always safe.
+//
+// It is therefore not a way to make completing an authorization single-use: two
+// callers deleting the same handle both succeed. ConsumeAuthTransaction is the call
+// that elects exactly one winner.
 func (s *SQLiteStore) DeleteAuthTransaction(ctx context.Context, handle Secret) error {
 	if err := checkStoreRequest(ctx); err != nil {
 		return err
@@ -229,161 +354,4 @@ func (s *SQLiteStore) DeleteAuthTransaction(ctx context.Context, handle Secret) 
 		return fmt.Errorf("store: delete authorization transaction: %w", err)
 	}
 	return nil
-}
-
-// AuthCodeDraft is the input to PutAuthCode.
-type AuthCodeDraft struct {
-	// Code is the opaque authorization code. It is hashed, never stored.
-	Code Secret
-
-	PrincipalID   string
-	ClientID      string
-	RedirectURI   string
-	Audience      string
-	Scopes        []string
-	CodeChallenge string
-	Lifetime      time.Duration
-}
-
-// AuthCode is what a redeemed authorization code proves.
-type AuthCode struct {
-	PrincipalID   string
-	ClientID      string
-	RedirectURI   string
-	Audience      string
-	Scopes        []string
-	CodeChallenge string
-	ExpiresAt     time.Time
-}
-
-// PutAuthCode stores an authorization code under its hash.
-func (s *SQLiteStore) PutAuthCode(ctx context.Context, draft AuthCodeDraft) error {
-	if err := checkStoreRequest(ctx); err != nil {
-		return err
-	}
-	for kind, value := range map[string]string{
-		"principal id": draft.PrincipalID, "client id": draft.ClientID, "audience": draft.Audience,
-	} {
-		if err := checkIdentifier(kind, value); err != nil {
-			return err
-		}
-	}
-	if err := checkChallenge(draft.CodeChallenge); err != nil {
-		return err
-	}
-	if err := checkAuthLifetime(draft.Lifetime); err != nil {
-		return err
-	}
-	scopes, err := encodeScopes(draft.Scopes)
-	if err != nil {
-		return err
-	}
-	hash, err := s.keys.requireLookup(purposeAuthCode, draft.Code)
-	if err != nil {
-		return err
-	}
-
-	now := s.now().UTC()
-	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO auth_codes
-		     (code_hash, principal_id, client_id, redirect_uri, scopes, audience,
-		      code_challenge, created_at, expires_at, consumed_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-		hash, draft.PrincipalID, draft.ClientID, draft.RedirectURI, scopes, draft.Audience,
-		draft.CodeChallenge, formatTime(now), formatTime(now.Add(draft.Lifetime)))
-	switch {
-	case isUniqueViolation(err):
-		return fmt.Errorf("store: authorization code is already stored: %w", ErrInvalidArgument)
-	case isForeignKeyViolation(err):
-		return fmt.Errorf("store: principal %s or client %s does not exist: %w",
-			draft.PrincipalID, draft.ClientID, ErrPrincipalNotFound)
-	case err != nil:
-		return fmt.Errorf("store: insert authorization code: %w", err)
-	}
-	return nil
-}
-
-// ConsumeAuthCode redeems an authorization code exactly once.
-//
-// The read and the consumption happen in one immediate transaction, and the UPDATE
-// repeats the not-consumed precondition, so two concurrent redemptions of one code
-// produce exactly one success and one ErrCodeAlreadyUsed. A replay is reported
-// distinctly from an unknown code, because a replay is a security event a caller
-// should audit; an expired code reports ErrCodeNotFound, so expiry does not become an
-// oracle for whether a code ever existed.
-func (s *SQLiteStore) ConsumeAuthCode(ctx context.Context, code Secret) (AuthCode, error) {
-	if err := checkStoreRequest(ctx); err != nil {
-		return AuthCode{}, err
-	}
-	hash, err := s.keys.requireLookup(purposeAuthCode, code)
-	if err != nil {
-		return AuthCode{}, err
-	}
-
-	var redeemed AuthCode
-	err = s.inTx(ctx, func(tx *sql.Tx) error {
-		consumed, err := s.consumeCodeIn(ctx, tx, hash)
-		redeemed = consumed
-		return err
-	})
-	if err != nil {
-		return AuthCode{}, err
-	}
-	return redeemed, nil
-}
-
-// consumeCodeIn is the transactional body of ConsumeAuthCode.
-func (s *SQLiteStore) consumeCodeIn(ctx context.Context, tx *sql.Tx, hash string) (AuthCode, error) {
-	code, err := readAuthCode(ctx, tx, hash)
-	if err != nil {
-		return AuthCode{}, err
-	}
-	if !code.ExpiresAt.After(s.now().UTC()) {
-		return AuthCode{}, fmt.Errorf("store: authorization code expired at %s: %w",
-			code.ExpiresAt.Format(timeLayout), ErrCodeNotFound)
-	}
-
-	result, err := tx.ExecContext(ctx,
-		`UPDATE auth_codes SET consumed_at = ? WHERE code_hash = ? AND consumed_at IS NULL`,
-		formatTime(s.now()), hash)
-	if err != nil {
-		return AuthCode{}, fmt.Errorf("store: consume authorization code: %w", err)
-	}
-	err = requireOneRow(result, fmt.Errorf(
-		"store: authorization code was redeemed concurrently: %w", ErrCodeAlreadyUsed))
-	if err != nil {
-		return AuthCode{}, err
-	}
-	return code, nil
-}
-
-// readAuthCode loads a code row and refuses one that was already redeemed.
-func readAuthCode(ctx context.Context, tx *sql.Tx, hash string) (AuthCode, error) {
-	var (
-		code        AuthCode
-		scopes      string
-		expiresText string
-		consumedAt  sql.NullString
-	)
-	err := tx.QueryRowContext(ctx,
-		`SELECT principal_id, client_id, redirect_uri, scopes, audience, code_challenge,
-		        expires_at, consumed_at
-		   FROM auth_codes WHERE code_hash = ?`, hash).Scan(
-		&code.PrincipalID, &code.ClientID, &code.RedirectURI, &scopes, &code.Audience,
-		&code.CodeChallenge, &expiresText, &consumedAt)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return AuthCode{}, fmt.Errorf("store: no authorization code matches: %w", ErrCodeNotFound)
-	case err != nil:
-		return AuthCode{}, fmt.Errorf("store: read authorization code: %w", err)
-	case consumedAt.Valid:
-		return AuthCode{}, fmt.Errorf("store: authorization code was already redeemed: %w",
-			ErrCodeAlreadyUsed)
-	}
-
-	code.Scopes = decodeScopes(scopes)
-	if code.ExpiresAt, err = parseTime(expiresText); err != nil {
-		return AuthCode{}, err
-	}
-	return code, nil
 }

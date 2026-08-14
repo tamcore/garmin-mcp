@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io/fs"
 	"testing"
 	"testing/fstest"
 
@@ -226,3 +227,76 @@ func TestEmbeddedMigrationSetIsWellFormed(t *testing.T) {
 		}
 	}
 }
+
+// TestMigratingAnExistingDatabaseKeepsItsConsents is the upgrade path a developer's
+// database takes. 0002 rebuilds consents to widen the key, and a rebuild that lost a row
+// would silently drop a grant. Every migrated row must land on the empty redirect URI and
+// the empty resource, which is what a row written under the narrow key meant.
+func TestMigratingAnExistingDatabaseKeepsItsConsents(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	db := newTestDB(t)
+
+	initial, err := fs.ReadFile(migrations.FS(), "0001_initial.sql")
+	if err != nil {
+		t.Fatalf("read the initial migration: %v", err)
+	}
+	if _, err := store.Migrate(ctx, db,
+		migrationFS(map[string]string{"0001_initial.sql": string(initial)})); err != nil {
+		t.Fatalf("Migrate to the initial version: %v", err)
+	}
+
+	seedNarrowConsent(t, db)
+
+	result, err := store.Migrate(ctx, db, migrations.FS())
+	if err != nil {
+		t.Fatalf("Migrate an existing database: %v", err)
+	}
+	if result.FromVersion != 1 || result.ToVersion < 2 {
+		t.Fatalf("migrated %d -> %d, want 1 -> at least 2", result.FromVersion, result.ToVersion)
+	}
+
+	var (
+		redirectURI string
+		resource    string
+		scopes      string
+	)
+	err = db.QueryRowContext(ctx,
+		`SELECT redirect_uri, resource, scopes FROM consents WHERE principal_id = ?`,
+		testUnknownID).Scan(&redirectURI, &resource, &scopes)
+	if err != nil {
+		t.Fatalf("the migrated consent is gone: %v", err)
+	}
+	if redirectURI != "" || resource != "" || scopes != testScope {
+		t.Fatalf("migrated consent = redirect %q resource %q scopes %q, want empty, empty and %q",
+			redirectURI, resource, scopes, testScope)
+	}
+}
+
+// seedNarrowConsent writes the rows a 0001 database would hold: one principal, one
+// client, and one consent under the narrow key.
+func seedNarrowConsent(t *testing.T, db *sql.DB) {
+	t.Helper()
+	statements := []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO principals (id, email_normalized, key_version, created_at, updated_at)
+		  VALUES (?, ?, 1, ?, ?)`,
+			[]any{testUnknownID, testEmailNormalized, migrationInstant, migrationInstant}},
+		{`INSERT INTO oauth_clients (id, name, is_public, created_at)
+		  VALUES (?, ?, 1, ?)`,
+			[]any{"legacy-client", testClientName, migrationInstant}},
+		{`INSERT INTO consents (principal_id, client_id, scopes, granted_at)
+		  VALUES (?, ?, ?, ?)`,
+			[]any{testUnknownID, "legacy-client", testScope, migrationInstant}},
+	}
+	for _, statement := range statements {
+		if _, err := db.Exec(statement.query, statement.args...); err != nil {
+			t.Fatalf("seed a 0001 row: %v", err)
+		}
+	}
+}
+
+// migrationInstant is a fixed timestamp in the format every table in the schema uses.
+const migrationInstant = "2026-08-14T12:00:00Z"

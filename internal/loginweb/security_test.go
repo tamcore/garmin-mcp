@@ -149,7 +149,7 @@ func TestUnsolicitedCredentialsAreRefused(t *testing.T) {
 	}{
 		{name: "no cookie and no token"},
 		{name: "cookie but no token", cookie: true},
-		{name: "cookie and a wrong token", cookie: true, token: "not-the-token"},
+		{name: "cookie and a wrong token", cookie: true, token: wrongToken},
 	}
 
 	for _, tc := range tests {

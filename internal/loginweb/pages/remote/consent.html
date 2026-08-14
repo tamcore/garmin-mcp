@@ -1,0 +1,25 @@
+{{define "title"}}Confirm the access you grant{{end}}
+{{define "content"}}
+<p>Your Garmin account is signed in. Nothing has been granted yet.</p>
+<p><strong>{{.Client.ClientName}}</strong> (<code>{{.Client.ClientID}}</code>) will
+receive a token for this deployment only. It never receives your Garmin password or
+your Garmin tokens.</p>
+<dl>
+<dt>The answer is sent to</dt>
+<dd><strong>{{.Client.RedirectHost}}</strong></dd>
+<dt>Exact address</dt>
+<dd><code>{{.Client.RedirectURI}}</code></dd>
+<dt>Server being authorized</dt>
+<dd><code>{{.Client.Resource}}</code></dd>
+<dt>Access granted</dt>
+<dd><ul>{{range .Client.Scopes}}<li><code>{{.}}</code></li>{{end}}</ul></dd>
+</dl>
+<form method="post" action="/login/consent">
+<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+<p>
+<button type="submit" name="decision" value="allow">Allow</button>
+<button type="submit" name="decision" value="deny">Deny</button>
+</p>
+</form>
+<p class="notice">Denying discards the Garmin sign-in this page is holding.</p>
+{{end}}

@@ -1,6 +1,10 @@
 package loginweb
 
-import "net/http"
+import (
+	"net/http"
+	"strconv"
+	"time"
+)
 
 // contentSecurityPolicy is the page's whole permission set.
 //
@@ -15,14 +19,35 @@ const contentSecurityPolicy = "default-src 'none'; " +
 	"base-uri 'none'; " +
 	"frame-ancestors 'none'"
 
-// secureHeaders wraps next so every response carries the browser protections,
-// including the generic 404 and the stylesheet.
+// secureHeaders wraps next for the loopback profile.
+//
+// It sends no HSTS: the loopback profile is plain HTTP on 127.0.0.1, and a
+// Strict-Transport-Security header there would either be ignored or, on a host that
+// honoured it, break every other plain-HTTP service on the same name.
+func secureHeaders(next http.Handler) http.Handler { return browserHeaders(next, "") }
+
+// remoteSecureHeaders wraps next for the remote profile, adding HSTS. The value is
+// rendered once at construction, so no request pays for it.
+func remoteSecureHeaders(next http.Handler, hsts string) http.Handler {
+	return browserHeaders(next, hsts)
+}
+
+// hstsHeader renders the Strict-Transport-Security value for maxAge.
+func hstsHeader(maxAge time.Duration) string {
+	return "max-age=" + strconv.FormatInt(int64(maxAge.Seconds()), 10) + "; includeSubDomains"
+}
+
+// browserHeaders wraps next so every response carries the browser protections,
+// including the generic 404, the expired page and the stylesheet.
 //
 // The headers are set before the handler runs, because a handler that writes its
 // status line first would freeze the header map with them missing.
-func secureHeaders(next http.Handler) http.Handler {
+func browserHeaders(next http.Handler, hsts string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()
+		if hsts != "" {
+			header.Set("Strict-Transport-Security", hsts)
+		}
 		header.Set("Content-Security-Policy", contentSecurityPolicy)
 		header.Set("X-Content-Type-Options", "nosniff")
 		header.Set("X-Frame-Options", "DENY")

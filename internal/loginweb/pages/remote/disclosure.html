@@ -1,0 +1,22 @@
+{{define "title"}}Authorize an MCP client{{end}}
+{{define "content"}}
+<p><strong>{{.Client.ClientName}}</strong> (<code>{{.Client.ClientID}}</code>) asks
+to reach your Garmin data through this garmin-mcp deployment.</p>
+<dl>
+<dt>The answer is sent to</dt>
+<dd><strong>{{.Client.RedirectHost}}</strong></dd>
+<dt>Exact address</dt>
+<dd><code>{{.Client.RedirectURI}}</code></dd>
+<dt>Server being authorized</dt>
+<dd><code>{{.Client.Resource}}</code></dd>
+<dt>Requested access</dt>
+<dd><ul>{{range .Client.Scopes}}<li><code>{{.}}</code></li>{{end}}</ul></dd>
+</dl>
+<p>Nothing is granted yet, and nothing is asked of Garmin yet. On the next page you
+enter your Garmin Connect email address and password.</p>
+<p>If you did not start this sign-in, close this page.</p>
+<form method="post" action="/login">
+<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+<p><button type="submit">Continue to the Garmin sign-in</button></p>
+</form>
+{{end}}

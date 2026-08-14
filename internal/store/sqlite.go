@@ -33,6 +33,12 @@ import (
 //   - Refresh rotation, reuse detection, consent revocation and Garmin unlinking
 //     are single transactions. They are idempotent: running one twice reaches the
 //     same state and reports no error the second time.
+//   - Compare-and-set on an authorization transaction is the same single UPDATE
+//     ... WHERE version = ?, and reports ErrTransactionConflict to every loser.
+//     Consuming a transaction is a read and a delete in one transaction with a
+//     one-row requirement, so concurrent completions elect exactly one winner —
+//     which a compare-and-set alone cannot do, because two callers can serialize
+//     and each win its own in turn.
 //   - Expiry is enforced on every read, so an expired transaction, code or token is
 //     never returned even before Cleanup runs.
 //

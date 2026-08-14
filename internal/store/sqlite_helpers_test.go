@@ -120,6 +120,29 @@ func newTestStore(t *testing.T) (*store.SQLiteStore, *fakeClock) {
 	return opened, clock
 }
 
+// newTestStoreWithPath is newTestStore that also reports the database file, for the
+// tests that have to read the raw bytes on disk and prove a value is not in the clear
+// there.
+func newTestStoreWithPath(t *testing.T) (*store.SQLiteStore, *fakeClock, string) {
+	t.Helper()
+	clock := newFakeClock()
+	path := testDBPath(t)
+	opened, err := store.OpenSQLite(context.Background(), store.SQLiteConfig{
+		Path: path,
+		Key:  testKey(t),
+		Now:  clock.Now,
+	})
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := opened.Close(); err != nil {
+			t.Errorf("close store: %v", err)
+		}
+	})
+	return opened, clock, path
+}
+
 // Synthetic Garmin DI token material. The token is JWT-shaped so the document
 // decoder's unverified-exp path is exercised, and the payload carries no real claim.
 const (

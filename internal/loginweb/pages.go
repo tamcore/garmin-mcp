@@ -70,8 +70,16 @@ type pageSet struct {
 	stylesheet []byte
 }
 
-// loadPages parses the embedded templates and reads the stylesheet.
+// loadPages parses the loopback templates and reads the stylesheet.
 func loadPages() (*pageSet, error) {
+	return loadPageSet("pages",
+		[]string{pageDisclosure, pageCredentials, pageMFA, pageDone, pageNotFound})
+}
+
+// loadPageSet parses one profile's templates from dir. Each profile has its own
+// document and its own set of pages; the stylesheet is shared, because it is the
+// only asset and it carries no policy.
+func loadPageSet(dir string, names []string) (*pageSet, error) {
 	stylesheet, err := assets.ReadFile("pages/style.css")
 	if err != nil {
 		return nil, fmt.Errorf("loginweb: reading the embedded stylesheet: %w", err)
@@ -81,9 +89,9 @@ func loadPages() (*pageSet, error) {
 		templates:  make(map[string]*template.Template),
 		stylesheet: stylesheet,
 	}
-	for _, name := range []string{pageDisclosure, pageCredentials, pageMFA, pageDone, pageNotFound} {
+	for _, name := range names {
 		parsed, err := template.New("base.html").ParseFS(assets,
-			"pages/base.html", "pages/"+name+".html")
+			dir+"/base.html", dir+"/"+name+".html")
 		if err != nil {
 			return nil, fmt.Errorf("loginweb: parsing the %s page: %w", name, err)
 		}
@@ -96,7 +104,11 @@ func loadPages() (*pageSet, error) {
 //
 // A template failure after the status line can only truncate the page:
 // html/template escapes as it writes, so nothing half-escaped reaches the browser.
-func (p *pageSet) render(w http.ResponseWriter, status int, name string, data pageData) {
+//
+// The data argument is the profile's own page data type. It is typed as any so the
+// two profiles can render different field sets through one page set; each set only
+// ever receives the type its own templates were written against.
+func (p *pageSet) render(w http.ResponseWriter, status int, name string, data any) {
 	parsed, ok := p.templates[name]
 	if !ok {
 		http.Error(w, "internal error", http.StatusInternalServerError)
