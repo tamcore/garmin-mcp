@@ -1,0 +1,257 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedBy": "static AST extraction (no upstream execution)",
+  "extractionDate": "2026-08-14",
+  "upstream": {
+    "repository": "Taxuspt/garmin_mcp",
+    "commit": "3610be6feed93088d85b0f35aba9d7d07c2505a7",
+    "commitUrl": "https://github.com/Taxuspt/garmin_mcp/commit/3610be6feed93088d85b0f35aba9d7d07c2505a7",
+    "sourceRoot": "src/garmin_mcp",
+    "declaredDependency": "garminconnect==0.3.2 (pyproject.toml at this commit)",
+    "garminconnectReferenceCommit": "e4e9748cf3fa62f997e77171addee3acc333232c",
+    "garminconnectReferenceUrl": "https://github.com/cyberjunky/python-garminconnect/commit/e4e9748cf3fa62f997e77171addee3acc333232c"
+  },
+  "extraction": {
+    "method": "static AST analysis of the pinned upstream sources with Python's ast module; upstream code was never executed",
+    "script": "scratchpad extract.py + gen.py (development-time only; Python is not a runtime or build dependency of this project)",
+    "matchedRegistrations": "decorators of the form @app.tool() / @app.resource(<uri>) on functions under src/garmin_mcp",
+    "regenerate": "see docs/parity.md"
+  },
+  "enums": {
+    "status": [
+      "not-implemented",
+      "in-progress",
+      "implemented",
+      "intentionally-omitted"
+    ],
+    "sensitivity": [
+      "health",
+      "location",
+      "profile",
+      "device",
+      "nutrition",
+      "womens-health",
+      "ordinary"
+    ],
+    "effect": [
+      "read-only",
+      "write",
+      "destructive",
+      "external-side-effect"
+    ],
+    "idempotency": [
+      "idempotent",
+      "non-idempotent",
+      "unknown"
+    ]
+  },
+  "counts": {
+    "resources": 5,
+    "byStatus": {
+      "not-implemented": 5
+    },
+    "byEffect": {
+      "read-only": 5
+    },
+    "bySensitivity": {
+      "ordinary": 5
+    }
+  },
+  "resources": [
+    {
+      "uri": "workout://templates/simple-run",
+      "status": "not-implemented",
+      "name": "get_simple_run_template",
+      "description": "Simple run workout template (warmup, run, cooldown)\n\nA basic running workout structure suitable for easy runs.\nModify the endConditionValue to adjust durations.",
+      "mimeType": "text/plain",
+      "outputShape": {
+        "kind": "json-text",
+        "mediaType": "text/plain",
+        "note": "Static JSON template serialised with json.dumps(..., indent=2); no Garmin call."
+      },
+      "upstream": {
+        "module": "src/garmin_mcp/workout_templates.py",
+        "line": 303,
+        "pythonFunction": "get_simple_run_template",
+        "permalink": "https://github.com/Taxuspt/garmin_mcp/blob/3610be6feed93088d85b0f35aba9d7d07c2505a7/src/garmin_mcp/workout_templates.py#L303"
+      },
+      "sensitivity": "ordinary",
+      "sensitivityTags": [
+        "ordinary"
+      ],
+      "effect": "read-only",
+      "secondaryEffects": [],
+      "idempotency": "idempotent",
+      "idempotencyNote": "Returns a constant document; no state is touched.",
+      "authRequired": false,
+      "notes": [],
+      "go": {
+        "package": "",
+        "handler": "",
+        "file": "",
+        "registeredUri": ""
+      },
+      "tests": {
+        "unit": [],
+        "integration": [],
+        "conformance": []
+      }
+    },
+    {
+      "uri": "workout://templates/interval-running",
+      "status": "not-implemented",
+      "name": "get_interval_template",
+      "description": "Interval running workout template with repeat groups\n\nDemonstrates RepeatGroupDTO for interval training.\nIncludes 6x400m intervals with 2min recovery.",
+      "mimeType": "text/plain",
+      "outputShape": {
+        "kind": "json-text",
+        "mediaType": "text/plain",
+        "note": "Static JSON template serialised with json.dumps(..., indent=2); no Garmin call."
+      },
+      "upstream": {
+        "module": "src/garmin_mcp/workout_templates.py",
+        "line": 312,
+        "pythonFunction": "get_interval_template",
+        "permalink": "https://github.com/Taxuspt/garmin_mcp/blob/3610be6feed93088d85b0f35aba9d7d07c2505a7/src/garmin_mcp/workout_templates.py#L312"
+      },
+      "sensitivity": "ordinary",
+      "sensitivityTags": [
+        "ordinary"
+      ],
+      "effect": "read-only",
+      "secondaryEffects": [],
+      "idempotency": "idempotent",
+      "idempotencyNote": "Returns a constant document; no state is touched.",
+      "authRequired": false,
+      "notes": [],
+      "go": {
+        "package": "",
+        "handler": "",
+        "file": "",
+        "registeredUri": ""
+      },
+      "tests": {
+        "unit": [],
+        "integration": [],
+        "conformance": []
+      }
+    },
+    {
+      "uri": "workout://templates/tempo-run",
+      "status": "not-implemented",
+      "name": "get_tempo_template",
+      "description": "Tempo run workout template with heart rate zone target\n\nDemonstrates targeting a specific heart rate zone.\n20min tempo block at HR zone 4.",
+      "mimeType": "text/plain",
+      "outputShape": {
+        "kind": "json-text",
+        "mediaType": "text/plain",
+        "note": "Static JSON template serialised with json.dumps(..., indent=2); no Garmin call."
+      },
+      "upstream": {
+        "module": "src/garmin_mcp/workout_templates.py",
+        "line": 321,
+        "pythonFunction": "get_tempo_template",
+        "permalink": "https://github.com/Taxuspt/garmin_mcp/blob/3610be6feed93088d85b0f35aba9d7d07c2505a7/src/garmin_mcp/workout_templates.py#L321"
+      },
+      "sensitivity": "ordinary",
+      "sensitivityTags": [
+        "ordinary"
+      ],
+      "effect": "read-only",
+      "secondaryEffects": [],
+      "idempotency": "idempotent",
+      "idempotencyNote": "Returns a constant document; no state is touched.",
+      "authRequired": false,
+      "notes": [],
+      "go": {
+        "package": "",
+        "handler": "",
+        "file": "",
+        "registeredUri": ""
+      },
+      "tests": {
+        "unit": [],
+        "integration": [],
+        "conformance": []
+      }
+    },
+    {
+      "uri": "workout://templates/strength-circuit",
+      "status": "not-implemented",
+      "name": "get_strength_template",
+      "description": "Strength training circuit template\n\nCircuit-style strength workout with repeat groups.\n3 rounds of 10min work + 2min rest.",
+      "mimeType": "text/plain",
+      "outputShape": {
+        "kind": "json-text",
+        "mediaType": "text/plain",
+        "note": "Static JSON template serialised with json.dumps(..., indent=2); no Garmin call."
+      },
+      "upstream": {
+        "module": "src/garmin_mcp/workout_templates.py",
+        "line": 330,
+        "pythonFunction": "get_strength_template",
+        "permalink": "https://github.com/Taxuspt/garmin_mcp/blob/3610be6feed93088d85b0f35aba9d7d07c2505a7/src/garmin_mcp/workout_templates.py#L330"
+      },
+      "sensitivity": "ordinary",
+      "sensitivityTags": [
+        "ordinary"
+      ],
+      "effect": "read-only",
+      "secondaryEffects": [],
+      "idempotency": "idempotent",
+      "idempotencyNote": "Returns a constant document; no state is touched.",
+      "authRequired": false,
+      "notes": [],
+      "go": {
+        "package": "",
+        "handler": "",
+        "file": "",
+        "registeredUri": ""
+      },
+      "tests": {
+        "unit": [],
+        "integration": [],
+        "conformance": []
+      }
+    },
+    {
+      "uri": "workout://reference/structure",
+      "status": "not-implemented",
+      "name": "get_structure_reference",
+      "description": "Reference guide for workout JSON structure\n\nDocuments valid values for step types, conditions, targets, and sports.\nUse this to understand what values are valid in workout definitions.",
+      "mimeType": "text/plain",
+      "outputShape": {
+        "kind": "json-text",
+        "mediaType": "text/plain",
+        "note": "Static JSON template serialised with json.dumps(..., indent=2); no Garmin call."
+      },
+      "upstream": {
+        "module": "src/garmin_mcp/workout_templates.py",
+        "line": 339,
+        "pythonFunction": "get_structure_reference",
+        "permalink": "https://github.com/Taxuspt/garmin_mcp/blob/3610be6feed93088d85b0f35aba9d7d07c2505a7/src/garmin_mcp/workout_templates.py#L339"
+      },
+      "sensitivity": "ordinary",
+      "sensitivityTags": [
+        "ordinary"
+      ],
+      "effect": "read-only",
+      "secondaryEffects": [],
+      "idempotency": "idempotent",
+      "idempotencyNote": "Returns a constant document; no state is touched.",
+      "authRequired": false,
+      "notes": [],
+      "go": {
+        "package": "",
+        "handler": "",
+        "file": "",
+        "registeredUri": ""
+      },
+      "tests": {
+        "unit": [],
+        "integration": [],
+        "conformance": []
+      }
+    }
+  ]
+}
