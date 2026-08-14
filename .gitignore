@@ -1,5 +1,7 @@
 .envrc
 .direnv/
 .private/
+.claude/
 dist/
 cover.out
+cover-fakegarmin.out
