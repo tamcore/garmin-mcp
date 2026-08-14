@@ -83,14 +83,17 @@ package or type that provides it.
 
 Roots, sampling, and logging are deprecated as of protocol 2026-07-28. The SDK
 still supports them, but this project must not build any behavior on them. The
-`logging` protocol capability in particular is not used: structured logging lives
-in `internal/mcplog` and writes to stderr, which also keeps stdout reserved for
-MCP frames under stdio.
+`logging` protocol capability in particular must not be used. Structured logging
+**will** live in a local package that writes to stderr, which also keeps stdout
+reserved for MCP frames under stdio. No logger exists in this repository today:
+`Config.LogLevel` and `Config.LogFormat` are parsed and validated, and nothing
+reads them. The logger lands with the MCP foundation slice.
 
 The conformance suite
 ([`modelcontextprotocol/conformance`](https://github.com/modelcontextprotocol/conformance))
-is pinned to an immutable release or commit SHA in the CI workflow that runs it,
-when that workflow gains a server to test. It validates MCP wire, transport,
+is **not pinned and not run today**: no conformance job exists, because there is
+no server to test. The job that adds it must pin the suite to an immutable release
+or commit SHA. The suite validates MCP wire, transport,
 tool, and resource behavior only. It is not certification of the embedded OAuth
 authorization server, which keeps its own negative test matrix.
 
@@ -118,9 +121,11 @@ House patterns with no direct official-SDK equivalent, and how each is
 reimplemented, are recorded in `docs/mcp-version-matrix.md` next to the feature
 they belong to. The one-tool-per-file registration layout, the explicit
 `writeTools`/`destructiveTools` name lists validated at startup, and the
-rate-limit handler middleware are all local code in `internal/tools`,
-`internal/policy`, and `internal/ratelimit`; the official SDK supplies only
-`mcp.AddTool` and the `Middleware` hooks they build on.
+rate-limit handler middleware **will** be local code: the official SDK supplies
+only `mcp.AddTool` and the `Middleware` hooks they build on. None of that code
+exists yet, and neither do the packages that will hold it. Where this ADR names a
+package that will own a behavior, read it as the intended target layout, not as a
+description of the tree.
 
 ## Consequences
 

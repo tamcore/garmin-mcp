@@ -34,7 +34,11 @@ Phase definitions are in `docs/phases.md`.
       Measured 138 tools and 5 resources by two independent methods.
 - [x] Repository skeleton: `go.mod` with the pinned Go directive, golangci-lint
       v2 config, `.pre-commit-config.yaml`, `.goreleaser.yaml`, `Dockerfile`.
-- [x] Hardened GitHub Actions workflows with SHA-pinned actions.
+- [x] Hardened GitHub Actions workflows with SHA-pinned actions, including the
+      SHA-pinned dependency review gate on pull requests, name-based tagged-suite
+      guards on `test-fakegarmin` and `e2e`, `-race` on every Go test invocation,
+      and distinct literal concurrency prefixes in `ci.yaml` and `release.yaml`.
+      Details and the remaining gaps are below.
 - [x] Scripted fake Garmin service in `internal/testkit`, plus
       `internal/garmin/protocol` with the endpoint/identity constants and the
       login failure classifier.
@@ -186,11 +190,17 @@ Coverage figures are statement coverage from `go test -cover`.
 
 ### Known gaps carried out of phase 1
 
-These are deliberate and tracked, not silently dropped:
+These are deliberate and tracked, not silently dropped.
+
+Gates the target pipeline still needs, and none of them exists: a bounded **fuzz
+smoke** job, the pinned **MCP conformance** suite, a **coverage threshold** gate,
+a **two-clean-build reproducibility** check, **container image signing**,
+**container image and per-binary SBOMs**, and **build provenance attestation**.
+The bullets below give the detail.
 
 - CI has no fuzz smoke job and no MCP conformance job. There are no fuzz targets
-  and no MCP server to point them at yet. Wire each one with the subsystem that
-  creates it.
+  and no MCP server to point them at yet, and the conformance suite is therefore
+  not pinned anywhere. Wire each one with the subsystem that creates it.
 - Release supply-chain coverage is narrower than the brief asks for.
   `.goreleaser.yaml` signs the **checksum file only** (`artifacts: checksum`,
   keyless cosign `sign-blob`) and emits **archive SBOMs only**
@@ -211,12 +221,17 @@ These are deliberate and tracked, not silently dropped:
   (`TestVersionReportsTheInjectedBuildInfo`,
   `TestStdioTransportKeepsStdoutClean`,
   `TestUnknownCommandFailsWithoutTouchingStdout`) that build the binary and drive
-  it as a subprocess. The vacuity guard now **exists** on both jobs: an "Assert
-  the tagged suite exists" step runs before the tests and exits non-zero when the
-  count is zero — `test-fakegarmin` counts files carrying
-  `//go:build fakegarmin`, `e2e` counts test files under `./e2e/`. The guard is
-  presence-based, so it catches a deleted suite but not a suite that decays to one
-  trivial test. Keeping the suites meaningful is still a review duty.
+  it as a subprocess.
+  The vacuity guards on both jobs **no longer count files**. Each job runs
+  `go test -json` and tees the stream, then extracts the test names declared in the
+  tagged sources — `grep '^func Test'` over the files carrying
+  `//go:build fakegarmin`, or over every `_test.go` under `./e2e/` — and requires
+  **each declared name to appear as a `pass` action in that stream**. A deleted,
+  renamed, emptied or universally skipped tagged test therefore fails the job, and
+  so does a build tag that excludes a file the guard counted. Zero declared names
+  is still a hard error. The `e2e` job also runs with `-race` now, like every other
+  Go test invocation. What the guard still cannot catch is a suite that decays into
+  one trivial assertion, so keeping the suites meaningful remains a review duty.
 - The widget MFA path is still incomplete. `ClassifyWidgetLogin` decides from the
   HTTP status and the page title only. The inline-JS variables embedded in the
   widget page (`customerGuid`, `mfaMethod`, `locale`, `clientId`, `codeSentTo`)
@@ -230,23 +245,46 @@ These are deliberate and tracked, not silently dropped:
   outcome distinct from `OutcomeInvalidCredentials` for a rejected OTP, so a
   wrong code and a wrong password cannot be told apart.
 - The 0.3.8 to 0.3.10 security behaviors are now **mostly implemented**, not
-  mostly missing. Landed: host allowlist enforcement through
-  `protocol.ValidatedDomain`, sanitized exception messages, login-error query
+  mostly missing. Landed: sanitized exception messages, login-error query
   redaction, symlink-rejecting token paths with full ancestry checks, atomic
   writes with owner-only modes, refresh serialized per principal with CAS, JWT
   `exp` validation with unsigned-payload and `alg:none` rejection, and
-  per-transaction pending MFA state in a bounded registry. Still missing:
-  explicit widget MFA code delivery (above), server-driven pagination caps, and
-  segment-aware path-traversal guards. See `docs/upstream-pins.md` for the
-  numbered list.
+  per-transaction pending MFA state in a bounded registry. Partly landed: the host
+  allowlist, because every URL the auth package builds comes from a
+  `protocol.ValidatedDomain` but `Refresher.Do` does not inspect the host of a
+  caller-supplied request; and the segment-aware traversal guard, because the store
+  and key paths are resolved component by component while no download or
+  file-taking path exists to validate a filename. Not started: explicit widget MFA
+  code delivery (above) and server-driven pagination caps. See
+  `docs/upstream-pins.md` for the numbered list and the same per-item split.
 - The `JWT_WEB` cookie fallback after a failed DI exchange is not implemented.
   Upstream consumes the CAS ticket through the web front end when the DI
   exchange fails; this project requires the DI token set and reports
   `ErrTokenExchangeFailed` instead. That is a deliberate narrowing, and it means
   a Garmin-side DI change becomes a hard login failure rather than a degraded
   one.
-- GitHub-native secret scanning and dependency/license review are repository
-  settings, not workflow files. They still need enabling.
+- Dependency and license review **is** an enforced CI gate now, and the earlier
+  claim that it is only a repository setting was wrong. `ci.yaml` runs a
+  SHA-pinned `actions/dependency-review-action` on `pull_request` only, because the
+  action needs a base and a head to compare, with `fail-on-severity: low` and an
+  explicit `allow-licenses` list (Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT)
+  that matches `docs/dependencies.md`. A dependency under any other license fails
+  the pull request instead of passing silently. GitHub-native **secret scanning**
+  remains a repository setting, not a workflow file, and still needs enabling.
+- The concurrency groups in `ci.yaml` and `release.yaml` use **distinct literal
+  prefixes** (`ci-` and `release-`), not `github.workflow`. A called workflow
+  inherits the caller's `github.workflow`, so the shared expression resolved both
+  runs into one group and the release run cancelled itself before it could publish.
+  `release.yaml` also sets `cancel-in-progress: false`, because a release must not
+  be interrupted midway through publishing.
+- The container smoke test proves less than its name suggests. It proves that a
+  **nonroot, read-only, shell-free** image can execute the binary: the image user
+  is `65532:65532`, no `/bin/sh`, `/bin/bash` or `/busybox/sh` is present, and the
+  binary runs under `--read-only --cap-drop=ALL --security-opt no-new-privileges`
+  with a `noexec` tmpfs. It does **not** prove server start-up and does not prove a
+  writable `/data` volume, because no server exists: the container run exercises
+  the default command and exits. `Dockerfile` declares `VOLUME ["/data"]` and
+  `EXPOSE 8080`, and nothing has used either yet.
 - The parity extractor scripts are not committed; `docs/parity.md` documents the
   algorithm instead. A Go regenerator that fails CI on manifest drift is
   deferred.
@@ -296,11 +334,14 @@ the phase-0 gate already recorded in ADR 0001.
       `0600` in `0700`, atomic writes, link-based exclusive install,
       component-by-component path resolution with post-open identity checks, and
       the subprocess hostile-umask test with a mask that has teeth. The
-      platform-ACL **rule** is a pure function and its tests pass on every
-      platform. Not done: no test executes the Windows syscall layer on Windows,
-      because CI tests on Linux only, so the ACL that a real Windows run applies
-      and reads is still unverified at runtime. The item stays unchecked for that
-      reason alone. See the gap below.
+      platform-ACL **rule** is a pure function, and its tests **execute on Linux
+      only**, because that is the one runner CI has. The platform-specific
+      sources and their `_test.go` files **type-check** for `GOOS=linux`,
+      `darwin` and `windows`, because the `verify` job runs `go vet` for each and
+      `go vet` compiles test files. Nothing executes on Darwin or Windows. Not
+      done: the Windows syscall layer is therefore unexecuted, so the ACL a real
+      Windows run applies and reads is unverified at runtime. The item stays
+      unchecked for that reason alone. See the gap below.
 - [ ] `garmin-mcp auth` completes the one-shot loopback browser login and MFA
       flow, plus the explicit TTY fallback.
       `auth` is a declared gap that validates configuration and fails. The
@@ -365,7 +406,7 @@ the phase-0 gate already recorded in ADR 0001.
 ```sh
 go test -race -count=1 ./...
 go test -race -count=1 -tags=fakegarmin ./...
-go test -tags=e2e -timeout=10m ./e2e/...
+go test -race -count=1 -tags=e2e -timeout=10m ./e2e/...
 go vet ./...
 golangci-lint run
 govulncheck ./...
@@ -404,21 +445,27 @@ exit status. Plus the pinned MCP conformance command and the container target.
   `Authenticator` and a `Refresher`, and cover it with a test that fails when the
   two configs receive different gates.
 - Windows ACL enforcement is real code, but its syscall layer is **never
-  executed**. The split: `internal/securefile/acl.go` has no build tag and
-  carries the decision as a pure function, `checkOwnerOnlyAccess`, over plain
-  `accessControl` and `accessEntry` values. It compiles and is tested on every
-  platform — 18 cases across 7 test functions, including an 11-case rejection
-  table (null DACL, foreign owner, unknown owner, an unprotected DACL that still
-  inherits, and seven hostile ACEs). `internal/securefile/acl_windows.go` (151
-  lines, `//go:build windows`) reads the owner and every ACE from the **open
-  handle** through `golang.org/x/sys/windows`, and `perm_windows.go` (53 lines)
-  applies an owner-only ACL. Those two files, about 200 lines, run on no CI
-  runner: CI tests on Linux only. What is now true and was not before is that
-  they are type-checked, because the `verify` job runs `go vet` for
-  `GOOS=windows` and `go vet` does compile `_test.go` files. The old `icacls`
-  subprocess is gone; no Go file in the repository mentions it. The honest claim
-  is "the rule is proven, the syscall layer compiles and vets under
-  `GOOS=windows`" — nothing about runtime behavior on Windows.
+  executed**. Precisely what CI does and does not do:
+  - `internal/securefile/acl.go` has no build tag and carries the decision as a
+    pure function, `checkOwnerOnlyAccess`, over plain `accessControl` and
+    `accessEntry` values. Its 18 cases across 7 test functions — including an
+    11-case rejection table (null DACL, foreign owner, unknown owner, an
+    unprotected DACL that still inherits, and seven hostile ACEs) — **execute on
+    Linux**, the only platform any CI job runs tests on.
+  - The platform-specific sources **and their test files type-check for every
+    supported `GOOS`**. The `verify` job runs `go vet ./...` for `GOOS=linux`,
+    `darwin` and `windows`, and `go vet` compiles `_test.go` files, so a broken
+    Windows or Darwin test file fails CI. Type-checking executes nothing.
+  - `internal/securefile/acl_windows.go` (151 lines, `//go:build windows`) reads
+    the owner and every ACE from the **open handle** through
+    `golang.org/x/sys/windows`, and `perm_windows.go` (53 lines) applies an
+    owner-only ACL. Those two files, about 200 lines, **run on no CI runner**.
+  - The old `icacls` subprocess is gone; no Go file in the repository mentions it.
+
+  The honest claim is: the pure rule executes on Linux, the platform-specific
+  sources and tests type-check for every `GOOS`, and the Windows syscall layer
+  remains unexecuted. Nothing here says anything about runtime behavior on
+  Windows.
 - The OS keyring backends in `internal/cryptostore` (`keyring_darwin.go`,
   `keyring_linux.go`, `keyring_other.go`) are cgo-free **no-ops** — deliberate
   placeholders, not working backends. All three return `errKeyringUnsupported`

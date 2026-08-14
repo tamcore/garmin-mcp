@@ -2,8 +2,11 @@
 
 ## Status
 
-Open. Decided in phase 2, together with ADR 0004 and before any secret is
-written to disk.
+**Partly implemented.** `internal/cryptostore` exists and `internal/store` uses
+it, so secrets are written to disk today and this ADR is no longer a decision
+taken ahead of the first one. The cryptography, the key file, and staged rotation
+have landed. Start-up refusal on bad key material, an operator-facing rotation
+driver, and store-level re-sealing are still open. See the two lists below.
 
 ## Context
 
@@ -18,28 +21,51 @@ Keep encryption in one focused package, `internal/cryptostore`, with a narrow
 exported API: `GenerateKey`, `LoadOrCreateKey`, `LoadKey`, `Encrypt`, `Decrypt`,
 and nothing else.
 
-Fixed properties:
+### Landed
 
-- AES-GCM or an equivalent AEAD, with `crypto/rand` nonces.
-- Versioned key IDs, so a record names the key that produced it.
-- Authenticated additional data binding the principal ID and the record type, so
-  a ciphertext cannot be moved between principals or record types.
-- Staged key rotation with a tested migration path.
-- The always-available backend is an owner-only (`0600`) key file under an
-  explicit config directory, holding a versioned key ID and a base64 32-byte
-  master key.
-- Remote mode refuses to start on missing, malformed, or world-readable key
-  material.
-- The key is never logged or printed.
+- The AEAD is **AES-256-GCM** with `crypto/rand` nonces. The exported surface is
+  the five named functions and nothing else, pinned by an AST-based surface test.
+- The envelope format: a five-byte header — one format-version byte plus the
+  four-byte key version — then the 12-byte nonce and the ciphertext with its
+  16-byte tag. The key version sits outside the ciphertext because a reader must
+  pick the key before it can authenticate anything, and it is inside the
+  additional data, so it cannot be edited undetected.
+- The additional-data encoding: a fixed context string, the key version, and the
+  principal and record type appended **length-prefixed**, so adjacent fields
+  cannot be confused. `internal/store` extends the same binding with the record
+  wrapper's schema and CAS version. Tampering, a wrong key of the same version, a
+  wrong principal, and a wrong record type all collapse to `ErrAuthentication`.
+- The key-file format: one file per version, `key-v<N>.json` under an explicit
+  config directory, holding a version ID and a base64 32-byte master key, in a
+  `0700` directory at mode `0600`, bounded to 4 KiB on read, with a `json.Number`
+  version so a float or quoted value is not coerced silently. Creation installs
+  the file exclusively by hard link, so two creators agree on one winner.
+- Staged key rotation, proven end to end inside the package by
+  `TestStagedRotationReencryptsRecords`.
+- The key is never logged or printed: `Key` seals the raw bytes in a nested
+  unexported struct whose render paths are all covered.
 - Optional OS keyring support lives in build-tagged files (`keyring_darwin.go`,
-  `keyring_linux.go`, `keyring_other.go`) with a no-op fallback, so
-  `CGO_ENABLED=0` cross-compilation keeps working.
-- A platform secret manager or a documented KMS adapter may implement the same
-  interface.
+  `keyring_linux.go`, `keyring_other.go`). All three are cgo-free **no-ops** that
+  report unavailable, which keeps `CGO_ENABLED=0` cross-compilation working. The
+  owner-only key file is the only real backend.
 
-Completing this ADR requires the selected AEAD, the exact key-file format, the
-additional-data encoding, the rotation procedure with its operator commands, and
-the tamper and wrong-key test list.
+### Still open
+
+- **Start-up refusal on bad key material.** Only the lexical half is wired:
+  `Config.validateRemoteState` requires a database path and a master key for the
+  streamable-http transport and refuses inline material there. Nothing opens the
+  key at start-up, so `ErrKeyNotFound`, `ErrMalformedKey`,
+  `ErrInsecureKeyPermissions`, `ErrInsecureKeyPath` and `ErrInvalidKeyVersion` are
+  never observed by a command. `internal/cmd` imports only `internal/config`.
+- **An operator-facing rotation driver.** Rotation is a library capability with no
+  command, no procedure, and no `docs/operations.md`.
+- **Store-level re-sealing.** `FileStore` holds exactly one key and re-seals
+  nothing, so no existing record is migrated to a new key version.
+- A platform secret manager or a documented KMS adapter behind the same
+  interface. None exists.
+- The `internal/securefile` hard-link requirement is undocumented for operators:
+  key material on a filesystem without hard links fails loudly on creation, and
+  there is no rename fallback on purpose.
 
 ## Consequences
 

@@ -49,24 +49,24 @@ The items below are **requirements for this repository**. Each one is a behavior
 we must implement and cover with tests, not upstream trivia. Each is
 release-blocking for the auth/session slice.
 
-| # | Required behavior | Where it lands |
-|---|-------------------|----------------|
-| 1 | Host allowlist: only `garmin.com` and `garmin.cn` derived hosts are reachable. Reject any other host before a request is built. | `internal/garmin/protocol`, HTTP client |
-| 2 | Sanitized exception messages: no credential, token, cookie, header, or raw body text in any error string. | error types, client, tools |
-| 3 | URL query redaction in login errors: an error that names an endpoint carries no query string. | login/MFA error rendering |
-| 4 | Symlink-rejecting token paths: refuse a symlink at the token path **and** at every ancestor directory, checking the full ancestry. | token store |
-| 5 | Serialized token refresh with atomic writes: one refresh at a time per principal, write to a temporary file and rename, never a partial file. | session/refresh, token store |
-| 6 | JWT `exp` validation, and rejection of an unsigned payload. Never trust an unverified or `alg=none` token. | token parsing |
-| 7 | Server-driven pagination caps: honor the server page cap instead of a client-chosen page size, and bound total results. | API clients, tools |
-| 8 | Interleaved MFA logins must not overwrite each other's pending state. Pending MFA state is keyed per login transaction. | login transaction state |
-| 9 | Explicit widget MFA code delivery (upstream GH-386): request the code explicitly instead of assuming that the page sends it. | widget login strategy |
-| 10 | Segment-aware path-traversal guards: validate each path segment, not the joined string. | download/file-taking paths, token store |
+The status column was re-verified against the code on 2026-08-14, row by row.
 
-Items 4 to 10 have no equivalent in this repository yet. Items 1,
-2, and 3 exist only in part. `internal/garmin/protocol` derives every host from
-the two allowed domains, sanitizes page titles and scraped tokens, and its
-`Error` type carries a fixed endpoint label instead of a URL. No HTTP client
-enforces the allowlist at request time, because no client exists yet.
+| # | Required behavior | Where it lands | Status |
+|---|-------------------|----------------|--------|
+| 1 | Host allowlist: only `garmin.com` and `garmin.cn` derived hosts are reachable. Reject any other host before a request is built. | `internal/garmin/protocol`, HTTP client | **partly landed.** Only those two domains parse into a `protocol.ValidatedDomain`, and every URL `internal/garmin/auth` builds comes from a `protocol.Hosts` derived from one. No request-time host check exists: `Refresher.Do` attaches the bearer token to a caller-supplied `*http.Request` without inspecting its host. |
+| 2 | Sanitized exception messages: no credential, token, cookie, header, or raw body text in any error string. | error types, client, tools | **landed for the code that exists.** `internal/garmin/protocol` and `internal/garmin/auth` sanitize page titles and scraped tokens, and the alias-leak tests prove the sealed values stay unreadable under every `fmt` verb. No tools exist. |
+| 3 | URL query redaction in login errors: an error that names an endpoint carries no query string. | login/MFA error rendering | **landed.** `protocol.Error` carries a fixed endpoint label instead of a URL. |
+| 4 | Symlink-rejecting token paths: refuse a symlink at the token path **and** at every ancestor directory, checking the full ancestry. | token store | **landed.** `store.ResolveTokenFilePath` refuses `~user` and checks the full ancestry, and `internal/securefile` re-verifies every component against a directory descriptor with an identity check after the open. |
+| 5 | Serialized token refresh with atomic writes: one refresh at a time per principal, write to a temporary file and rename, never a partial file. | session/refresh, token store | **landed.** Concurrent refreshes for one principal collapse into one flight; `securefile.WriteFile` writes a random-suffixed temporary sibling, `fsync`s it, renames it over the target, and syncs the directory. Cross-process CAS is out of scope for the file store. |
+| 6 | JWT `exp` validation, and rejection of an unsigned payload. Never trust an unverified or `alg=none` token. | token parsing | **landed.** `auth/jwt_unverified.go` and `store/document.go` reject `alg:none` case-folded, a missing or empty signature segment, non-numeric, non-finite and overflowing `exp`, and oversized tokens and segments. The value is used for expiry only. |
+| 7 | Server-driven pagination caps: honor the server page cap instead of a client-chosen page size, and bound total results. | API clients, tools | **not started.** No paging code exists anywhere in the repository, because no API client and no read tool exist. |
+| 8 | Interleaved MFA logins must not overwrite each other's pending state. Pending MFA state is keyed per login transaction. | login transaction state | **landed.** The bounded registry keys state per transaction capability, holds no per-client "current login" field, and returns an immutable deep copy per attempt. Proven by 16-way concurrent isolation tests under `-race`. |
+| 9 | Explicit widget MFA code delivery (upstream GH-386): request the code explicitly instead of assuming that the page sends it. | widget login strategy | **not started.** `PathWidgetRequestMFACode`, `EndpointWidgetRequestMFACode` and `Hosts.WidgetRequestMFACodeURL` exist and nothing calls them, so the requirement has a constant and no behavior. `MFADeliveryUncertain()` signals the gap to the caller. |
+| 10 | Segment-aware path-traversal guards: validate each path segment, not the joined string. | download/file-taking paths, token store | **partly landed.** The store and key paths are resolved component by component with `os.Root`, so the joined string is never trusted. The download and file-taking side does not exist, so no filename is validated yet. |
+
+Items 1, 2, and 10 are partly landed, items 3 to 6 and 8 are landed, and items 7
+and 9 have not started. `docs/implementation-status.md` carries the same split in
+its gap list, and the two files must be changed together.
 
 ## Protocol and SDK pins
 
@@ -108,7 +108,9 @@ providing SDK package or type and the owning milestone — are in
 
 The MCP conformance suite
 ([`modelcontextprotocol/conformance`](https://github.com/modelcontextprotocol/conformance))
-is pinned to an immutable release or commit SHA in the CI workflow that runs it.
+**is not pinned and not used yet.** No CI job runs it, because there is no server
+to point it at. When that job is added, it must pin the suite to an immutable
+release or commit SHA. `docs/implementation-status.md` records the missing job.
 
 ## Requirement precedence
 

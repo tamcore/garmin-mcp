@@ -26,11 +26,17 @@ Milestones: **M1** is the local single-user stdio server, **M2** the remote
 multi-user server, **M3** full Taxuspt parity. Definitions are in
 `docs/phases.md`, checklists in `docs/implementation-status.md`.
 
+**Every row in this file is target work.** Nothing MCP-facing exists in the
+repository: there is no SDK requirement in `go.mod`, no transport, no tool, no
+resource, no policy layer, no rate limiter, and no logger. Where a row names a
+local package, that names the intended owner of the behavior, not a package that
+is present today.
+
 ## Transports
 
 | Feature | Status | Milestone | SDK package or type | Notes |
 |---------|--------|-----------|---------------------|-------|
-| stdio transport | required | M1 | `mcp.StdioTransport` | Stdout carries MCP frames only. Logs and status go to stderr through `internal/mcplog`. |
+| stdio transport | required | M1 | `mcp.StdioTransport` | Stdout carries MCP frames only. Logs and status must go to stderr through the local structured logger, which does not exist yet and lands with this transport. |
 | Streamable HTTP lifecycle | required | M2 | `mcp.StreamableHTTPHandler`, `mcp.NewStreamableHTTPHandler`, `mcp.StreamableHTTPOptions`, `mcp.StreamableServerTransport` | Authenticate every applicable `POST`, `GET`, and `DELETE`. The handler serves a stateless and a stateful path; see session behavior below. |
 | Streamable HTTP request-body cap | required | M2 | `mcp.StreamableHTTPOptions.MaxRequestBodyBytes` | Set explicitly. Never rely on the default. |
 | Origin and localhost protection | required | M2 | `mcp.StreamableHTTPOptions.CrossOriginProtection`, `.DisableLocalhostProtection` | Default CORS to deny. A Streamable HTTP request that carries `Origin` must match the configured allowlist; standards-compliant non-browser token requests may omit it. |
@@ -88,7 +94,7 @@ them.
 |---------|--------|-----------|---------------------|-------|
 | Roots | deferred | — | `mcp.Root`, `ServerSession.ListRoots` | Deprecated. A remote tool must never write an arbitrary server filesystem path, so a client-declared root has no role here. |
 | Sampling | deferred | — | `ServerSession.CreateMessage`, `ServerSession.CreateMessageWithTools` | Deprecated. No handler asks the client's model for a completion. |
-| MCP `logging` capability | deferred | — | `mcp.LoggingCapabilities`, `ServerSession.Log` | Deprecated. Structured logging lives in `internal/mcplog` and writes to stderr with the redaction rules in `docs/threat-model.md`. This also keeps stdout reserved for MCP frames under stdio. |
+| MCP `logging` capability | deferred | — | `mcp.LoggingCapabilities`, `ServerSession.Log` | Deprecated. Structured logging must instead be a local package that writes to stderr under the redaction rules in `docs/threat-model.md`, which also keeps stdout reserved for MCP frames under stdio. No logger exists yet. |
 
 ## Review triggers
 

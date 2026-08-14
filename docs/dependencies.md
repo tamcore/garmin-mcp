@@ -14,9 +14,12 @@ cache license files, and `proxy.golang.org`.
 | `github.com/spf13/cobra` | `v1.10.2` | Apache-2.0 (`LICENSE.txt`) | 2025-12-03 | `internal/cmd` |
 | `github.com/spf13/viper` | `v1.21.0` | MIT | 2025-09-08 | `internal/config` |
 | `github.com/spf13/pflag` | `v1.0.10` | BSD-3-Clause | 2025-09-02 | `internal/config` |
+| `golang.org/x/sys` | `v0.47.0` | BSD-3-Clause | 2026-06-30 | `internal/securefile` (Windows-tagged files only) |
 
-All three are at the latest version published by `proxy.golang.org` on the
-verification date. These are the first real dependencies of the module.
+All four are at the latest version published by `proxy.golang.org` on the
+verification date. `golang.org/x/sys` sits far above the version Viper selects,
+which is what its advisory required. These four are the module's real
+dependencies.
 
 ### `github.com/spf13/cobra`
 
@@ -67,7 +70,7 @@ Viper both require it.
 
 ### `golang.org/x/sys`
 
-**Version.** `v0.44.0`. License BSD-3-Clause.
+**Version.** `v0.47.0`. License BSD-3-Clause.
 
 **Rationale.** `internal/securefile` reads a Windows security descriptor from an
 open handle to decide whether a key file or a token record is owner-only. The
@@ -77,8 +80,8 @@ opened and so cannot close the gap between the check and the open. Only the
 `golang.org/x/sys/windows` subpackage is used, and only from Windows-tagged files,
 so no other platform links it.
 
-**Maintenance.** Published by the Go team, versioned with the toolchain. The
-version is above the one Viper selects, because the older version carried a
+**Maintenance.** Published by the Go team, versioned with the toolchain. The pin
+is far above the version Viper selects, because that older version carried a
 Windows advisory.
 
 ### House-stack note
@@ -144,7 +147,7 @@ resolved by an explicit bump in `go.mod`:
 | Advisory | Module | Viper selects | This module pins |
 |----------|--------|---------------|------------------|
 | `GO-2026-5970` | `golang.org/x/text` | `v0.28.0` | `v0.39.0` |
-| `GO-2026-5024` | `golang.org/x/sys` | `v0.29.0` | `v0.44.0` |
+| `GO-2026-5024` | `golang.org/x/sys` | `v0.29.0` | `v0.47.0` |
 
 Neither was on a called path even before the bump, so the gate was green either
 way. They were bumped because a stale transitive version becomes a real finding as
