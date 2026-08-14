@@ -16,7 +16,7 @@ Last updated: 2026-08-14.
 |-------|-------|
 | 0 — native login feasibility gate | **CLOSED — GO** (see `docs/adr/0001-garmin-login-feasibility.md`) |
 | 1 — inventory, docs skeleton, and CI | **CLOSED** with the recorded gaps below |
-| 2 — core auth and storage (M1) | **IN PROGRESS** — `internal/config`, `internal/cmd`, `internal/garmin/auth`, `internal/store`, `internal/cryptostore` landed |
+| 2 — core auth and storage (M1) | **IN PROGRESS** — `internal/config`, `internal/cmd`, `internal/garmin/auth`, `internal/store`, `internal/cryptostore`, `internal/securefile`, `internal/tokenlink` landed |
 | 3 — MCP foundation (M1) | not started — this is the next slice |
 | 4 — remote multi-user (M2) | not started |
 | 5 — compatibility breadth (M3) | not started |
@@ -75,7 +75,7 @@ Coverage figures are statement coverage from `go test -cover`.
       `Secret` and `Config`. There is no password, MFA, email, or
       account-selector field, and two reflective guard tests keep it that way.
       Secret settings have no flag at all, so they cannot appear in a process
-      listing. Coverage 94.4%.
+      listing. Coverage 95.3%.
 - [x] `internal/garmin/auth` login state machine. Seven explicit states
       (`created`, `credentials_submitted`, `mfa_pending`, `authenticated`,
       `failed`, `expired`, `cancelled`) and seven transitions, with all 49
@@ -103,6 +103,19 @@ Coverage figures are statement coverage from `go test -cover`.
       concurrent refreshes, and CAS save that yields to a newer stored token set
       on conflict. Different principals do not serialize. All asserted under
       `-race`.
+- [x] `auth.TokenGate`: a per-principal gate that serializes every
+      token-producing operation, so a login cannot overwrite the token set a
+      concurrent refresh just rotated. `Authenticator.Login` and
+      `Refresher.Refresh` each acquire it around the store write, it honours a
+      context that ends, and it keeps no entry for an idle principal.
+      `Config.TokenGate` and `RefreshConfig.TokenGate` are both optional fields
+      that fall back to a private gate, so **sharing one gate is the caller's
+      duty**. Nothing wires it yet; see the gap below.
+- [x] A single completion lease on each pending MFA transaction. `Registry.Attempt`
+      hands out an `*Attempt` that holds the lease, and only the lease holder may
+      `Claim` the terminal transition or `Release` it. A second submission of the
+      same capability performs no work, and a wrong code releases the lease and
+      leaves the transaction usable until its attempt budget runs out.
 - [x] Unverified-JWT `exp` parsing that rejects `alg:none` (case-folded),
       missing or empty signatures, boolean, string, object and null `exp`,
       non-finite and overflowing values, and oversized tokens and segments. It is
@@ -110,14 +123,25 @@ Coverage figures are statement coverage from `go test -cover`.
 - [x] `internal/store` `FileStore`: encrypted records, atomic write through a
       random-suffixed temp sibling with `fsync` and directory sync, `0600` files
       in a `0700` directory enforced by explicit `chmod` and re-checked on read,
-      symlink rejection across the full path ancestry with `O_NOFOLLOW` on unix,
-      `~user` refusal, structure-based legacy `garmin_tokens.json` detection with
-      import and export, inline token JSON refused unless explicitly enabled, and
-      per-principal CAS versioning. `TestRecordOnDiskHoldsNoPlaintextToken`
-      proves the principal is absent from the file bytes as well as the tokens.
-      Hostile umask is proven in a re-exec subprocess by
-      `TestHostileUmaskIsIgnored`, with the parent independently re-verifying the
-      artifacts so a skipped child cannot pass. Coverage 87.1%.
+      symlink refusal across the full path ancestry, `~user` refusal,
+      structure-based legacy `garmin_tokens.json` detection with import and
+      export, inline token JSON refused unless explicitly enabled, and
+      per-principal CAS versioning. Every filesystem operation now goes through
+      `internal/securefile`; `internal/store/secure.go` is only the translation
+      of that package's sentinels onto `ErrNoTokens`, `ErrInsecurePath` and
+      `ErrInsecurePermissions`. The wrapper's schema and CAS version are bound
+      into the AEAD as additional data by `recordAAD`, so neither can be edited
+      on disk without the record failing to open.
+      `TestRecordOnDiskHoldsNoPlaintextToken` proves the principal is absent from
+      the file bytes as well as the tokens. Hostile umask is proven in a re-exec
+      subprocess by `TestHostileUmaskIsIgnored`, with the parent independently
+      re-verifying the artifacts so a skipped child cannot pass. The mask is
+      `0o277`, which strips the owner write bit: without the explicit `chmod` the
+      record lands at `0400` and the directories at `0500`, so the assertions can
+      only hold if the `chmod` ran. The earlier version of this test used a mask
+      of `0`, which left the requested modes unchanged and therefore proved
+      nothing — it passed with every `chmod` deleted. The teeth of the current
+      mask were verified by deleting each `chmod` in turn. Coverage 91.7%.
 - [x] `internal/cryptostore`: five exported functions (`GenerateKey`, `LoadKey`,
       `LoadOrCreateKey`, `Encrypt`, `Decrypt`) pinned by an AST-based surface
       test, AES-256-GCM with `crypto/rand` nonces, a versioned key ID in the
@@ -126,7 +150,39 @@ Coverage figures are statement coverage from `go test -cover`.
       an owner-only key file, and staged rotation proven end to end by
       `TestStagedRotationReencryptsRecords`. Tampering, wrong key of the same
       version, wrong principal, and wrong record type all collapse to
-      `ErrAuthentication` on purpose. Coverage 83.8%.
+      `ErrAuthentication` on purpose. Key files go through `internal/securefile`.
+      Coverage 89.9%.
+- [x] `internal/securefile`: the shared filesystem hardening, extracted from
+      `internal/store` and `internal/cryptostore` so there is one implementation
+      instead of two drifting copies. Six functions (`ReadFile`, `WriteFile`,
+      `InstallNewFile`, `Remove`, `EnsureDir`, `CheckAncestry`) and four
+      sentinels. What it does:
+      - Resolves every path component by component against directory file
+        descriptors with `os.Root`, starting from the volume root, so no
+        intermediate component can be swapped for a symlink mid-walk. A component
+        that is a symlink or not a directory is refused by `Lstat` before it is
+        opened.
+      - Verifies identity **after** opening, with `os.SameFile` against the
+        `Lstat` result, for both directories and files. This is required because
+        `os.Root` deliberately resolves symlinks that stay inside the root, so
+        preventing escape is not the same as preventing substitution.
+      - Installs a new file exclusively with a **link**, not a rename, so a loser
+        cannot clobber a winner: a taken name reports `ErrExists`. Existing files
+        are replaced by rename instead, and both paths refuse a target that
+        exists as anything other than a regular file.
+      - Opens for reading with `O_NONBLOCK` and requires a regular file both
+        before and after the open, so a planted FIFO, device, socket or directory
+        cannot block or divert a read. Proven by
+        `TestReadFileRefusesAFifoWithoutBlocking` under a watchdog, plus the
+        device, socket and directory cases.
+      - Enforces owner-only permissions with an explicit `chmod` on the open
+        descriptor after the write, and rejects any group or other bit on read.
+      Coverage 84.2%.
+- [x] `internal/tokenlink` `Store`: the adapter that makes a `*store.FileStore`
+      satisfy `auth.TokenStore`, with `var _ auth.TokenStore = (*Store)(nil)`
+      asserted against the real consumer interface, not a local copy. It converts
+      between `store.TokenSet` and `auth.TokenSet` and translates the store's
+      sentinels onto the authenticator's. Coverage 80.0%.
 
 ### Known gaps carried out of phase 1
 
@@ -146,19 +202,21 @@ These are deliberate and tracked, not silently dropped:
   `cover.out` with `-covermode=atomic`, but no job asserts a minimum
   percentage, so the documented 80% rule is unenforced.
 - The `test-fakegarmin` job is **no longer vacuous**. `internal/garmin/auth`
-  carries 23 tagged test functions across `login_fakegarmin_test.go` and
-  `mfa_fakegarmin_test.go`, plus a tagged harness file, which is 29 of the 113
-  test runs the package reports under the tag. Package coverage is 85.1% with
-  `-tags=fakegarmin` against 55.2% untagged. The `e2e` job is **no longer
+  carries 29 tagged test functions across `login_fakegarmin_test.go`,
+  `mfa_fakegarmin_test.go`, `login_cas_fakegarmin_test.go` and
+  `mfa_lease_fakegarmin_test.go`, plus a tagged harness file, which is 29 of the
+  100 top-level test runs the package reports under the tag. Package coverage is
+  87.5% with `-tags=fakegarmin` against 65.1% untagged. The `e2e` job is **no longer
   vacuous** either: `e2e/cli_test.go` carries three passing tests
   (`TestVersionReportsTheInjectedBuildInfo`,
   `TestStdioTransportKeepsStdoutClean`,
   `TestUnknownCommandFailsWithoutTouchingStdout`) that build the binary and drive
-  it as a subprocess. What is **still missing** is the guard: both jobs would
-  pass again if every tagged file were deleted. Each must be made to **fail when
-  the expected suite is absent**, so an empty suite can never read as a pass.
-  Until that guard exists, the green tick on these jobs proves the tests that ran,
-  not that any tests ran.
+  it as a subprocess. The vacuity guard now **exists** on both jobs: an "Assert
+  the tagged suite exists" step runs before the tests and exits non-zero when the
+  count is zero — `test-fakegarmin` counts files carrying
+  `//go:build fakegarmin`, `e2e` counts test files under `./e2e/`. The guard is
+  presence-based, so it catches a deleted suite but not a suite that decays to one
+  trivial test. Keeping the suites meaningful is still a review duty.
 - The widget MFA path is still incomplete. `ClassifyWidgetLogin` decides from the
   HTTP status and the page title only. The inline-JS variables embedded in the
   widget page (`customerGuid`, `mfaMethod`, `locale`, `clientId`, `codeSentTo`)
@@ -234,10 +292,15 @@ the phase-0 gate already recorded in ADR 0001.
       server, no transport, and no principal binding.
 - [ ] Tokens are stored owner-only and encrypted; hostile-umask, symlink,
       atomic-write, and platform-ACL tests pass.
-      Done: encryption at rest, `0600` in `0700`, atomic writes, full-ancestry
-      symlink rejection, and the subprocess hostile-umask test. Not done: the
-      platform-ACL test never runs anywhere, so the Windows behavior is
-      unverified. See the gap below.
+      Done: encryption at rest with the schema and CAS version authenticated,
+      `0600` in `0700`, atomic writes, link-based exclusive install,
+      component-by-component path resolution with post-open identity checks, and
+      the subprocess hostile-umask test with a mask that has teeth. The
+      platform-ACL **rule** is a pure function and its tests pass on every
+      platform. Not done: no test executes the Windows syscall layer on Windows,
+      because CI tests on Linux only, so the ACL that a real Windows run applies
+      and reads is still unverified at runtime. The item stays unchecked for that
+      reason alone. See the gap below.
 - [ ] `garmin-mcp auth` completes the one-shot loopback browser login and MFA
       flow, plus the explicit TTY fallback.
       `auth` is a declared gap that validates configuration and fails. The
@@ -251,7 +314,11 @@ the phase-0 gate already recorded in ADR 0001.
       CAS both pass under `-race`. The collapsing is hand-rolled from
       `sync.Mutex` plus a per-principal in-flight map with a done channel; there
       is no `singleflight` package involved, and `golang.org/x/sync` is not a
-      dependency. Not done: cache invalidation, because no cache exists.
+      dependency. `auth.TokenGate` additionally serializes a login against a
+      refresh for the same principal, and
+      `TestTokenGateSerializesALoginAgainstTheRefreshPath` forces that
+      interleaving. Not done: one shared gate is not wired, so the protection is
+      available and unused; and cache invalidation, because no cache exists.
 - [ ] CI, cross-platform builds, and the release pipeline are green.
 
 ## M2 — remote multi-user server
@@ -324,61 +391,89 @@ exit status. Plus the pinned MCP conformance command and the container target.
 
 ### Gaps from the auth and storage slice
 
-- `*store.FileStore` does **not** satisfy `auth.TokenStore`. The two interfaces
-  are method-for-method identical but use `store.TokenSet` and `auth.TokenSet`
-  respectively, so the types do not unify. The compile-time assertion in
-  `internal/store/interface_test.go` is against a **local copy** of the consumer
-  interface declared in that test file, not against `auth.TokenStore`. The
-  adapter that will bridge them exists only as a comment in
-  `internal/store/tokens.go`. Nothing wires the store to the authenticator yet,
-  so this has not broken anything, and it must be closed before it can.
-- Windows ACL enforcement in `internal/store` and `internal/cryptostore` uses
-  `icacls` and is **unverified at runtime**. Windows-only tests exist and would
-  assert that every ACE names the current user, but CI runs tests on Linux only
-  and the Windows matrix entry runs `go build ./...`, which does not compile
-  `_test.go` files. `go vet` runs with the host `GOOS`, so the `_windows.go`
-  files are never type-checked in CI either. The claim that can be made today is
-  "compiles under `GOOS=windows`", nothing stronger.
+- **Login and refresh do not yet share one `auth.TokenGate`, and nothing wires
+  either.** This is a required piece of wiring, not a detail. `Config.TokenGate`
+  and `RefreshConfig.TokenGate` are optional, and each config builds its own
+  private gate when the field is nil. Two gates therefore compile cleanly and
+  pass every existing test, while login serializes only against login and
+  refresh only against refresh — which brings back the rotated-token overwrite
+  the gate was added to prevent. Whatever constructs both configs must pass the
+  **same** `*auth.TokenGate` to both. `internal/cmd` imports only
+  `internal/config` today, so it constructs neither, and the requirement is
+  unmet rather than broken. Close it in the same change that first builds an
+  `Authenticator` and a `Refresher`, and cover it with a test that fails when the
+  two configs receive different gates.
+- Windows ACL enforcement is real code, but its syscall layer is **never
+  executed**. The split: `internal/securefile/acl.go` has no build tag and
+  carries the decision as a pure function, `checkOwnerOnlyAccess`, over plain
+  `accessControl` and `accessEntry` values. It compiles and is tested on every
+  platform — 18 cases across 7 test functions, including an 11-case rejection
+  table (null DACL, foreign owner, unknown owner, an unprotected DACL that still
+  inherits, and seven hostile ACEs). `internal/securefile/acl_windows.go` (151
+  lines, `//go:build windows`) reads the owner and every ACE from the **open
+  handle** through `golang.org/x/sys/windows`, and `perm_windows.go` (53 lines)
+  applies an owner-only ACL. Those two files, about 200 lines, run on no CI
+  runner: CI tests on Linux only. What is now true and was not before is that
+  they are type-checked, because the `verify` job runs `go vet` for
+  `GOOS=windows` and `go vet` does compile `_test.go` files. The old `icacls`
+  subprocess is gone; no Go file in the repository mentions it. The honest claim
+  is "the rule is proven, the syscall layer compiles and vets under
+  `GOOS=windows`" — nothing about runtime behavior on Windows.
 - The OS keyring backends in `internal/cryptostore` (`keyring_darwin.go`,
   `keyring_linux.go`, `keyring_other.go`) are cgo-free **no-ops** — deliberate
-  placeholders, not working backends. All three return an unsupported error and
-  report unavailable, which keeps `CGO_ENABLED=0` cross-compilation working per
-  ADR 0005. The owner-only key file is the only real backend.
-- Roughly 130 to 150 lines of filesystem-hardening helpers are **duplicated**
-  between `internal/store` and `internal/cryptostore`:
-  `checkNoSymlinkAncestry`, `readBounded`, `writeFileAtomically`,
-  `writeTempFile`, `syncDir`, `openNoFollow`, `createExclusiveNoFollow`, the
-  owner-restriction and `checkOwnerOnly` helpers including the verbatim `icacls`
-  invocation, and the `presence` redaction helper. The duplication is not marked
-  intentional anywhere, and it has already drifted: only the `store` copy of
-  `writeFileAtomically` re-checks symlink ancestry internally. Extract these into
-  a shared `internal/` package.
-- Symlink checking is strict enough to refuse a store or key directory reached
-  **through** a symlinked path, with no `EvalSymlinks` normalization and no
-  same-tree exemption. On macOS that refuses anything under `/var`, `/tmp`, or
-  `/etc`, because `/var` is a symlink to `/private/var`. Both test suites work
-  around it by calling `filepath.EvalSymlinks(t.TempDir())`. Callers must pass
+  placeholders, not working backends. All three return `errKeyringUnsupported`
+  and report unavailable, which keeps `CGO_ENABLED=0` cross-compilation working
+  per ADR 0005. The owner-only key file is the only real backend.
+- `internal/securefile` requires the key and store directory's filesystem to
+  support **hard links**, because exclusive install links a completed temporary
+  into place instead of renaming it. That is what makes the install exclusive: a
+  rename would silently replace a file another process had just created, while a
+  link fails. Where links are unavailable, `InstallNewFile` returns the link
+  error and key creation fails loudly. There is no rename fallback, on purpose,
+  because a fallback would restore the clobber. Operators putting key material on
+  such a filesystem need to be told; that documentation does not exist yet.
+- Symlink checking still refuses a store or key directory reached **through** a
+  symlinked path. There is no `EvalSymlinks` normalization and no same-tree
+  exemption: `os.Root` prevents escape from the root, and `securefile` separately
+  refuses any component that is a symlink. On macOS that refuses anything under
+  `/var`, `/tmp`, or `/etc`, because `/var` is a symlink to `/private/var`. Four
+  test suites work around it by calling `filepath.EvalSymlinks(t.TempDir())`
+  (`securefile`, `store`, `cryptostore`, `tokenlink`). Callers must pass
   already-resolved paths, and `ResolveStoreDir` offers no opt-out. Decide whether
   that is the final contract and document it for operators, or normalize before
   checking.
-- Cross-process CAS is **not** provided. `FileStore.Save` compares the version
-  under a per-principal in-process mutex, with no file locking anywhere, so two
-  processes sharing a directory could both pass their version check before
-  either renames. The limitation is stated in the source. The race tests are
-  goroutine-level only.
+- Cross-process and cross-instance compare-and-set is **not** provided by the
+  file store, and this is a limitation, not a guarantee. `FileStore.Save`
+  compares the version under a per-principal in-process mutex, with no file
+  locking anywhere, so two processes sharing a directory could both pass their
+  version check before either commits. `auth.TokenGate` does not help here: it is
+  also per process. The file store is therefore safe for a **single active
+  instance** only, which is the intended design, and the race tests are
+  goroutine-level accordingly. Anything running two instances against one
+  directory needs the SQLite store of ADR 0004, or real file locking.
+- The record schema version was bumped from **1 to 2** when the wrapper's schema
+  and version were bound into the AEAD by `recordAAD`. A schema-1 record now
+  reports corruption rather than decoding, because its additional data does not
+  match. **No migration exists, and none is needed**: nothing has shipped, so no
+  schema-1 record exists outside a discarded working tree. If a release ever
+  carries schema 2, the next bump needs a migration.
 - Key rotation has no store-level driver. `internal/cryptostore` proves staged
-  rotation end to end, but `FileStore` holds exactly one key and there is no
-  loop that re-seals existing records, so rotation is a library capability, not
-  an operator procedure yet.
+  rotation end to end, but `FileStore` holds exactly one key and nothing re-seals
+  existing records, so rotation is a library capability, not an operator
+  procedure yet.
 - Inline token JSON has no caller. `ParseInlineTokenJSON` takes the
   allow-insecure boolean as a parameter and `FileStore.AllowsInlineTokens()`
   exposes the configured value, but nothing connects them.
-- "Refuse to start in remote mode on bad key material" is **not wired**.
-  `internal/cryptostore` returns distinguishable sentinels
-  (`ErrKeyNotFound`, `ErrMalformedKey`, `ErrInsecureKeyPermissions`,
-  `ErrInsecureKeyPath`, `ErrInvalidKeyVersion`) and `NewFileStore` rejects an
-  unusable key, but the startup decision belongs to `internal/config` or
-  `internal/cmd` and neither implements it. ADR 0005 requires it.
+- "Refuse to start in remote mode on bad key material" is **only half wired**.
+  `Config.validateRemoteState` does the lexical half: the streamable-http
+  transport requires a database path and a master key, and inline master-key or
+  inline token material is refused there outright. The other half is missing —
+  nothing opens the key at start-up and acts on the outcome.
+  `internal/cryptostore` returns distinguishable sentinels (`ErrKeyNotFound`,
+  `ErrMalformedKey`, `ErrInsecureKeyPermissions`, `ErrInsecureKeyPath`,
+  `ErrInvalidKeyVersion`) and `NewFileStore` rejects an unusable key, but
+  `internal/cmd` imports only `internal/config`, so it never builds a store and
+  never sees those sentinels. ADR 0005 requires the full behavior.
 - No effective-configuration printer is wired to a command, because `doctor` is
   a declared gap. `Config` already redacts itself through `String`, `GoString`,
   `MarshalJSON`, and `LogValue`, so the printer has nothing left to invent.
@@ -391,15 +486,27 @@ exit status. Plus the pinned MCP conformance command and the container target.
   deliberately **absent** from `Config` until the M2 subsystem exists, so a
   configuration file cannot claim a protection that nothing enforces. Add them
   with the subsystem, not before.
-- Two `govulncheck` advisories stand against versions Viper pins:
-  `GO-2026-5970` in `golang.org/x/text` v0.28.0 and `GO-2026-5024` in
-  `golang.org/x/sys` v0.29.0. Neither is on a called path, so the gate is green.
-  Both are fixable by an explicit bump in `go.mod`. See `docs/dependencies.md`.
+- MFA registry entries are **not bound to a browser session, OAuth client,
+  redirect URI, resource, or PKCE challenge**. A capability is bound to its
+  principal and nothing else, so anything holding the raw capability can continue
+  the transaction from any context. The brief requires that binding. It belongs
+  with the M2 OAuth transaction, because the values to bind to do not exist yet:
+  `Config` deliberately carries no OAuth client, redirect URI, or scope settings.
+  Add the binding in the same slice that adds them, not after.
+- `govulncheck ./...` reports no vulnerabilities. The two advisories recorded here
+  earlier (`GO-2026-5970` in `golang.org/x/text`, `GO-2026-5024` in
+  `golang.org/x/sys`) no longer apply: `go.mod` now carries `x/text` v0.39.0 and
+  `x/sys` v0.44.0. `golang.org/x/sys` is a **direct** requirement now, because
+  `internal/securefile` reads Windows security descriptors through
+  `golang.org/x/sys/windows`, so it needs its own entry in
+  `docs/dependencies.md`.
 
 ## Next task
 
-The MCP foundation slice. Configuration, the command tree, auth, the token
-store, and encryption all exist; nothing MCP-facing does. This slice adds the
+The MCP foundation slice. Configuration, the command tree, auth, the token store,
+encryption, the shared filesystem hardening, and the store-to-auth adapter all
+exist; nothing MCP-facing does, and nothing assembles the parts — `internal/cmd`
+still imports only `internal/config`. This slice adds the
 pinned `modelcontextprotocol/go-sdk` `v1.7.0` to `go.mod` in the same commit as
 the first code that imports it, stands up the stdio server behind
 `garmin-mcp serve --transport=stdio` so the command stops returning
@@ -418,8 +525,13 @@ Scope, in order:
    process-local configuration. No `user_id`, email, token path, or account
    selector is ever a tool argument, and `Config` already makes that
    unrepresentable.
-3. Close the store-to-auth seam: the `store.TokenSet` to `auth.TokenSet` adapter,
-   so `serve` can hand the authenticator a real `auth.TokenStore`.
+3. Assemble the token path. `internal/tokenlink` already adapts a
+   `*store.FileStore` to `auth.TokenStore`, so this is wiring, not new
+   abstraction: build the key, the store, the adapter, the `Authenticator` and
+   the `Refresher`, and act on the `internal/cryptostore` key sentinels at
+   start-up. **Pass one `*auth.TokenGate` to both `auth.Config` and
+   `auth.RefreshConfig`.** Two gates compile and pass, and they silently restore
+   the rotated-token overwrite, so this needs its own test.
 4. Tool policy. Read-only tools always register. Write and destructive tools need
    the intersection of operator enablement and granted scope, and both name lists
    are validated at startup against the registered set.
@@ -439,6 +551,7 @@ non-empty. It fails today because `internal/mcpserver` does not exist and
 stdio wiring, and the stdout/stderr split into existence together.
 
 Then, in order: `TestToolPolicyRegistersReadOnlyToolsAndWithholdsWriteTools`,
-`TestStoreAdapterSatisfiesAuthTokenStore` (a compile-time assertion against the
-real `auth.TokenStore`, not a local copy), and the first tool's name and schema
-snapshot test.
+`TestServeSharesOneTokenGateBetweenLoginAndRefresh` (assert that the
+`Authenticator` and the `Refresher` the wiring builds hold the same gate, so a
+future refactor cannot split them), and the first tool's name and schema snapshot
+test.

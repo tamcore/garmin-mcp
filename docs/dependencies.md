@@ -65,6 +65,22 @@ Viper both require it.
 
 **Maintenance.** Active. `v1.0.10` is the latest release.
 
+### `golang.org/x/sys`
+
+**Version.** `v0.44.0`. License BSD-3-Clause.
+
+**Rationale.** `internal/securefile` reads a Windows security descriptor from an
+open handle to decide whether a key file or a token record is owner-only. The
+standard library exposes no ACL API, and the alternative that this replaced was a
+subprocess call to `icacls`, which cannot inspect the object that was actually
+opened and so cannot close the gap between the check and the open. Only the
+`golang.org/x/sys/windows` subpackage is used, and only from Windows-tagged files,
+so no other platform links it.
+
+**Maintenance.** Published by the Go team, versioned with the toolchain. The
+version is above the one Viper selects, because the older version carried a
+Windows advisory.
+
 ### House-stack note
 
 Cobra plus Viper is the maintainer's house stack in the other Go MCP servers.
@@ -101,12 +117,14 @@ commit evidence; `docs/mcp-version-matrix.md` holds the per-feature obligations.
 
 ## Indirect set [NOW]
 
-`go.mod` carries 12 `// indirect` requirements. The set arrived with Viper:
+`go.mod` carries 11 `// indirect` requirements. The set arrived with Viper:
 
-- 10 reach the module only through Viper — `fsnotify/fsnotify`,
+- 9 reach the module only through Viper — `fsnotify/fsnotify`,
   `go-viper/mapstructure/v2`, `pelletier/go-toml/v2`,
   `sagikazarmark/locafero`, `sourcegraph/conc`, `spf13/afero`, `spf13/cast`,
-  `subosito/gotenv`, `golang.org/x/sys`, `golang.org/x/text`.
+  `subosito/gotenv`, `golang.org/x/text`. `golang.org/x/sys` was in this set
+  until `internal/securefile` began to import it, and it is now a direct
+  requirement.
 - 1 comes from Cobra alone — `inconshreveable/mousetrap`.
 - 1 is required by both — `go.yaml.in/yaml/v3`.
 
@@ -119,21 +137,21 @@ choice, and it cannot be changed without replacing Viper.
 
 ### Known advisories in the indirect set
 
-`govulncheck ./...` reports **0 vulnerabilities affecting this code** and
-passes. It also reports two advisories against versions Viper pins:
+`govulncheck ./...` reports **no vulnerabilities**, and it reports no advisory of
+any kind. Two advisories did apply to the versions Viper selects, and both are
+resolved by an explicit bump in `go.mod`:
 
-| Advisory | Module | Pinned | Fixed in | Reachability |
-|----------|--------|--------|----------|--------------|
-| `GO-2026-5970` | `golang.org/x/text` | `v0.28.0` | `v0.39.0` | Imported, not called |
-| `GO-2026-5024` | `golang.org/x/sys` | `v0.29.0` | `v0.44.0` | Module level only, Windows platform |
+| Advisory | Module | Viper selects | This module pins |
+|----------|--------|---------------|------------------|
+| `GO-2026-5970` | `golang.org/x/text` | `v0.28.0` | `v0.39.0` |
+| `GO-2026-5024` | `golang.org/x/sys` | `v0.29.0` | `v0.44.0` |
 
-Neither is on a called path today, which is why the gate is green. Both are
-stale-version problems, not code problems, and an explicit `golang.org/x/text`
-and `golang.org/x/sys` bump in `go.mod` fixes both without waiting for Viper.
-`docs/implementation-status.md` tracks this as a gap. Re-run
-`govulncheck -show verbose ./...` after any dependency change, because a future
-Windows or text-handling call site turns either advisory into a reachable
-finding.
+Neither was on a called path even before the bump, so the gate was green either
+way. They were bumped because a stale transitive version becomes a real finding as
+soon as a call site appears, and `internal/securefile` then added exactly such a
+call site for `golang.org/x/sys/windows`. Keep both requirements above Viper's
+choice until Viper catches up, and re-run `govulncheck -show verbose ./...` after
+any dependency change.
 
 ## Rules for adding a dependency
 

@@ -32,19 +32,23 @@ statement coverage reported by `go test -cover`.
 |------|---------------|----------|
 | `cmd/garmin-mcp/main.go` | Thin `main`: passes the ldflags-injected `version` and `commit` into `cmd.Execute` and calls `os.Exit` with the returned code | n/a |
 | `internal/cmd` | Cobra tree — root, `serve`, `auth`, `doctor`, `tools` with a `list` subcommand, `migrate`, `version`. Only `version` (and root `--version`) does real work. Bare root and bare `tools` print help; the rest validate configuration and then fail; see below | 96.4% |
-| `internal/config` | `Config`, deterministic four-layer precedence, `_FILE` secret variants, full lexical validation, redacted output | 94.4% |
-| `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry, DI ticket exchange, session validation, refresh with per-principal collapsing and CAS, unverified-JWT `exp` parsing | 85.1% with `-tags=fakegarmin`, 55.2% untagged |
+| `internal/config` | `Config`, deterministic four-layer precedence, `_FILE` secret variants, full lexical validation, redacted output | 95.3% |
+| `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, refresh with per-principal collapsing and CAS, a per-principal `TokenGate` that serializes login against refresh, unverified-JWT `exp` parsing | 87.5% with `-tags=fakegarmin`, 65.1% untagged |
 | `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, and the login response classifier (JSON and widget HTML). No I/O | 96.7% |
-| `internal/store` | `FileStore`: encrypted, atomically written, owner-only per-principal token records with CAS versioning, plus legacy `garmin_tokens.json` import and export | 87.1% |
-| `internal/cryptostore` | AES-256-GCM envelope encryption with versioned key IDs and principal/record-type AAD, and an owner-only key file | 83.8% |
+| `internal/store` | `FileStore`: encrypted, atomically written, owner-only per-principal token records whose wrapper schema and CAS version are authenticated by the AEAD, plus legacy `garmin_tokens.json` import and export | 91.7% |
+| `internal/cryptostore` | AES-256-GCM envelope encryption with versioned key IDs and principal/record-type AAD, and an owner-only key file | 89.9% |
+| `internal/securefile` | The shared filesystem hardening both stores use: `os.Root` component-by-component path resolution, post-open identity verification, link-based exclusive install, non-blocking regular-file reads, owner-only modes, and Windows ACL evaluation | 84.2% |
+| `internal/tokenlink` | `Store`, the adapter that makes a `*store.FileStore` satisfy `auth.TokenStore` by converting between the two packages' `TokenSet` types | 80.0% |
 | `internal/testkit` | Scripted fake Garmin service, fake clock, fixtures, transport guard | 96.8% |
 | `e2e` | Build tag `e2e`. `cli_test.go` builds the binary and drives it as a subprocess: version output, clean stdout on the stdio path, unknown command | n/a |
 
 Everything else in the repository is documentation, contract manifests
 (`compat/`), and CI, lint, pre-commit, GoReleaser, and container configuration.
 
-`go.mod` now has real requirements: `spf13/cobra`, `spf13/viper`, and
-`spf13/pflag`, plus the transitive indirect set. See `docs/dependencies.md`.
+`go.mod` now has real requirements: `spf13/cobra`, `spf13/viper`, `spf13/pflag`,
+and `golang.org/x/sys`, plus the transitive indirect set. `golang.org/x/sys` is a
+direct requirement because `internal/securefile` reads Windows security
+descriptors through `golang.org/x/sys/windows`. See `docs/dependencies.md`.
 
 What `serve`, `auth`, `doctor`, `tools list`, and `migrate` actually do: they
 load and validate the configuration, then return a `*cmd.NotImplementedError`
@@ -58,6 +62,10 @@ or HTTP transport, no OAuth authorization server, no registered tool or
 resource, no `slog` logger anywhere in the binary path, no SQLite store, no
 `LoginTransport` type (the auth package uses a one-method `Doer` transport
 interface instead), and no `garminlive` command.
+
+Nothing assembles the packages either. `internal/cmd` imports only
+`internal/config`, so no command builds a key, a store, an authenticator, or a
+refresher. Every package above is exercised by its own tests alone.
 
 `docs/implementation-status.md` is the authoritative task and gap list. Read it
 with this file before any work. Where this file and the repository disagree, the
@@ -143,6 +151,8 @@ internal/
   loginweb/              embedded templates and one-time login transactions    planned
   store/                 storage interfaces, SQLite implementation, migrations  exists (FileStore only; SQLite per ADR 0004 still planned)
   cryptostore/           versioned envelope encryption and key rotation        exists
+  securefile/            shared filesystem hardening for every secret file    exists
+  tokenlink/             store-to-auth TokenSet adapter                       exists
   policy/                scopes, write/destructive gates, limits               planned
   observability/         redacted logging, metrics, tracing hooks              planned
   testkit/               fake Garmin, fake clock, fixtures, test keys          exists
@@ -212,13 +222,16 @@ Four layers. The first three have a CI job each.
 | Layer | Command | Build tag | What it tests | State |
 |-------|---------|-----------|---------------|-------|
 | Unit | `go test -race -count=1 ./...` | *(none)* | Logic, handlers, policy, crypto, state machines with fakes | **[NOW]** real tests in every `internal/` package |
-| Fake-service integration | `go test -race -count=1 -tags=fakegarmin ./...` | `fakegarmin` | Login strategies, MFA, DI refresh, retries, API decoding against the scripted fake Garmin | **[NOW]** real tests. `internal/garmin/auth` carries 23 tagged test functions in `login_fakegarmin_test.go` and `mfa_fakegarmin_test.go`, plus a tagged harness. The job no longer passes vacuously |
+| Fake-service integration | `go test -race -count=1 -tags=fakegarmin ./...` | `fakegarmin` | Login strategies, MFA, DI refresh, retries, API decoding against the scripted fake Garmin | **[NOW]** real tests. `internal/garmin/auth` carries 29 tagged test functions across four tagged test files, plus a tagged harness, which is 29 of the 100 top-level test runs the package reports under the tag. The job no longer passes vacuously |
 | E2E | `go test -tags=e2e -timeout=10m ./e2e/...` | `e2e` | stdio and Streamable HTTP MCP, OAuth flow, browser login form, tenant isolation | **[NOW]** `e2e/cli_test.go` builds the binary and drives it as a subprocess: version output, a clean stdout on the stdio path, and an unknown command. The MCP, OAuth, and isolation rows are still **[TARGET]** |
 | Live (opt-in) | `go test -tags=garminlive -count=1 ./...` | `garminlive` | Real Garmin login drift detection. Never in CI | **[TARGET]** nothing carries the tag |
 
 A vacuous pass is a defect, not a green light. Both tagged jobs now run real
-tests, but neither yet **fails when the expected suite is absent**, so deleting
-every tagged file would still produce a green tick. Add that guard to each job.
+tests, and each one now **fails before the suite runs when the suite is absent**:
+`test-fakegarmin` counts files carrying `//go:build fakegarmin` and `e2e` counts
+test files under `./e2e/`, and a count of zero is a hard error. The guard is
+presence-based, so it catches a deleted suite, not a suite that decays to one
+trivial test. That remains a review duty.
 
 Rules:
 
@@ -243,7 +256,7 @@ group keyed on workflow and ref.
 
 | Workflow | Jobs |
 |----------|------|
-| CI (`ci.yaml`) | `verify` (gofmt, `go mod tidy`, `go vet`), `lint` (golangci-lint plus `golangci-lint fmt --diff`), `test` (race, coverage profile, coverage summary), `test-fakegarmin`, `e2e`, `vulncheck`, `build` (3 OS x 2 arch), `goreleaser` (`check` plus snapshot with `--skip=sign,sbom,docker`), `container` (build the image from a prepared context, then hardening smoke test) |
+| CI (`ci.yaml`) | `verify` (gofmt, `go mod tidy`, `go vet`, then `go vet` again for `GOOS=linux`, `darwin` and `windows` so platform-specific files and their tests are type-checked), `lint` (golangci-lint plus `golangci-lint fmt --diff`), `test` (race, coverage profile, coverage summary), `test-fakegarmin`, `e2e`, `vulncheck`, `build` (3 OS x 2 arch), `goreleaser` (`check` plus snapshot with `--skip=sign,sbom,docker`), `container` (build the image from a prepared context, then hardening smoke test) |
 | Release (`release.yaml`) | `v*` tags only. `gates` re-runs the whole CI workflow against the tagged commit, then `release` runs GoReleaser with the narrowest write permissions plus `id-token: write` for keyless cosign |
 
 Every third-party action is pinned to a full commit SHA with the intended
@@ -289,6 +302,13 @@ Plus:
 These apply to every commit, including the code that already exists.
 
 - Immutability: return new values, do not mutate shared state in place.
+- One `auth.TokenGate` per process, shared by every path that writes tokens.
+  Whatever builds an `auth.Config` and an `auth.RefreshConfig` must pass the
+  **same** `*auth.TokenGate` to both. Each config falls back to a private gate
+  when the field is nil, so two gates compile and pass their own tests while
+  login and refresh serialize only against themselves — which restores the
+  rotated-token overwrite the gate exists to prevent. Nothing wires this yet;
+  see `docs/implementation-status.md`.
 - `context.Context` end to end. Carry cancellation and deadlines into every
   HTTP request.
 - Inject `http.Client`, clock, randomness, Garmin base URLs, stores, and
@@ -302,6 +322,23 @@ These apply to every commit, including the code that already exists.
   protocol constants live in the focused protocol package with source comments.
 - Secrets must not be printable: `String`, `MarshalJSON`, error, and debug paths
   on secret-bearing structs never reveal fields.
+- Secret material sits **at least one pointer deeper** than the redacting type.
+  A redacting `String` method is not sufficient on its own. `fmt` reaches its
+  `badVerb` path for a verb the type does not support, and that path re-prints
+  the value at depth 0, where it dereferences a pointer to a struct and prints
+  the unexported fields verbatim. It cannot call a method on an unexported
+  field, so no method can close the hole. The rule that follows: the field that
+  holds the material must be a **pointer** sitting at depth 1 or deeper, where
+  `fmt` renders it as an address. Depth 0 is not enough, and a plain field is
+  never enough. `fmt` also dereferences a top-level pointer to an array, slice,
+  struct or map, so material of those kinds needs one more level than material
+  behind a defined string type. `config.Secret` (`*secretMaterial`, a defined
+  string type), `store.TokenSet` (`*tokenParts` holding `*secret` fields),
+  `cryptostore.Key` (`*keySecret` holding `*keyMaterial`), and
+  `protocol.Response` (`*sealedParts` holding `*responseParts`) all follow this
+  shape. Each has a leak test that strips the type's methods with an alias and
+  asserts the material is still absent from every verb. Every future
+  secret-bearing type must follow it too.
 - Structured `slog` logging only. Log request ID, pseudonymous principal ID,
   client ID, coarse category, outcome, latency, and coarse status. Never log
   request or response bodies by default.
