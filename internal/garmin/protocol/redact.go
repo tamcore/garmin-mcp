@@ -11,12 +11,15 @@ import (
 	"strings"
 )
 
-// Redaction markers. redactedValue replaces a query value; redactedURLMarker
-// replaces a URL that cannot be parsed, because an unparsable string cannot be
-// split into a safe prefix and a secret-bearing query.
+// Redaction markers use square brackets rather than angle brackets. The JSON
+// encoder escapes angle brackets, which would leave an ungreppable marker in a
+// JSON log line. internal/config uses the same convention. redactedValue
+// replaces a query value; redactedURLMarker replaces a URL that cannot be
+// parsed, because an unparsable string cannot be split into a safe prefix and a
+// secret-bearing query.
 const (
-	redactedValue     = "<redacted>"
-	redactedURLMarker = "<redacted-url>"
+	redactedValue     = "[redacted]"
+	redactedURLMarker = "[redacted-url]"
 )
 
 // redactURL keeps the scheme, host and path of rawURL and replaces every query

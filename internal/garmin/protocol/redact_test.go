@@ -158,7 +158,7 @@ func TestRedactURL(t *testing.T) {
 		{
 			name: "query values redacted",
 			in:   testSSOEmbedURL + "?ticket=ST-secret-0100&clientId=GCM_IOS_DARK",
-			want: testSSOEmbedURL + "?ticket=<redacted>&clientId=<redacted>",
+			want: testSSOEmbedURL + "?ticket=[redacted]&clientId=[redacted]",
 		},
 		{
 			name: "no query is unchanged",
@@ -173,14 +173,14 @@ func TestRedactURL(t *testing.T) {
 		{
 			name: "userinfo stripped",
 			in:   "https://user:pa55word@sso.garmin.com/sso/embed?ticket=ST-secret-0100",
-			want: testSSOEmbedURL + "?ticket=<redacted>",
+			want: testSSOEmbedURL + "?ticket=[redacted]",
 		},
 		{
 			name: "fragment dropped",
 			in:   testSSOEmbedURL + "#ticket=ST-secret-0100",
 			want: testSSOEmbedURL,
 		},
-		{name: "unparsable url", in: "http://[::1]:namedport/x", want: "<redacted-url>"},
+		{name: "unparsable url", in: "http://[::1]:namedport/x", want: "[redacted-url]"},
 		{name: "empty url", in: "", want: ""},
 	}
 
@@ -218,7 +218,7 @@ func TestRedactedCause(t *testing.T) {
 				URL: testSSOEmbedURL + "?ticket=ST-secret-0100",
 				Err: errors.New(testHeaderCookie + ": " + secretCookie),
 			},
-			wantHas:   []string{testHTTPVerbPost, testSSOEmbedURL, "<redacted>"},
+			wantHas:   []string{testHTTPVerbPost, testSSOEmbedURL, "[redacted]"},
 			wantLacks: []string{secretTicket, secretCookie, testHeaderCookie},
 		},
 		{
