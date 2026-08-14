@@ -8,8 +8,10 @@
     "commitUrl": "https://github.com/Taxuspt/garmin_mcp/commit/3610be6feed93088d85b0f35aba9d7d07c2505a7",
     "sourceRoot": "src/garmin_mcp",
     "declaredDependency": "garminconnect==0.3.2 (pyproject.toml at this commit)",
-    "garminconnectReferenceCommit": "e4e9748cf3fa62f997e77171addee3acc333232c",
-    "garminconnectReferenceUrl": "https://github.com/cyberjunky/python-garminconnect/commit/e4e9748cf3fa62f997e77171addee3acc333232c"
+    "garminconnectReferenceCommit": "414b54023a31259232744bb67f00a2aa71065e09",
+    "garminconnectReferenceUrl": "https://github.com/cyberjunky/python-garminconnect/commit/414b54023a31259232744bb67f00a2aa71065e09",
+    "garminconnectReferenceRelease": "0.3.10",
+    "garminconnectReferenceNote": "Facade method names and HTTP verbs in this manifest were re-confirmed against garminconnect/__init__.py at 0.3.10. Every facade method the pinned Taxuspt surface reaches still exists there with an identical verb set, so moving the reference from 0.3.8 to 0.3.10 changed no classification in this file."
   },
   "extraction": {
     "method": "static AST analysis of the pinned upstream sources with Python's ast module; upstream code was never executed",
@@ -39,6 +41,30 @@
       "destructive",
       "external-side-effect"
     ],
+    "scope": [
+      "garmin:activities:read",
+      "garmin:activities:write",
+      "garmin:activities:destructive",
+      "garmin:challenges:read",
+      "garmin:devices:read",
+      "garmin:devices:write",
+      "garmin:health:read",
+      "garmin:health:write",
+      "garmin:health:destructive",
+      "garmin:nutrition:read",
+      "garmin:nutrition:write",
+      "garmin:nutrition:destructive",
+      "garmin:profile:read",
+      "garmin:womens-health:read",
+      "garmin:workouts:read",
+      "garmin:workouts:write",
+      "garmin:workouts:destructive",
+      "local:files:read",
+      "local:files:write"
+    ],
+    "scopeAggregates": [
+      "garmin:read"
+    ],
     "idempotency": [
       "idempotent",
       "non-idempotent",
@@ -57,17 +83,58 @@
       "write": 31
     },
     "bySensitivity": {
-      "device": 6,
-      "health": 59,
+      "device": 10,
+      "health": 84,
       "location": 14,
       "nutrition": 14,
-      "ordinary": 38,
+      "ordinary": 9,
       "profile": 4,
       "womens-health": 3
     },
+    "byScope": {
+      "garmin:activities:destructive": 1,
+      "garmin:activities:read": 16,
+      "garmin:activities:write": 8,
+      "garmin:challenges:read": 6,
+      "garmin:devices:read": 8,
+      "garmin:devices:write": 2,
+      "garmin:health:destructive": 1,
+      "garmin:health:read": 48,
+      "garmin:health:write": 6,
+      "garmin:nutrition:destructive": 2,
+      "garmin:nutrition:read": 6,
+      "garmin:nutrition:write": 6,
+      "garmin:profile:read": 4,
+      "garmin:womens-health:read": 3,
+      "garmin:workouts:destructive": 4,
+      "garmin:workouts:read": 6,
+      "garmin:workouts:write": 9,
+      "local:files:write": 2
+    },
+    "byScopeRequired": {
+      "garmin:activities:destructive": 1,
+      "garmin:activities:read": 17,
+      "garmin:activities:write": 8,
+      "garmin:challenges:read": 6,
+      "garmin:devices:read": 8,
+      "garmin:devices:write": 2,
+      "garmin:health:destructive": 5,
+      "garmin:health:read": 74,
+      "garmin:health:write": 18,
+      "garmin:nutrition:destructive": 2,
+      "garmin:nutrition:read": 6,
+      "garmin:nutrition:write": 6,
+      "garmin:profile:read": 4,
+      "garmin:womens-health:read": 3,
+      "garmin:workouts:destructive": 4,
+      "garmin:workouts:read": 6,
+      "garmin:workouts:write": 9,
+      "local:files:read": 1,
+      "local:files:write": 2
+    },
     "byIdempotency": {
-      "idempotent": 118,
-      "non-idempotent": 20
+      "idempotent": 121,
+      "non-idempotent": 17
     },
     "byModule": {
       "src/garmin_mcp/activity_analysis.py": 4,
@@ -184,6 +251,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -274,6 +346,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -379,6 +456,12 @@
       ],
       "effect": "external-side-effect",
       "secondaryEffects": [],
+      "scope": "local:files:write",
+      "scopesRequired": [
+        "garmin:activities:read",
+        "garmin:health:read",
+        "local:files:write"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Writes to a deterministic '{activity_id}.{ext}' path and overwrites it.",
       "authRequired": true,
@@ -450,6 +533,10 @@
       ],
       "effect": "external-side-effect",
       "secondaryEffects": [],
+      "scope": "local:files:write",
+      "scopesRequired": [
+        "local:files:write"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": false,
@@ -549,6 +636,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -621,6 +713,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -700,6 +797,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -787,6 +889,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:activities:write",
+      "scopesRequired": [
+        "garmin:activities:write"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
@@ -881,6 +987,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:activities:write",
+      "scopesRequired": [
+        "garmin:activities:write"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
@@ -966,6 +1076,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:activities:write",
+      "scopesRequired": [
+        "garmin:activities:write"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
@@ -1061,6 +1175,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:activities:write",
+      "scopesRequired": [
+        "garmin:activities:write"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
@@ -1147,6 +1265,11 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:activities:write",
+      "scopesRequired": [
+        "garmin:activities:write",
+        "garmin:health:write"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
@@ -1233,6 +1356,11 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:activities:write",
+      "scopesRequired": [
+        "garmin:activities:write",
+        "garmin:health:write"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
@@ -1312,6 +1440,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -1391,6 +1524,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -1470,6 +1608,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -1553,6 +1696,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -1631,6 +1778,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -1709,6 +1861,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -1781,13 +1938,16 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "device",
       "sensitivityTags": [
-        "device",
-        "ordinary"
+        "device"
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:devices:read",
+      "scopesRequired": [
+        "garmin:devices:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -1866,6 +2026,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -1934,6 +2099,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -2009,6 +2178,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -2101,13 +2275,18 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "location",
-        "ordinary"
+        "health",
+        "location"
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:activities:write",
+      "scopesRequired": [
+        "garmin:activities:write",
+        "garmin:health:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a new activity; each call creates another activity.",
       "authRequired": true,
@@ -2173,6 +2352,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -2237,12 +2420,16 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -2313,6 +2500,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -2386,6 +2577,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:challenges:read",
+      "scopesRequired": [
+        "garmin:challenges:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -2465,6 +2660,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:challenges:read",
+      "scopesRequired": [
+        "garmin:challenges:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -2543,12 +2742,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:challenges:read",
+      "scopesRequired": [
+        "garmin:challenges:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -2627,12 +2831,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:challenges:read",
+      "scopesRequired": [
+        "garmin:challenges:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -2711,12 +2920,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:challenges:read",
+      "scopesRequired": [
+        "garmin:challenges:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -2784,6 +2998,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -2862,12 +3080,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:challenges:read",
+      "scopesRequired": [
+        "garmin:challenges:read",
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -2934,6 +3157,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:activities:read",
+      "scopesRequired": [
+        "garmin:activities:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -3034,6 +3261,11 @@
       "secondaryEffects": [
         "external-side-effect"
       ],
+      "scope": "garmin:activities:write",
+      "scopesRequired": [
+        "garmin:activities:write",
+        "local:files:read"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a new course; repeats create duplicate courses.",
       "authRequired": true,
@@ -3110,6 +3342,10 @@
       ],
       "effect": "destructive",
       "secondaryEffects": [],
+      "scope": "garmin:activities:destructive",
+      "scopesRequired": [
+        "garmin:activities:destructive"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state; the second call reports a missing course.",
       "authRequired": true,
@@ -3240,6 +3476,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:health:write",
+      "scopesRequired": [
+        "garmin:health:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a timestamped composition record; repeats add records.",
       "authRequired": true,
@@ -3324,6 +3564,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:health:write",
+      "scopesRequired": [
+        "garmin:health:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a timestamped reading; timestamp defaults to now, so repeats add readings.",
       "authRequired": true,
@@ -3403,6 +3647,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:health:write",
+      "scopesRequired": [
+        "garmin:health:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "PUTs a hydration delta; repeats accumulate the volume.",
       "authRequired": true,
@@ -3468,6 +3716,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:devices:read",
+      "scopesRequired": [
+        "garmin:devices:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -3533,6 +3785,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:devices:read",
+      "scopesRequired": [
+        "garmin:devices:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -3616,6 +3872,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:devices:read",
+      "scopesRequired": [
+        "garmin:devices:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -3681,6 +3941,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:devices:read",
+      "scopesRequired": [
+        "garmin:devices:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -3759,6 +4023,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:devices:read",
+      "scopesRequired": [
+        "garmin:devices:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -3830,6 +4098,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:devices:read",
+      "scopesRequired": [
+        "garmin:devices:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -3920,13 +4192,16 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "device",
       "sensitivityTags": [
-        "device",
-        "ordinary"
+        "device"
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:devices:read",
+      "scopesRequired": [
+        "garmin:devices:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -4001,13 +4276,16 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "device",
       "sensitivityTags": [
-        "device",
-        "ordinary"
+        "device"
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:devices:write",
+      "scopesRequired": [
+        "garmin:devices:write"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
@@ -4082,13 +4360,16 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "device",
       "sensitivityTags": [
-        "device",
-        "ordinary"
+        "device"
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:devices:write",
+      "scopesRequired": [
+        "garmin:devices:write"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
@@ -4160,6 +4441,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -4231,6 +4516,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -4306,6 +4595,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -4377,6 +4670,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -4448,6 +4745,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -4523,6 +4824,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -4594,6 +4899,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -4669,6 +4978,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -4740,6 +5053,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -4815,6 +5132,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -4886,6 +5207,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -4957,6 +5282,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5028,6 +5357,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5099,6 +5432,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5170,6 +5507,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5241,6 +5582,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5312,6 +5657,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5383,6 +5732,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5454,6 +5807,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5525,6 +5882,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5596,6 +5957,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5667,6 +6032,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5738,6 +6107,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5809,6 +6182,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5880,6 +6257,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -5960,6 +6341,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -6040,6 +6425,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -6120,6 +6509,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -6191,6 +6584,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -6265,6 +6662,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:read",
+      "scopesRequired": [
+        "garmin:nutrition:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -6339,6 +6740,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:read",
+      "scopesRequired": [
+        "garmin:nutrition:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -6413,6 +6818,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:read",
+      "scopesRequired": [
+        "garmin:nutrition:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -6518,6 +6927,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:write",
+      "scopesRequired": [
+        "garmin:nutrition:write"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
@@ -6604,6 +7017,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:read",
+      "scopesRequired": [
+        "garmin:nutrition:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -6685,6 +7102,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:read",
+      "scopesRequired": [
+        "garmin:nutrition:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -6752,6 +7173,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:read",
+      "scopesRequired": [
+        "garmin:nutrition:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -6905,6 +7330,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:write",
+      "scopesRequired": [
+        "garmin:nutrition:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "Creates a new custom food; repeats create duplicates.",
       "authRequired": true,
@@ -7076,6 +7505,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:write",
+      "scopesRequired": [
+        "garmin:nutrition:write"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
@@ -7150,6 +7583,10 @@
       ],
       "effect": "destructive",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:destructive",
+      "scopesRequired": [
+        "garmin:nutrition:destructive"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state; the second call reports a missing food.",
       "authRequired": true,
@@ -7249,6 +7686,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:write",
+      "scopesRequired": [
+        "garmin:nutrition:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "Adds a food-log entry; repeats add duplicate entries.",
       "authRequired": true,
@@ -7354,6 +7795,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:write",
+      "scopesRequired": [
+        "garmin:nutrition:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "Adds a quick-add food-log entry; repeats add duplicate entries.",
       "authRequired": true,
@@ -7432,6 +7877,10 @@
       ],
       "effect": "destructive",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:destructive",
+      "scopesRequired": [
+        "garmin:nutrition:destructive"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state.",
       "authRequired": true,
@@ -7555,6 +8004,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:nutrition:write",
+      "scopesRequired": [
+        "garmin:nutrition:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "Creates or reuses a custom food and then adds a log entry; repeats add duplicate log entries.",
       "authRequired": true,
@@ -7634,6 +8087,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -7709,6 +8166,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -7792,6 +8253,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -7863,6 +8328,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -7938,6 +8407,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -8013,6 +8486,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -8084,6 +8561,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -8149,6 +8630,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -8225,6 +8710,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -8296,6 +8785,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:health:write",
+      "scopesRequired": [
+        "garmin:health:write"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Re-triggers the same server-side recompute for the date; no new user data is created.",
       "authRequired": true,
@@ -8376,6 +8869,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -8449,6 +8946,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -8530,6 +9031,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -8611,6 +9116,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -8692,6 +9201,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -8755,6 +9268,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:profile:read",
+      "scopesRequired": [
+        "garmin:profile:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -8818,6 +9335,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:profile:read",
+      "scopesRequired": [
+        "garmin:profile:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -8883,6 +9404,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:profile:read",
+      "scopesRequired": [
+        "garmin:profile:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -8948,6 +9473,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:profile:read",
+      "scopesRequired": [
+        "garmin:profile:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -9023,6 +9552,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -9094,6 +9627,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:health:read",
+      "scopesRequired": [
+        "garmin:health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -9176,6 +9713,10 @@
       ],
       "effect": "destructive",
       "secondaryEffects": [],
+      "scope": "garmin:health:destructive",
+      "scopesRequired": [
+        "garmin:health:destructive"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Deletes every weigh-in for the date (delete_all gate); repeating leaves the same end state.",
       "authRequired": true,
@@ -9256,6 +9797,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:health:write",
+      "scopesRequired": [
+        "garmin:health:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a new weigh-in record.",
       "authRequired": true,
@@ -9346,6 +9891,10 @@
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:health:write",
+      "scopesRequired": [
+        "garmin:health:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a new weigh-in record at the given timestamps.",
       "authRequired": true,
@@ -9412,6 +9961,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:womens-health:read",
+      "scopesRequired": [
+        "garmin:health:read",
+        "garmin:womens-health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -9484,6 +10038,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:womens-health:read",
+      "scopesRequired": [
+        "garmin:health:read",
+        "garmin:womens-health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -9562,6 +10121,11 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:womens-health:read",
+      "scopesRequired": [
+        "garmin:health:read",
+        "garmin:womens-health:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -9654,12 +10218,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:write",
+      "scopesRequired": [
+        "garmin:health:write",
+        "garmin:workouts:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "Uploads a newly built workout; repeats create duplicates.",
       "authRequired": true,
@@ -9755,12 +10324,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:write",
+      "scopesRequired": [
+        "garmin:health:write",
+        "garmin:workouts:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "Uploads a newly built workout; repeats create duplicates.",
       "authRequired": true,
@@ -9840,12 +10414,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:write",
+      "scopesRequired": [
+        "garmin:health:write",
+        "garmin:workouts:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "Uploads a newly built workout; repeats create duplicates.",
       "authRequired": true,
@@ -9917,12 +10496,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:write",
+      "scopesRequired": [
+        "garmin:health:write",
+        "garmin:workouts:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "Uploads a newly built workout; repeats create duplicates.",
       "authRequired": true,
@@ -9989,16 +10573,23 @@
         "garminconnectMethodVerbs": {},
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "write",
       "secondaryEffects": [],
-      "idempotency": "non-idempotent",
-      "idempotencyNote": "POSTs schedule entries; repeats add duplicate scheduled instances.",
+      "scope": "garmin:workouts:write",
+      "scopesRequired": [
+        "garmin:health:write",
+        "garmin:workouts:write"
+      ],
+      "idempotency": "idempotent",
+      "idempotencyNote": "Applies the same _is_already_scheduled() pre-check per item and reports 'already_scheduled' instead of POSTing, so repeating the call converges on the same calendar entries.",
       "authRequired": true,
-      "notes": [],
+      "notes": [
+        "Idempotency is enforced by the upstream MCP layer, not by the endpoint: _is_already_scheduled() runs a workoutScheduleSummariesScalar GraphQL query for the date and the POST is skipped on a match. A bare workout-service/schedule POST does create a second calendar entry, and upstream deliberately falls through to that POST when the pre-check itself raises. A Go port must keep the pre-check to preserve this behavior."
+      ],
       "go": {
         "package": "",
         "handler": "",
@@ -10056,12 +10647,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:read",
+      "scopesRequired": [
+        "garmin:health:read",
+        "garmin:workouts:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -10145,12 +10741,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:read",
+      "scopesRequired": [
+        "garmin:health:read",
+        "garmin:workouts:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -10221,12 +10822,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:read",
+      "scopesRequired": [
+        "garmin:health:read",
+        "garmin:workouts:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -10305,12 +10911,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:write",
+      "scopesRequired": [
+        "garmin:health:write",
+        "garmin:workouts:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a new workout; repeats create duplicates.",
       "authRequired": true,
@@ -10397,12 +11008,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "write",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:write",
+      "scopesRequired": [
+        "garmin:health:write",
+        "garmin:workouts:write"
+      ],
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs each workout in the batch; repeats create duplicates.",
       "authRequired": true,
@@ -10472,12 +11088,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "destructive",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:destructive",
+      "scopesRequired": [
+        "garmin:health:destructive",
+        "garmin:workouts:destructive"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state.",
       "authRequired": true,
@@ -10551,12 +11172,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "destructive",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:destructive",
+      "scopesRequired": [
+        "garmin:health:destructive",
+        "garmin:workouts:destructive"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state.",
       "authRequired": true,
@@ -10632,12 +11258,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:read",
+      "scopesRequired": [
+        "garmin:health:read",
+        "garmin:workouts:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -10708,12 +11339,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:read",
+      "scopesRequired": [
+        "garmin:health:read",
+        "garmin:workouts:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -10784,12 +11420,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:read",
+      "scopesRequired": [
+        "garmin:health:read",
+        "garmin:workouts:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
@@ -10876,16 +11517,23 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "write",
       "secondaryEffects": [],
-      "idempotency": "non-idempotent",
-      "idempotencyNote": "POSTs a schedule entry; repeats add duplicate scheduled instances.",
+      "scope": "garmin:workouts:write",
+      "scopesRequired": [
+        "garmin:health:write",
+        "garmin:workouts:write"
+      ],
+      "idempotency": "idempotent",
+      "idempotencyNote": "Pre-checks the calendar with _is_already_scheduled() and reports success without POSTing when the workout is already scheduled for that date, so repeating the call converges on the same single calendar entry.",
       "authRequired": true,
-      "notes": [],
+      "notes": [
+        "Idempotency is enforced by the upstream MCP layer, not by the endpoint: _is_already_scheduled() runs a workoutScheduleSummariesScalar GraphQL query for the date and the POST is skipped on a match. A bare workout-service/schedule POST does create a second calendar entry, and upstream deliberately falls through to that POST when the pre-check itself raises. A Go port must keep the pre-check to preserve this behavior."
+      ],
       "go": {
         "package": "",
         "handler": "",
@@ -10982,16 +11630,24 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "write",
       "secondaryEffects": [],
-      "idempotency": "non-idempotent",
-      "idempotencyNote": "POSTs schedule entries; repeats add duplicate scheduled instances.",
+      "scope": "garmin:workouts:write",
+      "scopesRequired": [
+        "garmin:health:write",
+        "garmin:workouts:write"
+      ],
+      "idempotency": "idempotent",
+      "idempotencyNote": "Applies the same _is_already_scheduled() pre-check per batch item and skips the POST for entries that already exist, so repeating the call converges on the same calendar entries.",
       "authRequired": true,
-      "notes": [],
+      "notes": [
+        "Idempotency is enforced by the upstream MCP layer, not by the endpoint: _is_already_scheduled() runs a workoutScheduleSummariesScalar GraphQL query for the date and the POST is skipped on a match. A bare workout-service/schedule POST does create a second calendar entry, and upstream deliberately falls through to that POST when the pre-check itself raises. A Go port must keep the pre-check to preserve this behavior.",
+        "Batch items that carry inline workout_data upload a new workout template before scheduling, and that upload is not deduplicated, so repeats can leave extra unscheduled templates in the workout library."
+      ],
       "go": {
         "package": "",
         "handler": "",
@@ -11057,12 +11713,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "destructive",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:destructive",
+      "scopesRequired": [
+        "garmin:health:destructive",
+        "garmin:workouts:destructive"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state.",
       "authRequired": true,
@@ -11136,12 +11797,17 @@
         },
         "resolution": "static"
       },
-      "sensitivity": "ordinary",
+      "sensitivity": "health",
       "sensitivityTags": [
-        "ordinary"
+        "health"
       ],
       "effect": "destructive",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:destructive",
+      "scopesRequired": [
+        "garmin:health:destructive",
+        "garmin:workouts:destructive"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state.",
       "authRequired": true,

@@ -8,8 +8,10 @@
     "commitUrl": "https://github.com/Taxuspt/garmin_mcp/commit/3610be6feed93088d85b0f35aba9d7d07c2505a7",
     "sourceRoot": "src/garmin_mcp",
     "declaredDependency": "garminconnect==0.3.2 (pyproject.toml at this commit)",
-    "garminconnectReferenceCommit": "e4e9748cf3fa62f997e77171addee3acc333232c",
-    "garminconnectReferenceUrl": "https://github.com/cyberjunky/python-garminconnect/commit/e4e9748cf3fa62f997e77171addee3acc333232c"
+    "garminconnectReferenceCommit": "414b54023a31259232744bb67f00a2aa71065e09",
+    "garminconnectReferenceUrl": "https://github.com/cyberjunky/python-garminconnect/commit/414b54023a31259232744bb67f00a2aa71065e09",
+    "garminconnectReferenceRelease": "0.3.10",
+    "garminconnectReferenceNote": "Facade method names and HTTP verbs in this manifest were re-confirmed against garminconnect/__init__.py at 0.3.10. Every facade method the pinned Taxuspt surface reaches still exists there with an identical verb set, so moving the reference from 0.3.8 to 0.3.10 changed no classification in this file."
   },
   "extraction": {
     "method": "static AST analysis of the pinned upstream sources with Python's ast module; upstream code was never executed",
@@ -39,6 +41,30 @@
       "destructive",
       "external-side-effect"
     ],
+    "scope": [
+      "garmin:activities:read",
+      "garmin:activities:write",
+      "garmin:activities:destructive",
+      "garmin:challenges:read",
+      "garmin:devices:read",
+      "garmin:devices:write",
+      "garmin:health:read",
+      "garmin:health:write",
+      "garmin:health:destructive",
+      "garmin:nutrition:read",
+      "garmin:nutrition:write",
+      "garmin:nutrition:destructive",
+      "garmin:profile:read",
+      "garmin:womens-health:read",
+      "garmin:workouts:read",
+      "garmin:workouts:write",
+      "garmin:workouts:destructive",
+      "local:files:read",
+      "local:files:write"
+    ],
+    "scopeAggregates": [
+      "garmin:read"
+    ],
     "idempotency": [
       "idempotent",
       "non-idempotent",
@@ -55,6 +81,12 @@
     },
     "bySensitivity": {
       "ordinary": 5
+    },
+    "byScope": {
+      "garmin:workouts:read": 5
+    },
+    "byScopeRequired": {
+      "garmin:workouts:read": 5
     }
   },
   "resources": [
@@ -81,6 +113,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:read",
+      "scopesRequired": [
+        "garmin:workouts:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Returns a constant document; no state is touched.",
       "authRequired": false,
@@ -120,6 +156,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:read",
+      "scopesRequired": [
+        "garmin:workouts:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Returns a constant document; no state is touched.",
       "authRequired": false,
@@ -159,6 +199,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:read",
+      "scopesRequired": [
+        "garmin:workouts:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Returns a constant document; no state is touched.",
       "authRequired": false,
@@ -198,6 +242,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:read",
+      "scopesRequired": [
+        "garmin:workouts:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Returns a constant document; no state is touched.",
       "authRequired": false,
@@ -237,6 +285,10 @@
       ],
       "effect": "read-only",
       "secondaryEffects": [],
+      "scope": "garmin:workouts:read",
+      "scopesRequired": [
+        "garmin:workouts:read"
+      ],
       "idempotency": "idempotent",
       "idempotencyNote": "Returns a constant document; no state is touched.",
       "authRequired": false,
