@@ -11,8 +11,12 @@ on:
 permissions:
   contents: read
 
+# The group name is a literal, not github.workflow. A called workflow inherits
+# the caller's github.workflow, so sharing that expression with release.yaml made
+# both resolve to the same group and the release run cancelled itself before it
+# could publish.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -59,6 +63,23 @@ jobs:
             GOOS="${os}" go vet ./... || exit 1
           done
 
+  # Dependency review is an enforceable PR gate, not only a repository setting.
+  # It blocks a pull request that introduces a vulnerable or disallowed-license
+  # dependency. It only runs on pull_request, because the action needs a base and
+  # a head to compare.
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: low
+          # Matches the licenses recorded in docs/dependencies.md. A dependency
+          # under anything else needs a decision, not an automatic pass.
+          allow-licenses: Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -102,20 +123,49 @@ jobs:
           go-version-file: go.mod
 
       # A tagged job that runs zero tagged tests reports success and proves
-      # nothing. Fail before the suite runs if the tag matches no test file.
-      - name: Assert the tagged suite exists
+      # nothing. Counting files is not enough either: an empty tagged file, or a
+      # suite where every test skips, satisfies a file count while proving
+      # nothing. Require a minimum number of tests that actually PASSED, read
+      # from the test2json stream.
+      - name: go test -tags=fakegarmin with coverage
         run: |
-          count=$(grep -rl '^//go:build fakegarmin' --include='*_test.go' . | wc -l | tr -d ' ')
-          echo "fakegarmin-tagged test files: $count"
-          if [ "$count" -eq 0 ]; then
+          set -o pipefail
+          go test -json -race -count=1 -tags=fakegarmin \
+            -covermode=atomic -coverprofile=cover-fakegarmin.out ./... | tee fakegarmin.json
+
+      # Counting every passing test would prove nothing, because the untagged
+      # tests compile under the tag as well. Take the test names declared in
+      # tagged files and require each one to appear as a pass in the run, so a
+      # deleted, renamed, emptied or universally skipped tagged test fails here.
+      - name: Assert the tagged suite really ran
+        run: |
+          files=$(grep -rl '^//go:build fakegarmin' --include='*_test.go' . || true)
+          if [ -z "${files}" ]; then
             echo "::error::no fakegarmin-tagged test files found; this job would pass vacuously"
             exit 1
           fi
 
-      - name: go test -tags=fakegarmin with coverage
-        run: |
-          go test -race -count=1 -tags=fakegarmin \
-            -covermode=atomic -coverprofile=cover-fakegarmin.out ./...
+          expected=$(printf '%s\n' "${files}" | xargs grep -h '^func Test' \
+            | sed -E 's/^func (Test[A-Za-z0-9_]*).*/\1/' | sort -u)
+          if [ -z "${expected}" ]; then
+            echo "::error::tagged files declare no test functions"
+            exit 1
+          fi
+
+          jq -r 'select(.Action=="pass" and (.Test // "") != "") | .Test' fakegarmin.json | sort -u > passed.txt
+
+          missing=0
+          for name in ${expected}; do
+            if ! grep -qx "${name}" passed.txt; then
+              echo "::error::tagged test ${name} did not pass"
+              missing=$((missing + 1))
+            fi
+          done
+
+          echo "tagged tests declared: $(echo "${expected}" | wc -w), missing: ${missing}"
+          if [ "${missing}" -ne 0 ]; then
+            exit 1
+          fi
 
       # Packages whose behavior is exercised mainly through the fake service are
       # undercounted by the untagged job, so report the tagged number too.
@@ -131,17 +181,39 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Assert the tagged suite exists
+      # -race here too: the brief requires it on every Go test invocation, and
+      # the suite passes with it.
+      - name: go test -tags=e2e
         run: |
-          count=$(grep -rl '^func Test' --include='*_test.go' ./e2e | wc -l | tr -d ' ')
-          echo "e2e test files: $count"
-          if [ "$count" -eq 0 ]; then
-            echo "::error::no tests found under ./e2e; this job would pass vacuously"
+          set -o pipefail
+          go test -json -race -count=1 -tags=e2e -timeout=10m ./e2e/... | tee e2e.json
+
+      # A file count would accept a file the e2e tag excludes, or a suite where
+      # every test skips. Count tests that passed instead.
+      # Every test declared under ./e2e must pass. A file count would accept a
+      # file the e2e tag excludes, or a suite where every test skips.
+      - name: Assert the E2E suite really ran
+        run: |
+          expected=$(grep -rh '^func Test' --include='*_test.go' ./e2e | sed -E 's/^func (Test[A-Za-z0-9_]*).*/\1/' | sort -u)
+          if [ -z "${expected}" ]; then
+            echo "::error::no tests declared under ./e2e; this job would pass vacuously"
             exit 1
           fi
 
-      - name: go test -tags=e2e
-        run: go test -count=1 -tags=e2e -timeout=10m ./e2e/...
+          jq -r 'select(.Action=="pass" and (.Test // "") != "") | .Test' e2e.json | sort -u > passed.txt
+
+          missing=0
+          for name in ${expected}; do
+            if ! grep -qx "${name}" passed.txt; then
+              echo "::error::E2E test ${name} did not pass"
+              missing=$((missing + 1))
+            fi
+          done
+
+          echo "E2E tests declared: $(echo "${expected}" | wc -w), missing: ${missing}"
+          if [ "${missing}" -ne 0 ]; then
+            exit 1
+          fi
 
   vulncheck:
     name: govulncheck

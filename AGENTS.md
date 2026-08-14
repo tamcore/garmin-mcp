@@ -223,15 +223,17 @@ Four layers. The first three have a CI job each.
 |-------|---------|-----------|---------------|-------|
 | Unit | `go test -race -count=1 ./...` | *(none)* | Logic, handlers, policy, crypto, state machines with fakes | **[NOW]** real tests in every `internal/` package |
 | Fake-service integration | `go test -race -count=1 -tags=fakegarmin ./...` | `fakegarmin` | Login strategies, MFA, DI refresh, retries, API decoding against the scripted fake Garmin | **[NOW]** real tests. `internal/garmin/auth` carries 29 tagged test functions across four tagged test files, plus a tagged harness, which is 29 of the 100 top-level test runs the package reports under the tag. The job no longer passes vacuously |
-| E2E | `go test -tags=e2e -timeout=10m ./e2e/...` | `e2e` | stdio and Streamable HTTP MCP, OAuth flow, browser login form, tenant isolation | **[NOW]** `e2e/cli_test.go` builds the binary and drives it as a subprocess: version output, a clean stdout on the stdio path, and an unknown command. The MCP, OAuth, and isolation rows are still **[TARGET]** |
+| E2E | `go test -race -count=1 -tags=e2e -timeout=10m ./e2e/...` | `e2e` | stdio and Streamable HTTP MCP, OAuth flow, browser login form, tenant isolation | **[NOW]** `e2e/cli_test.go` builds the binary and drives it as a subprocess: version output, a clean stdout on the stdio path, and an unknown command. The MCP, OAuth, and isolation rows are still **[TARGET]** |
 | Live (opt-in) | `go test -tags=garminlive -count=1 ./...` | `garminlive` | Real Garmin login drift detection. Never in CI | **[TARGET]** nothing carries the tag |
 
-A vacuous pass is a defect, not a green light. Both tagged jobs now run real
-tests, and each one now **fails before the suite runs when the suite is absent**:
-`test-fakegarmin` counts files carrying `//go:build fakegarmin` and `e2e` counts
-test files under `./e2e/`, and a count of zero is a hard error. The guard is
-presence-based, so it catches a deleted suite, not a suite that decays to one
-trivial test. That remains a review duty.
+A vacuous pass is a defect, not a green light. Both tagged jobs run real tests,
+and each one **fails when its suite did not actually run**. Counting files was the
+first attempt and was not enough: an empty tagged file, or a suite where every
+test skips, satisfies a file count while proving nothing. Each job now takes the
+test names declared in the relevant files and requires every one of them to appear
+as a pass in the `go test -json` stream, so a deleted, renamed, emptied or
+universally skipped tagged test fails the job. A suite that decays into fewer but
+still-passing tests is caught, because the declared name disappears with it.
 
 Rules:
 
@@ -251,12 +253,18 @@ Rules:
 
 Two workflows exist: `ci.yaml` and `release.yaml`. CI runs on push to `master`,
 on pull requests, and by `workflow_call` from the release workflow, with
-top-level `permissions: contents: read` and a cancel-in-progress concurrency
-group keyed on workflow and ref.
+top-level `permissions: contents: read`.
+
+Each workflow names its concurrency group with a **literal** prefix, `ci-` and
+`release-`, never `github.workflow`. A called workflow inherits the caller's
+`github.workflow`, so the shared expression put both in one group and the release
+run cancelled itself through its own `gates` job before it could publish. CI
+cancels superseded runs; a release does not, because publishing must not be
+interrupted part-way.
 
 | Workflow | Jobs |
 |----------|------|
-| CI (`ci.yaml`) | `verify` (gofmt, `go mod tidy`, `go vet`, then `go vet` again for `GOOS=linux`, `darwin` and `windows` so platform-specific files and their tests are type-checked), `lint` (golangci-lint plus `golangci-lint fmt --diff`), `test` (race, coverage profile, coverage summary), `test-fakegarmin`, `e2e`, `vulncheck`, `build` (3 OS x 2 arch), `goreleaser` (`check` plus snapshot with `--skip=sign,sbom,docker`), `container` (build the image from a prepared context, then hardening smoke test) |
+| CI (`ci.yaml`) | `verify` (gofmt, `go mod tidy`, `go vet`, then `go vet` again for `GOOS=linux`, `darwin` and `windows` so platform-specific files and their tests are type-checked), `dependency-review` (pull requests only, SHA-pinned, `fail-on-severity: low` and an explicit license allowlist), `lint` (golangci-lint plus `golangci-lint fmt --diff`), `test` (race, coverage profile, coverage summary), `test-fakegarmin` (race, coverage, and the declared-test assertion), `e2e` (race and the declared-test assertion), `vulncheck`, `build` (3 OS x 2 arch), `goreleaser` (`check` plus snapshot with `--skip=sign,sbom,docker`), `container` (build the image from a prepared context, then hardening smoke test, which proves a nonroot read-only shell-free image runs the binary and does not yet prove server start-up or a writable `/data`) |
 | Release (`release.yaml`) | `v*` tags only. `gates` re-runs the whole CI workflow against the tagged commit, then `release` runs GoReleaser with the narrowest write permissions plus `id-token: write` for keyless cosign |
 
 Every third-party action is pinned to a full commit SHA with the intended
@@ -280,7 +288,7 @@ go vet ./...
 golangci-lint run
 go test -race -count=1 ./...
 go test -race -count=1 -tags=fakegarmin ./...
-go test -tags=e2e -timeout=10m ./e2e/...
+go test -race -count=1 -tags=e2e -timeout=10m ./e2e/...
 govulncheck ./...
 goreleaser check
 goreleaser release --snapshot --clean

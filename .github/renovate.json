@@ -20,7 +20,8 @@
         "modernc.org/sqlite",
         "filippo.io/**",
         "golang.org/x/crypto",
-        "golang.org/x/oauth2"
+        "golang.org/x/oauth2",
+        "golang.org/x/sys"
       ],
       "automerge": false
     },

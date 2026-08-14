@@ -8,9 +8,15 @@ on:
 permissions:
   contents: read
 
+# A literal prefix, distinct from the one ci.yaml uses. See the note there: the
+# called workflow inherits this workflow's github.workflow, so a shared
+# expression makes the gates job cancel the run that started it.
+#
+# cancel-in-progress is false because a release must not be interrupted midway
+# through publishing.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   GORELEASER_VERSION: v2.17.1
