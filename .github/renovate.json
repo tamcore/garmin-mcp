@@ -8,12 +8,16 @@
   "packageRules": [
     {
       "description": "Actions execute in CI with repository credentials. A bumped SHA is a code change and needs a human.",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "automerge": false
     },
     {
-      "description": "Authorization, storage, and crypto dependencies gate the security model. Review every bump by hand.",
-      "matchManagers": ["gomod"],
+      "description": "Authorization, storage, and crypto dependencies gate the security model. Review every bump by hand. modernc.org/libc must move only with the modernc.org/sqlite release that pins it: upstream requires the exact pair, so an independent bump breaks the driver.",
+      "matchManagers": [
+        "gomod"
+      ],
       "matchPackageNames": [
         "github.com/modelcontextprotocol/go-sdk",
         "github.com/ory/fosite",
@@ -21,14 +25,19 @@
         "filippo.io/**",
         "golang.org/x/crypto",
         "golang.org/x/oauth2",
-        "golang.org/x/sys"
+        "golang.org/x/sys",
+        "modernc.org/libc"
       ],
       "automerge": false
     },
     {
       "description": "The runtime base image is pinned by digest, so Renovate is the only thing that keeps it current.",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["gcr.io/distroless/static-debian12"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "gcr.io/distroless/static-debian12"
+      ],
       "groupName": "distroless base image"
     }
   ]

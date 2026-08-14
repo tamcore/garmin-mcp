@@ -15,6 +15,7 @@ cache license files, and `proxy.golang.org`.
 | `github.com/spf13/viper` | `v1.21.0` | MIT | 2025-09-08 | `internal/config` |
 | `github.com/spf13/pflag` | `v1.0.10` | BSD-3-Clause | 2025-09-02 | `internal/config` |
 | `golang.org/x/sys` | `v0.47.0` | BSD-3-Clause | 2026-06-30 | `internal/securefile` (Windows-tagged files only) |
+| `modernc.org/sqlite` | `v1.56.0` | BSD-3-Clause | 2026-08-03 | `internal/store` (multi-user backend) |
 
 All four are at the latest version published by `proxy.golang.org` on the
 verification date. `golang.org/x/sys` sits far above the version Viper selects,
@@ -83,6 +84,32 @@ so no other platform links it.
 **Maintenance.** Published by the Go team, versioned with the toolchain. The pin
 is far above the version Viper selects, because that older version carried a
 Windows advisory.
+
+### `modernc.org/sqlite`
+
+**Version.** `v1.56.0`. License BSD-3-Clause.
+
+**Rationale.** The multi-user deployment needs a migration-backed relational store,
+and release binaries must stay `CGO_ENABLED=0`. This driver is pure Go, so the
+cross-compiled artifacts keep building: verified for linux/amd64, linux/arm64,
+darwin/arm64 and windows/amd64 with cgo off. The obvious alternative,
+`mattn/go-sqlite3`, is a cgo binding and would break every cross-compiled release.
+
+**Maintenance.** Actively maintained, with a release every two to four weeks.
+`v1.56.0` bundles SQLite 3.53.3 and patches an upstream data-corruption bug in
+journal rollback, which argues for taking it rather than against it.
+
+**Operational constraint.** Upstream requires the exact `modernc.org/libc` version
+this driver's `go.mod` pins. Moving `libc` on its own is a supported way to break
+the driver, so both modules are on the manual-review list in `.github/renovate.json`
+and neither may be automerged. They move together or not at all.
+
+**Cost.** The driver brings `modernc.org/libc`, `modernc.org/memory`,
+`modernc.org/mathutil`, `github.com/dustin/go-humanize`,
+`github.com/ncruces/go-strftime`, `github.com/mattn/go-isatty` and
+`github.com/remyoudompheng/bigfft` as indirect requirements. Internal identifiers
+are generated with `crypto/rand`, not with `github.com/google/uuid`, so that
+module stays indirect.
 
 ### House-stack note
 
