@@ -1,0 +1,37 @@
+version: "2"
+
+run:
+  allow-parallel-runners: true
+  build-tags:
+    - fakegarmin
+
+linters:
+  default: none
+  enable:
+    - copyloopvar
+    - dupl
+    - errcheck
+    - goconst
+    - gocyclo
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - prealloc
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    gocyclo:
+      min-complexity: 15
+    lll:
+      line-length: 120
+    nakedret:
+      max-func-lines: 0
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

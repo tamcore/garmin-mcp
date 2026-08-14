@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>tamcore/renovate",
+    "github>tamcore/renovate:go",
+    "github>tamcore/renovate:automerge-minor",
+    "github>tamcore/renovate:automerge-github-actions"
+  ],
+  "packageRules": [
+    {
+      "description": "Authorization, storage, and crypto dependencies gate the security model. Review every bump by hand.",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": [
+        "github.com/modelcontextprotocol/go-sdk",
+        "github.com/ory/fosite",
+        "modernc.org/sqlite",
+        "filippo.io/**",
+        "golang.org/x/crypto",
+        "golang.org/x/oauth2"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "The runtime base image is pinned by digest, so Renovate is the only thing that keeps it current.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["gcr.io/distroless/static-debian12"],
+      "groupName": "distroless base image"
+    }
+  ]
+}

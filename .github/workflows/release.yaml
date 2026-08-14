@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v*
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GORELEASER_VERSION: v2.17.1
+  COSIGN_VERSION: v2.6.5
+  SYFT_VERSION: v1.51.0
+
+jobs:
+  # Publishing is gated on the full CI matrix re-running against the tagged
+  # commit, so a tag can never ship artifacts that did not pass the gates.
+  gates:
+    name: Gates
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yaml
+
+  release:
+    name: GoReleaser
+    needs: gates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub release and upload artifacts
+      packages: write # push the OCI image to GHCR
+      id-token: write # keyless cosign signing via GitHub OIDC
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install cosign
+        run: go install github.com/sigstore/cosign/v2/cmd/cosign@${{ env.COSIGN_VERSION }}
+
+      - name: Install syft
+        run: go install github.com/anchore/syft/cmd/syft@${{ env.SYFT_VERSION }}
+
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: ${{ env.GORELEASER_VERSION }}
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
