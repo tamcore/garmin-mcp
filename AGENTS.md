@@ -25,22 +25,39 @@ Python, no Garth, no Python subprocess.
 
 ## Current state [NOW]
 
-As of 2026-08-14 the repository contains only the following Go code:
+As of 2026-08-14 the repository contains the following Go code. Coverage is the
+statement coverage reported by `go test -cover`.
 
-| Path | What is there |
-|------|---------------|
-| `cmd/garmin-mcp/main.go` | Bare `main` with the ldflags-injected `version` and `commit` variables. No command tree |
-| `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, and the login response classifier (JSON and widget HTML). No I/O |
-| `internal/testkit` | Scripted fake Garmin service, fake clock, fixtures |
-| `e2e/doc.go` | Build tag `e2e` and a package clause. No tests |
+| Path | What is there | Coverage |
+|------|---------------|----------|
+| `cmd/garmin-mcp/main.go` | Thin `main`: passes the ldflags-injected `version` and `commit` into `cmd.Execute` and calls `os.Exit` with the returned code | n/a |
+| `internal/cmd` | Cobra tree — root, `serve`, `auth`, `doctor`, `tools` with a `list` subcommand, `migrate`, `version`. Only `version` (and root `--version`) does real work. Bare root and bare `tools` print help; the rest validate configuration and then fail; see below | 96.4% |
+| `internal/config` | `Config`, deterministic four-layer precedence, `_FILE` secret variants, full lexical validation, redacted output | 94.4% |
+| `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry, DI ticket exchange, session validation, refresh with per-principal collapsing and CAS, unverified-JWT `exp` parsing | 85.1% with `-tags=fakegarmin`, 55.2% untagged |
+| `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, and the login response classifier (JSON and widget HTML). No I/O | 96.7% |
+| `internal/store` | `FileStore`: encrypted, atomically written, owner-only per-principal token records with CAS versioning, plus legacy `garmin_tokens.json` import and export | 87.1% |
+| `internal/cryptostore` | AES-256-GCM envelope encryption with versioned key IDs and principal/record-type AAD, and an owner-only key file | 83.8% |
+| `internal/testkit` | Scripted fake Garmin service, fake clock, fixtures, transport guard | 96.8% |
+| `e2e` | Build tag `e2e`. `cli_test.go` builds the binary and drives it as a subprocess: version output, clean stdout on the stdio path, unknown command | n/a |
 
 Everything else in the repository is documentation, contract manifests
 (`compat/`), and CI, lint, pre-commit, GoReleaser, and container configuration.
 
-There is **no** MCP server, no MCP SDK dependency (`go.mod` has no
-requirements), no stdio or HTTP transport, no OAuth authorization server, no
-registered tool or resource, no Cobra command tree, no configuration package, no
-store, no crypto, no `LoginTransport` type, and no `garminlive` command.
+`go.mod` now has real requirements: `spf13/cobra`, `spf13/viper`, and
+`spf13/pflag`, plus the transitive indirect set. See `docs/dependencies.md`.
+
+What `serve`, `auth`, `doctor`, `tools list`, and `migrate` actually do: they
+load and validate the configuration, then return a `*cmd.NotImplementedError`
+that wraps the exported `cmd.ErrNotImplemented` sentinel. `cmd.Execute` prints
+it to stderr and returns exit code 1, which `main` passes to `os.Exit`. This is
+a declared gap, not working behavior. Stdout stays byte-empty on those paths,
+and `internal/cmd` tests assert byte-emptiness.
+
+There is still **no** MCP server, no MCP SDK requirement in `go.mod`, no stdio
+or HTTP transport, no OAuth authorization server, no registered tool or
+resource, no `slog` logger anywhere in the binary path, no SQLite store, no
+`LoginTransport` type (the auth package uses a one-method `Doer` transport
+interface instead), and no `garminlive` command.
 
 `docs/implementation-status.md` is the authoritative task and gap list. Read it
 with this file before any work. Where this file and the repository disagree, the
@@ -108,13 +125,13 @@ that is present today; every other path must still be created. Do not import or
 reference a path marked `planned` — it will not compile.
 
 ```
-cmd/garmin-mcp/          main package only                                    exists (bare main)
+cmd/garmin-mcp/          main package only                                    exists
 internal/
-  cmd/                   Cobra commands: serve, auth, doctor, tools, migrate, version   planned
-  config/                parsing, precedence, validation, redacted output      planned
+  cmd/                   Cobra commands: serve, auth, doctor, tools, migrate, version   exists (only version works)
+  config/                parsing, precedence, validation, redacted output      exists
   garmin/protocol/       endpoints, client identities, pacing, failure classifier  exists
-  garmin/auth/           native login/MFA strategies and DI exchange           planned
-  garmin/client/         authenticated HTTP, refresh, retry, typed errors      planned
+  garmin/auth/           native login/MFA strategies and DI exchange           exists
+  garmin/client/         authenticated HTTP, refresh, retry, typed errors      planned (refresh/retry live in garmin/auth today)
   garmin/api/            domain clients: activity, health, workout, device, ...  planned
   mcpserver/             server, transports, middleware wiring                 planned
   tools/                 one file per MCP tool + register.go RegisterAll       planned
@@ -124,12 +141,12 @@ internal/
   identity/              principal and request-context resolution              planned
   oauthserver/           MCP-facing OAuth AS/RS integration and consent        planned
   loginweb/              embedded templates and one-time login transactions    planned
-  store/                 storage interfaces, SQLite implementation, migrations  planned
-  cryptostore/           versioned envelope encryption and key rotation        planned
+  store/                 storage interfaces, SQLite implementation, migrations  exists (FileStore only; SQLite per ADR 0004 still planned)
+  cryptostore/           versioned envelope encryption and key rotation        exists
   policy/                scopes, write/destructive gates, limits               planned
   observability/         redacted logging, metrics, tracing hooks              planned
   testkit/               fake Garmin, fake clock, fixtures, test keys          exists
-e2e/                     end-to-end tests (build tag: e2e)                     exists (empty)
+e2e/                     end-to-end tests (build tag: e2e)                     exists (CLI-level only)
 web/                     embedded HTML/CSS; no remote JS dependency            planned
 migrations/              embedded, monotonic database migrations                planned
 compat/                  pinned tool and resource contract manifests           exists
@@ -194,13 +211,14 @@ Four layers. The first three have a CI job each.
 
 | Layer | Command | Build tag | What it tests | State |
 |-------|---------|-----------|---------------|-------|
-| Unit | `go test -race -count=1 ./...` | *(none)* | Logic, handlers, policy, crypto, state machines with fakes | **[NOW]** real tests in `internal/garmin/protocol` and `internal/testkit` |
-| Fake-service integration | `go test -race -count=1 -tags=fakegarmin ./...` | `fakegarmin` | Login strategies, MFA, DI refresh, retries, API decoding against the scripted fake Garmin | **[TARGET]** no file carries the tag yet, so the job passes vacuously |
-| E2E | `go test -tags=e2e -timeout=10m ./e2e/...` | `e2e` | stdio and Streamable HTTP MCP, OAuth flow, browser login form, tenant isolation | **[TARGET]** only `e2e/doc.go` carries the tag, so the job passes vacuously |
+| Unit | `go test -race -count=1 ./...` | *(none)* | Logic, handlers, policy, crypto, state machines with fakes | **[NOW]** real tests in every `internal/` package |
+| Fake-service integration | `go test -race -count=1 -tags=fakegarmin ./...` | `fakegarmin` | Login strategies, MFA, DI refresh, retries, API decoding against the scripted fake Garmin | **[NOW]** real tests. `internal/garmin/auth` carries 23 tagged test functions in `login_fakegarmin_test.go` and `mfa_fakegarmin_test.go`, plus a tagged harness. The job no longer passes vacuously |
+| E2E | `go test -tags=e2e -timeout=10m ./e2e/...` | `e2e` | stdio and Streamable HTTP MCP, OAuth flow, browser login form, tenant isolation | **[NOW]** `e2e/cli_test.go` builds the binary and drives it as a subprocess: version output, a clean stdout on the stdio path, and an unknown command. The MCP, OAuth, and isolation rows are still **[TARGET]** |
 | Live (opt-in) | `go test -tags=garminlive -count=1 ./...` | `garminlive` | Real Garmin login drift detection. Never in CI | **[TARGET]** nothing carries the tag |
 
-A vacuous pass is a defect, not a green light. When a tagged suite is created,
-its CI job must also be made to fail when the expected suite is absent.
+A vacuous pass is a defect, not a green light. Both tagged jobs now run real
+tests, but neither yet **fails when the expected suite is absent**, so deleting
+every tagged file would still produce a green tick. Add that guard to each job.
 
 Rules:
 
@@ -248,6 +266,8 @@ go build ./...
 go vet ./...
 golangci-lint run
 go test -race -count=1 ./...
+go test -race -count=1 -tags=fakegarmin ./...
+go test -tags=e2e -timeout=10m ./e2e/...
 govulncheck ./...
 goreleaser check
 goreleaser release --snapshot --clean
@@ -288,4 +308,6 @@ These apply to every commit, including the code that already exists.
 - Stdout is reserved exclusively for MCP frames in stdio mode. Logs go to
   stderr.
 - Prefer the standard library. Every nontrivial dependency needs a rationale,
-  license, and maintenance note in an ADR or `docs/dependencies.md`.
+  license, and maintenance note in an ADR or `docs/dependencies.md`. That file
+  exists and carries the current direct requirements; add the entry in the same
+  commit as the requirement.

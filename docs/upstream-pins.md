@@ -70,21 +70,41 @@ enforces the allowlist at request time, because no client exists yet.
 
 ## Protocol and SDK pins
 
-These two entries are not pinned yet. They are pinned when the official Go SDK
-is added to `go.mod`, and the decision is recorded in
-`docs/adr/0002-mcp-sdk-and-spec-version.md`.
+Both entries are pinned. The decision and its evidence are recorded in
+`docs/adr/0002-mcp-sdk-and-spec-version.md`, which is **Accepted** as of
+2026-08-14.
 
 | Item | Repository | Pin | Governs |
 |------|-----------|-----|---------|
-| Official MCP Go SDK | [`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk) | TODO: pin the latest stable release and its commit SHA when the SDK is added | MCP types, tool registration, stdio, Streamable HTTP |
-| MCP specification | [`modelcontextprotocol/modelcontextprotocol`](https://github.com/modelcontextprotocol/modelcontextprotocol) | TODO: pin the latest dated specification fully supported by that stable SDK | Transport, authorization discovery, security, tool semantics |
+| Official MCP Go SDK | [`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk) | `v1.7.0`, tagged commit [`bc72835f62eb94d0fb484439f886b6885b075f36`](https://github.com/modelcontextprotocol/go-sdk/commit/bc72835f62eb94d0fb484439f886b6885b075f36) (tag object `25cb00203c6b693780f602ab4041c06f7f4b9570`) | MCP types, tool registration, stdio, Streamable HTTP |
+| MCP specification | [`modelcontextprotocol/modelcontextprotocol`](https://github.com/modelcontextprotocol/modelcontextprotocol) | `2026-07-28` | Transport, authorization discovery, security, tool semantics |
 
-Selection rule, as researched on 2026-08-05: the Go SDK compatibility table says
-the stable v1.4.0 to v1.6.1 line supports MCP 2025-11-25, while v1.7.0 support
-for MCP 2026-07-28 was still represented by prereleases. Default to the latest
-stable SDK and specification pairing. Adopt v1.7.0 with 2026-07-28 only if
-v1.7.0 is stable when implementation starts, or after ADR 0002 documents why a
-prerelease is necessary and the conformance suite passes.
+Why this pair, verified on 2026-08-14 against the GitHub releases API and the
+repository tree at the `v1.7.0` tag:
+
+- `v1.7.0` was published on 2026-07-28 with `prerelease=false` and
+  `draft=false`. It is a **stable** release, so no prerelease exception is
+  needed. The brief's selection rule, written on 2026-08-05 when v1.7.0 was
+  still a prerelease, is therefore satisfied by adopting it.
+- The README compatibility table at the tag states that v1.7.0 and later support
+  2026-07-28, 2025-11-25, 2025-06-18, 2025-03-26, and 2024-11-05. The
+  2025-11-25 entry is footnoted: client-side OAuth support is experimental at
+  that version. 2026-07-28 is the latest dated specification the pinned SDK
+  supports, so it is the pinned specification.
+- The README states that roots, sampling, and logging are deprecated as of
+  protocol 2026-07-28 by SEP-2577, and that the SDK keeps them for at least
+  twelve months. This project must not build on them.
+
+The SDK is deliberately **not yet a requirement in `go.mod`**. `go mod tidy`
+drops a requirement that no package imports, and CI verifies a clean
+`go mod tidy` diff, so an unused requirement would fail the build. The module
+line lands with the MCP foundation slice (phase 3), in the same commit as the
+first code that imports `mcp`. A reader who finds no SDK line in `go.mod` must
+read that as sequencing, not as a forgotten pin.
+
+Per-feature obligations for this pair — required, optional, or deferred, with the
+providing SDK package or type and the owning milestone — are in
+`docs/mcp-version-matrix.md`.
 
 The MCP conformance suite
 ([`modelcontextprotocol/conformance`](https://github.com/modelcontextprotocol/conformance))
