@@ -72,12 +72,15 @@ These are deliberate and tracked, not silently dropped:
   embedded in the widget page, and it reports the delivery method as the
   hardcoded `MFAMethodEmail` default. There is no outcome distinct from
   `OutcomeInvalidCredentials` for a rejected OTP, so a wrong code and a wrong
-  password cannot be told apart. No path or endpoint label models the explicit
-  MFA code request, so requirement 9 in `docs/upstream-pins.md` has nothing to
-  build on.
-- The 0.3.8 to 0.3.10 security behaviors are not implemented. See the required
-  list in `docs/upstream-pins.md`: host allowlist enforcement, sanitized
-  exception messages, login-error query redaction, symlink-rejecting token paths
+  password cannot be told apart. The wire constants for the explicit MFA code
+  request do exist (`PathWidgetRequestMFACode`, `EndpointWidgetRequestMFACode`,
+  `Hosts.WidgetRequestMFACodeURL`), but nothing calls them, so requirement 9 in
+  `docs/upstream-pins.md` has a constant and no behavior.
+- Most of the 0.3.8 to 0.3.10 security behaviors are not implemented. Host
+  allowlist enforcement, sanitized exception messages, and login-error query
+  redaction are partly in place in `internal/garmin/protocol`; the rest are not
+  started. See the required list in `docs/upstream-pins.md`: symlink-rejecting
+  token paths
   with full ancestry checks, serialized refresh with atomic writes, JWT `exp`
   validation and unsigned-payload rejection, server-driven pagination caps,
   per-transaction pending MFA state, explicit widget MFA code delivery, and

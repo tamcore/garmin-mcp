@@ -54,7 +54,11 @@ reasoned here, so it is documented rather than silently non-compliant.
 
 #### 1 — Runtime-only Dockerfile instead of multi-stage
 
-The brief asks for a multi-stage `Dockerfile`. `Dockerfile` in the repository
+Approved by the maintainer on 2026-08-14. The brief was amended in the same
+decision, so the runtime-only form is now compliant wording rather than a
+tolerated exception. An ADR alone cannot approve a deviation from the brief.
+
+The brief previously asked for a multi-stage `Dockerfile`. `Dockerfile` in the repository
 root is runtime-only: it starts from a digest-pinned
 `gcr.io/distroless/static-debian12:nonroot`, and its single `COPY` takes an
 already-built binary from `${TARGETPLATFORM}/garmin-mcp` in the build context.
