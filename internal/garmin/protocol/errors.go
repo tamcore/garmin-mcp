@@ -34,11 +34,14 @@ var sentinels = [...]error{
 // labels, the HTTP status, the classified outcome, any parsed Retry-After hint,
 // and a wrapped cause.
 //
-// The rendered message never contains raw cause text. Only recognized error
-// shapes are described (a *url.Error with its query redacted, a context error, a
-// nested *Error, one of this package's sentinels); anything else degrades to its
-// Go type name. Unwrap still exposes the real cause, so a caller that needs its
-// text must fetch and redact it deliberately.
+// The rendered message never contains raw cause text, and never the text of a
+// wrapper either: fmt.Errorf lets a caller put a bearer token, a cookie or a
+// password in the wrapping message, so a chain that merely contains a recognized
+// sentinel is still rendered from the sentinel's own text. Only recognized error
+// shapes are described (a nested *Error, a *url.Error with its query redacted, one
+// of this package's sentinels, a context error); anything else degrades to a
+// network failure category or to its Go type name. Unwrap still exposes the real
+// cause, so a caller that needs its text must fetch and redact it deliberately.
 type Error struct {
 	// Op names the logical operation. Only an Op* constant is rendered.
 	Op Op
@@ -57,6 +60,12 @@ type Error struct {
 
 // Error renders a sanitized, single-line message.
 func (e *Error) Error() string {
+	return e.render(maxCauseDepth)
+}
+
+// render is Error with an explicit remaining cause depth, so a cause chain that
+// loops back to this error terminates.
+func (e *Error) render(depth int) string {
 	if e == nil {
 		return "protocol: <nil>"
 	}
@@ -77,7 +86,7 @@ func (e *Error) Error() string {
 		b.WriteString(" retry after ")
 		b.WriteString(e.RetryAfter.String())
 	}
-	if cause := redactedCause(e.Err); cause != "" {
+	if cause := redactedCauseAt(e.Err, depth); cause != "" {
 		b.WriteString(": ")
 		b.WriteString(cause)
 	}

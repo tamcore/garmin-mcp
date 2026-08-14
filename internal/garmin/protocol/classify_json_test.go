@@ -15,6 +15,11 @@ const (
 
 	// testHostileDomain is a domain that must never reach URL construction.
 	testHostileDomain = "attacker.example"
+	// testCaseVariantDomain is an allowlisted domain in the wrong case, which is
+	// valid input for ParseDomain and invalid everywhere else.
+	testCaseVariantDomain = "GARMIN.COM"
+	// testStatusTypeSuccessful is the responseStatus.type of a successful login.
+	testStatusTypeSuccessful = "SUCCESSFUL"
 	// Real Garmin URLs the URL builders and the redactor must produce.
 	testSSOEmbedURL    = "https://sso.garmin.com/sso/embed"
 	testMobileLoginURL = "https://sso.garmin.com/mobile/api/login"
@@ -29,11 +34,7 @@ const (
 
 // jsonResponse builds a 200 JSON response; non-200 cases spell out Response.
 func jsonResponse(body string) Response {
-	return Response{
-		Status:      http.StatusOK,
-		ContentType: contentTypeJSON + ";charset=UTF-8",
-		Body:        []byte(body),
-	}
+	return NewResponseFromParts(http.StatusOK, contentTypeJSON+";charset=UTF-8", nil, []byte(body))
 }
 
 func TestClassifyJSONLogin(t *testing.T) {
@@ -98,47 +99,50 @@ func TestClassifyJSONLogin(t *testing.T) {
 		},
 		{
 			name: "http 429 with delta-seconds retry-after",
-			response: Response{
-				Status:      http.StatusTooManyRequests,
-				ContentType: contentTypeJSON,
-				Header:      http.Header{HeaderRetryAfter: []string{"120"}},
-				Body:        []byte(`{}`),
-			},
+			response: NewResponseFromParts(
+				http.StatusTooManyRequests,
+				contentTypeJSON,
+				http.Header{HeaderRetryAfter: []string{"120"}},
+				[]byte(`{}`),
+			),
 			wantOutcome:    OutcomeRateLimited,
 			wantRetryAfter: 2 * time.Minute,
 		},
 		{
 			name: "http 403 bot challenge with html body",
-			response: Response{
-				Status:      http.StatusForbidden,
-				ContentType: contentTypeHTML,
-				Body:        []byte("<html><title>Attention Required</title></html>"),
-			},
+			response: NewResponseFromParts(
+				http.StatusForbidden,
+				contentTypeHTML,
+				nil,
+				[]byte("<html><title>Attention Required</title></html>"),
+			),
 			wantOutcome: OutcomeBotChallenge,
 		},
 		{
 			// A bare 401 is a session, CSRF or protocol fault; only an explicit
 			// credential rejection in the body may blame the password.
 			name:        "http 401 without recognizable json is unknown",
-			response:    Response{Status: http.StatusUnauthorized, ContentType: "text/plain", Body: []byte("Unauthorized")},
+			response:    NewResponseFromParts(http.StatusUnauthorized, "text/plain", nil, []byte("Unauthorized")),
 			wantOutcome: OutcomeUnknown,
 		},
 		{
 			name: "http 401 with explicit credential rejection",
-			response: Response{
-				Status:      http.StatusUnauthorized,
-				ContentType: contentTypeJSON,
-				Body:        []byte(`{"responseStatus":{"type":"INVALID_USERNAME_PASSWORD"}}`),
-			},
+			response: NewResponseFromParts(
+				http.StatusUnauthorized,
+				contentTypeJSON,
+				nil,
+				[]byte(`{"responseStatus":{"type":"INVALID_USERNAME_PASSWORD"}}`),
+			),
 			wantOutcome: OutcomeInvalidCredentials,
 		},
 		{
 			name: "http 503 is temporary",
-			response: Response{
-				Status:      http.StatusServiceUnavailable,
-				ContentType: contentTypeHTML,
-				Body:        []byte("<html>maintenance</html>"),
-			},
+			response: NewResponseFromParts(
+				http.StatusServiceUnavailable,
+				contentTypeHTML,
+				nil,
+				[]byte("<html>maintenance</html>"),
+			),
 			wantOutcome: OutcomeTemporaryFailure,
 		},
 		{
@@ -185,11 +189,12 @@ func TestClassifyJSONLogin(t *testing.T) {
 		},
 		{
 			name: "content type sniffed from header when field empty",
-			response: Response{
-				Status: http.StatusOK,
-				Header: http.Header{"Content-Type": []string{contentTypeJSON}},
-				Body:   []byte(`{"responseStatus":{"type":"SUCCESSFUL"},"serviceTicketId":"ST-fake-0002"}`),
-			},
+			response: NewResponseFromParts(
+				http.StatusOK,
+				"",
+				http.Header{"Content-Type": []string{contentTypeJSON}},
+				[]byte(`{"responseStatus":{"type":"SUCCESSFUL"},"serviceTicketId":"ST-fake-0002"}`),
+			),
 			wantOutcome: OutcomeSuccess,
 			wantTicket:  "ST-fake-0002",
 		},
@@ -199,17 +204,17 @@ func TestClassifyJSONLogin(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := ClassifyJSONLogin(tc.response)
-			if got.Outcome != tc.wantOutcome {
-				t.Fatalf("Outcome = %v, want %v", got.Outcome, tc.wantOutcome)
+			if got.Outcome() != tc.wantOutcome {
+				t.Fatalf("Outcome = %v, want %v", got.Outcome(), tc.wantOutcome)
 			}
-			if got.ServiceTicket != tc.wantTicket {
-				t.Fatalf("ServiceTicket = %q, want %q", got.ServiceTicket, tc.wantTicket)
+			if got.ServiceTicket() != tc.wantTicket {
+				t.Fatalf("ServiceTicket = %q, want %q", got.ServiceTicket(), tc.wantTicket)
 			}
-			if got.MFAMethod != tc.wantMFAMethod {
-				t.Fatalf("MFAMethod = %q, want %q", got.MFAMethod, tc.wantMFAMethod)
+			if got.MFAMethod() != tc.wantMFAMethod {
+				t.Fatalf("MFAMethod = %q, want %q", got.MFAMethod(), tc.wantMFAMethod)
 			}
-			if got.RetryAfter != tc.wantRetryAfter {
-				t.Fatalf("RetryAfter = %v, want %v", got.RetryAfter, tc.wantRetryAfter)
+			if got.RetryAfter() != tc.wantRetryAfter {
+				t.Fatalf("RetryAfter = %v, want %v", got.RetryAfter(), tc.wantRetryAfter)
 			}
 		})
 	}
@@ -219,17 +224,18 @@ func TestClassifyJSONLoginRetryAfterHTTPDate(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.January, 2, 15, 4, 5, 0, time.UTC)
-	got := ClassifyJSONLogin(Response{
-		Status: http.StatusTooManyRequests,
-		Header: http.Header{HeaderRetryAfter: []string{"Fri, 02 Jan 2026 15:05:05 GMT"}},
-		Now:    now,
-	})
+	got := ClassifyJSONLogin(NewResponseFromParts(
+		http.StatusTooManyRequests,
+		"",
+		http.Header{HeaderRetryAfter: []string{"Fri, 02 Jan 2026 15:05:05 GMT"}},
+		nil,
+	).WithNow(now))
 
-	if got.Outcome != OutcomeRateLimited {
-		t.Fatalf("Outcome = %v, want %v", got.Outcome, OutcomeRateLimited)
+	if got.Outcome() != OutcomeRateLimited {
+		t.Fatalf("Outcome = %v, want %v", got.Outcome(), OutcomeRateLimited)
 	}
-	if got.RetryAfter != time.Minute {
-		t.Fatalf("RetryAfter = %v, want %v", got.RetryAfter, time.Minute)
+	if got.RetryAfter() != time.Minute {
+		t.Fatalf("RetryAfter = %v, want %v", got.RetryAfter(), time.Minute)
 	}
 }
 
@@ -249,10 +255,12 @@ func TestClassificationErr(t *testing.T) {
 
 	t.Run("failure carries operation endpoint status and cause", func(t *testing.T) {
 		t.Parallel()
-		c := ClassifyJSONLogin(Response{
-			Status: http.StatusTooManyRequests,
-			Header: http.Header{HeaderRetryAfter: []string{"15"}},
-		})
+		c := ClassifyJSONLogin(NewResponseFromParts(
+			http.StatusTooManyRequests,
+			"",
+			http.Header{HeaderRetryAfter: []string{"15"}},
+			nil,
+		))
 		err := c.Err(OpMobileLogin, EndpointMobileLogin, cause)
 
 		var pe *Error
@@ -284,4 +292,24 @@ func TestClassificationErr(t *testing.T) {
 			}
 		}
 	})
+}
+
+// The raw responseStatus.type token stays available for diagnostics even when the
+// classifier does not recognize it; only the rendered forms fold it to "other".
+func TestClassificationResponseStatusType(t *testing.T) {
+	t.Parallel()
+
+	known := ClassifyJSONLogin(jsonResponse(
+		`{"responseStatus":{"type":"SUCCESSFUL"},"serviceTicketId":"ST-fake-0010"}`))
+	if got := known.ResponseStatusType(); got != testStatusTypeSuccessful {
+		t.Fatalf("ResponseStatusType() = %q, want %s", got, testStatusTypeSuccessful)
+	}
+
+	unknown := ClassifyJSONLogin(jsonResponse(`{"responseStatus":{"type":"BRAND_NEW_STATE"}}`))
+	if got := unknown.ResponseStatusType(); got != "BRAND_NEW_STATE" {
+		t.Fatalf("ResponseStatusType() = %q, want the raw token", got)
+	}
+	if strings.Contains(unknown.String(), "BRAND_NEW_STATE") {
+		t.Fatalf("rendering %q must fold an unrecognized token", unknown.String())
+	}
 }

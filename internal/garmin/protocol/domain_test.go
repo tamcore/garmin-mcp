@@ -42,16 +42,19 @@ func TestParseDomain(t *testing.T) {
 				if !errors.Is(err, ErrUnsupportedDomain) {
 					t.Fatalf("ParseDomain(%q) error = %v, want ErrUnsupportedDomain", tc.in, err)
 				}
-				if got != "" {
-					t.Fatalf("ParseDomain(%q) = %q, want zero Domain on error", tc.in, got)
+				if got.IsValid() || got.Domain() != "" {
+					t.Fatalf("ParseDomain(%q) = %q, want the zero ValidatedDomain on error", tc.in, got)
 				}
 				return
 			}
 			if err != nil {
 				t.Fatalf("ParseDomain(%q) unexpected error: %v", tc.in, err)
 			}
-			if got != tc.want {
-				t.Fatalf("ParseDomain(%q) = %q, want %q", tc.in, got, tc.want)
+			if got.Domain() != tc.want {
+				t.Fatalf("ParseDomain(%q) = %q, want %q", tc.in, got.Domain(), tc.want)
+			}
+			if !got.IsValid() {
+				t.Fatalf("ParseDomain(%q) returned a ValidatedDomain that reports itself invalid", tc.in)
 			}
 		})
 	}
@@ -92,7 +95,7 @@ func TestDomainIsAllowed(t *testing.T) {
 		{in: DomainGlobal, want: true},
 		{in: DomainChina, want: true},
 		{in: "", want: false},
-		{in: "GARMIN.COM", want: false},
+		{in: testCaseVariantDomain, want: false},
 		{in: testHostileDomain, want: false},
 	}
 
@@ -117,5 +120,50 @@ func TestAllowedDomainsReturnsFreshCopy(t *testing.T) {
 	first[0] = testHostileDomain
 	if second := AllowedDomains(); second[0] != DomainGlobal {
 		t.Fatalf("AllowedDomains() leaked shared backing array: %v", second)
+	}
+}
+
+// Domain.Validate is stricter than ParseDomain: it neither trims nor folds case,
+// and it refuses the zero Domain rather than reading it as "use the default".
+func TestDomainValidate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		in      Domain
+		wantErr bool
+	}{
+		{name: "global", in: DomainGlobal},
+		{name: "china", in: DomainChina},
+		{name: "zero domain rejected", in: "", wantErr: true},
+		{name: "case variant rejected", in: testCaseVariantDomain, wantErr: true},
+		{name: "untrimmed rejected", in: " garmin.com", wantErr: true},
+		{name: "attacker host rejected", in: testHostileDomain, wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := tc.in.Validate()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Domain(%q).Validate() = %q, want error", tc.in, got)
+				}
+				if !errors.Is(err, ErrUnsupportedDomain) {
+					t.Fatalf("Domain(%q).Validate() error = %v, want ErrUnsupportedDomain", tc.in, err)
+				}
+				if got.IsValid() {
+					t.Fatalf("Domain(%q).Validate() returned a valid ValidatedDomain on error", tc.in)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Domain(%q).Validate() unexpected error: %v", tc.in, err)
+			}
+			if got.Domain() != tc.in || got.String() != string(tc.in) {
+				t.Fatalf("Domain(%q).Validate() = %q", tc.in, got)
+			}
+		})
 	}
 }

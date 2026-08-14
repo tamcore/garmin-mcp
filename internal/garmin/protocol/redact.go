@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strconv"
 	"strings"
@@ -63,43 +64,87 @@ func redactQuery(rawQuery string) string {
 	return strings.Join(out, "&")
 }
 
-// redactedCause describes err without rendering arbitrary text. Only shapes this
-// package can reason about are described; anything else degrades to its Go type
-// name, because a third-party error message may embed a cookie, an Authorization
-// header or a response body.
+// maxCauseDepth bounds how far a cause chain is descended. A chain that loops
+// back on itself — or one a peer made pathologically deep — must terminate.
+const maxCauseDepth = 8
+
+// redactedCause describes err without ever rendering arbitrary text. Only shapes
+// this package can reason about are described; anything else degrades to a
+// transport failure category or to its Go type name, because a third-party error
+// message may embed a cookie, an Authorization header or a response body.
 func redactedCause(err error) string {
+	return redactedCauseAt(err, maxCauseDepth)
+}
+
+// redactedCauseAt is redactedCause with an explicit remaining depth.
+//
+// Structured shapes are tested before the sentinel set, and a matched sentinel is
+// rendered from the sentinel's own text rather than err.Error(). Both rules
+// matter: fmt.Errorf lets a caller put a bearer token, a cookie or a password in
+// the wrapper message, and that wrapper text must never reach a log line just
+// because the chain happens to contain one of this package's sentinels.
+func redactedCauseAt(err error, depth int) string {
 	if err == nil {
 		return ""
 	}
-	if isSentinel(err) {
-		return err.Error()
+	if depth <= 0 {
+		return causeTypeName(err)
 	}
-	if nested, ok := err.(*Error); ok {
-		return nested.Error()
+
+	// A *Error is the richest shape and is tested first. errors.As matches an
+	// *Error receiver without unwrapping, so a self-referential chain is bounded
+	// by depth rather than looping inside errors.Is.
+	var nested *Error
+	if errors.As(err, &nested) {
+		return nested.render(depth - 1)
 	}
 
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
-		return "url error " + sanitizeToken(urlErr.Op, MaxURLOpLen) + " " +
-			redactURL(urlErr.URL) + " (" + redactedCause(urlErr.Err) + ")"
+		return renderURLError(urlErr, depth-1)
 	}
 
+	if text, ok := sentinelText(err); ok {
+		return text
+	}
+
+	// Checked before networkCategory: context.DeadlineExceeded is also a
+	// net.Error that reports a timeout.
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
 		return "context deadline exceeded"
 	case errors.Is(err, context.Canceled):
 		return "context canceled"
 	}
-	return "cause of type " + fmt.Sprintf("%T", err)
+
+	if category, ok := networkCategory(err); ok {
+		return category
+	}
+	return causeTypeName(err)
 }
 
-func isSentinel(err error) bool {
+// renderURLError reports the verb and the query-redacted URL of a *url.Error,
+// then the redacted description of its own cause. The *url.Error's Error() text
+// is never used: it embeds the raw URL, including ?ticket=ST-...
+func renderURLError(urlErr *url.Error, depth int) string {
+	return "url error " + sanitizeToken(urlErr.Op, MaxURLOpLen) + " " +
+		redactURL(urlErr.URL) + " (" + redactedCauseAt(urlErr.Err, depth) + ")"
+}
+
+// sentinelText returns the canonical text of the first sentinel err matches. The
+// text comes from the sentinel itself, never from err, because this package
+// authored every sentinel string and authored none of the wrappers.
+func sentinelText(err error) (string, bool) {
 	for _, sentinel := range sentinels {
 		if errors.Is(err, sentinel) {
-			return true
+			return sentinel.Error(), true
 		}
 	}
-	return false
+	return "", false
+}
+
+func causeTypeName(err error) string {
+	return "cause of type " + fmt.Sprintf("%T", err)
 }
 
 // redactedResponse is the only shape a Response is ever rendered or serialized
@@ -115,10 +160,10 @@ type redactedResponse struct {
 func (r Response) redacted() redactedResponse {
 	return redactedResponse{
 		Type:        "protocol.Response",
-		Status:      r.Status,
-		ContentType: sanitizeMediaType(r.contentType()),
-		BodyBytes:   len(r.Body),
-		HeaderKeys:  len(r.Header),
+		Status:      r.Status(),
+		ContentType: r.ContentType(),
+		BodyBytes:   r.BodyLen(),
+		HeaderKeys:  r.HeaderLen(),
 	}
 }
 
@@ -140,6 +185,19 @@ func (r Response) MarshalJSON() ([]byte, error) {
 	return json.Marshal(r.redacted())
 }
 
+// LogValue implements slog.LogValuer, so structured logging is safe by default:
+// every handler receives the redacted group instead of walking the value.
+func (r Response) LogValue() slog.Value {
+	red := r.redacted()
+	return slog.GroupValue(
+		slog.String("type", red.Type),
+		slog.Int("status", red.Status),
+		slog.String("contentType", red.ContentType),
+		slog.Int("bodyBytes", red.BodyBytes),
+		slog.Int("headerKeys", red.HeaderKeys),
+	)
+}
+
 // redactedClassification is the only shape a Classification is ever rendered or
 // serialized in. Secret-bearing fields collapse to a presence flag.
 type redactedClassification struct {
@@ -156,17 +214,18 @@ type redactedClassification struct {
 }
 
 func (c Classification) redacted() redactedClassification {
+	fields := c.f()
 	return redactedClassification{
 		Type:                 "protocol.Classification",
-		Outcome:              c.Outcome.String(),
-		Status:               c.Status,
-		HasServiceTicket:     c.ServiceTicket != "",
-		MFAMethod:            knownMFAMethod(c.MFAMethod),
-		MFADeliveryUncertain: c.MFADeliveryUncertain,
-		HasCSRFToken:         c.CSRFToken != "",
-		HasPageTitle:         c.PageTitle != "",
-		RetryAfterSeconds:    int(c.RetryAfter.Seconds()),
-		ResponseStatusType:   knownResponseStatusType(c.ResponseStatusType),
+		Outcome:              fields.outcome.String(),
+		Status:               fields.status,
+		HasServiceTicket:     fields.serviceTicket != "",
+		MFAMethod:            knownMFAMethod(fields.mfaMethod),
+		MFADeliveryUncertain: fields.mfaDeliveryUncertain,
+		HasCSRFToken:         fields.csrfToken != "",
+		HasPageTitle:         fields.pageTitle != "",
+		RetryAfterSeconds:    int(fields.retryAfter.Seconds()),
+		ResponseStatusType:   knownResponseStatusType(fields.responseStatusType),
 	}
 }
 
@@ -191,6 +250,24 @@ func (c Classification) GoString() string { return c.String() }
 // log record cannot leak its ticket, CSRF token or page title.
 func (c Classification) MarshalJSON() ([]byte, error) {
 	return json.Marshal(c.redacted())
+}
+
+// LogValue implements slog.LogValuer, so structured logging is safe by default:
+// every handler receives the redacted group instead of walking the value.
+func (c Classification) LogValue() slog.Value {
+	red := c.redacted()
+	return slog.GroupValue(
+		slog.String("type", red.Type),
+		slog.String("outcome", red.Outcome),
+		slog.Int("status", red.Status),
+		slog.Bool("serviceTicketPresent", red.HasServiceTicket),
+		slog.String("mfaMethod", red.MFAMethod),
+		slog.Bool("mfaDeliveryUncertain", red.MFADeliveryUncertain),
+		slog.Bool("csrfTokenPresent", red.HasCSRFToken),
+		slog.Bool("pageTitlePresent", red.HasPageTitle),
+		slog.Int("retryAfterSeconds", red.RetryAfterSeconds),
+		slog.String("responseStatusType", red.ResponseStatusType),
+	)
 }
 
 func presence(present bool) string {

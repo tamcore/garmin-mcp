@@ -17,8 +17,9 @@ type Overrides struct {
 	MobileIntegration string
 }
 
-// Hosts builds absolute Garmin URLs for one domain. The zero value is not
-// usable; construct it with NewHosts.
+// Hosts builds absolute Garmin URLs for one domain. Construct it with NewHosts or
+// NewHostsForValidatedDomain. The zero value is not usable: every URL it reports
+// is empty.
 type Hosts struct {
 	domain            Domain
 	sso               string
@@ -32,16 +33,38 @@ type Hosts struct {
 // bases from domain. Source: the domain-aware host construction in
 // Client.__init__ (client.py, 0.3.10).
 //
-// Only an allowlisted Domain is accepted. Anything else — a case variant, a
-// subdomain, or an attacker-supplied host — falls back to DomainGlobal, so a
-// credential-bearing SSO URL can never point outside Garmin. Validate
-// caller-supplied input with ParseDomain to learn that a value was rejected;
-// redirect to a non-Garmin host with WithOverrides.
-func NewHosts(domain Domain) Hosts {
-	d := domain
-	if !d.IsAllowed() {
-		d = DomainGlobal
+// It is the strict constructor and it fails closed: only an allowlisted Domain is
+// accepted, and anything else — the zero Domain, a case variant, a subdomain, an
+// attacker-supplied host — is rejected with an error wrapping
+// ErrUnsupportedDomain. Nothing is coerced. Silently substituting DomainGlobal
+// would send a China account's credentials to the global region, so the caller
+// has to see the rejection.
+//
+// Use ParseDomain for a caller-supplied string, NewHostsForValidatedDomain when
+// the domain is already validated, and WithOverrides to redirect to a non-Garmin
+// host in a test.
+func NewHosts(domain Domain) (Hosts, error) {
+	validated, err := domain.Validate()
+	if err != nil {
+		return Hosts{}, err
 	}
+	return NewHostsForValidatedDomain(validated), nil
+}
+
+// NewHostsForValidatedDomain derives the bases from a domain whose allowlist
+// membership is already proven, so it cannot fail on a hostile host and needs no
+// error return.
+//
+// A zero ValidatedDomain carries no region. It yields the zero Hosts, whose base
+// URLs and endpoint URLs are all empty: an empty URL cannot be requested, so the
+// failure is closed rather than aimed at a default region. Reaching that state is
+// a programming error — a ValidatedDomain that was never obtained from ParseDomain
+// or Domain.Validate — not caller input.
+func NewHostsForValidatedDomain(validated ValidatedDomain) Hosts {
+	if !validated.IsValid() {
+		return Hosts{}
+	}
+	d := validated.Domain()
 	return Hosts{
 		domain:            d,
 		sso:               "https://sso." + string(d),
@@ -136,6 +159,12 @@ func pick(override, fallback string) string {
 	return strings.TrimRight(override, "/")
 }
 
+// join builds an absolute URL. An empty base yields an empty URL rather than a
+// bare path, so a zero Hosts cannot produce something a client would resolve
+// against a host of its own choosing.
 func join(base, path string) string {
+	if base == "" {
+		return ""
+	}
 	return strings.TrimRight(base, "/") + path
 }

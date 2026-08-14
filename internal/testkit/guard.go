@@ -5,11 +5,11 @@ import (
 	"net/url"
 )
 
-// OffOriginError reports a request refused by a testkit client because its
-// scheme and host did not match the fake server's origin. Nothing was resolved,
+// OffOriginError reports a request refused by a testkit Doer because its scheme
+// and host did not match the fake server's origin. Nothing was resolved,
 // dialed, or sent.
 type OffOriginError struct {
-	// Origin is the only reachable origin, as scheme://host.
+	// Origin is the only origin this Doer can reach, as scheme://host.
 	Origin string
 	// Attempt is the refused request origin, as scheme://host.
 	Attempt string
@@ -17,7 +17,7 @@ type OffOriginError struct {
 
 func (e *OffOriginError) Error() string {
 	return "testkit: refused request to " + e.Attempt +
-		": testkit clients may only reach the fake Garmin origin " + e.Origin
+		": a testkit Doer may only reach the fake Garmin origin " + e.Origin
 }
 
 // originGuard is an http.RoundTripper that refuses every request whose
@@ -35,9 +35,9 @@ func (g originGuard) RoundTrip(req *http.Request) (*http.Response, error) {
 	return g.next.RoundTrip(req)
 }
 
-// checkRedirect refuses a redirect that leaves origin. It is the second half of
-// the guard: it reports the hop before the transport is entered, so the error
-// stays the same even for callers that replace the client's Transport.
+// checkRedirect refuses a redirect that leaves origin. It reports the hop
+// before the transport is entered, so an off-origin Location yields the same
+// *OffOriginError as an off-origin first request.
 func checkRedirect(origin string) func(*http.Request, []*http.Request) error {
 	return func(req *http.Request, _ []*http.Request) error {
 		if got := originOf(req.URL); got != origin {

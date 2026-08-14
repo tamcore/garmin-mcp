@@ -32,31 +32,25 @@ func secretLeaks() []string {
 }
 
 func populatedResponse() Response {
-	return Response{
-		Status:      http.StatusOK,
-		ContentType: contentTypeJSON,
-		Header: http.Header{
-			testHeaderCookie:        []string{secretCookie},
-			testHeaderAuthorization: []string{secretBearer},
-			testHeaderSetCookie:     []string{secretCookie},
-		},
-		Body: []byte(secretBody),
-		Now:  time.Date(2026, time.August, 14, 12, 0, 0, 0, time.UTC),
-	}
+	return NewResponseFromParts(http.StatusOK, contentTypeJSON, http.Header{
+		testHeaderCookie:        []string{secretCookie},
+		testHeaderAuthorization: []string{secretBearer},
+		testHeaderSetCookie:     []string{secretCookie},
+	}, []byte(secretBody)).WithNow(time.Date(2026, time.August, 14, 12, 0, 0, 0, time.UTC))
 }
 
 func populatedClassification() Classification {
-	return Classification{
-		Outcome:              OutcomeSuccess,
-		Status:               http.StatusOK,
-		ServiceTicket:        secretTicket,
-		MFAMethod:            mfaMethodSMS,
-		MFADeliveryUncertain: true,
-		CSRFToken:            secretCSRF,
-		PageTitle:            secretTitle,
-		RetryAfter:           5 * time.Second,
-		ResponseStatusType:   "SUCCESSFUL",
-	}
+	return newClassification(classificationFields{
+		outcome:              OutcomeSuccess,
+		status:               http.StatusOK,
+		serviceTicket:        secretTicket,
+		mfaMethod:            mfaMethodSMS,
+		mfaDeliveryUncertain: true,
+		csrfToken:            secretCSRF,
+		pageTitle:            secretTitle,
+		retryAfter:           5 * time.Second,
+		responseStatusType:   testStatusTypeSuccessful,
+	})
 }
 
 func TestResponseFormattingIsRedacted(t *testing.T) {
@@ -141,7 +135,7 @@ func TestRedactedFormsReportPresenceNotContent(t *testing.T) {
 	t.Parallel()
 
 	withSecrets := populatedClassification().String()
-	empty := Classification{Outcome: OutcomeUnknown}.String()
+	empty := newClassification(classificationFields{outcome: OutcomeUnknown}).String()
 
 	if withSecrets == empty {
 		t.Fatal("a populated Classification must not render identically to an empty one")

@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -35,21 +36,15 @@ func TestNewHostsBases(t *testing.T) {
 			wantDIAuth:     "https://diauth.garmin.cn",
 			wantIOSService: "https://mobile.integration.garmin.cn/gcm/ios",
 		},
-		{
-			name:           "empty domain falls back to global",
-			domain:         "",
-			wantSSO:        "https://sso.garmin.com",
-			wantConnect:    "https://connect.garmin.com",
-			wantConnectAPI: "https://connectapi.garmin.com",
-			wantDIAuth:     "https://diauth.garmin.com",
-			wantIOSService: "https://mobile.integration.garmin.com/gcm/ios",
-		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			h := NewHosts(tc.domain)
+			h, err := NewHosts(tc.domain)
+			if err != nil {
+				t.Fatalf("NewHosts(%q) unexpected error: %v", tc.domain, err)
+			}
 			assertEqual(t, "SSOBase", h.SSOBase(), tc.wantSSO)
 			assertEqual(t, "ConnectBase", h.ConnectBase(), tc.wantConnect)
 			assertEqual(t, "ConnectAPIBase", h.ConnectAPIBase(), tc.wantConnectAPI)
@@ -60,41 +55,95 @@ func TestNewHostsBases(t *testing.T) {
 }
 
 // A non-allowlisted domain must never produce a credential-bearing URL that
-// points at it. NewHosts falls back to the global region instead.
+// points at it, and it must never be coerced into a region either: NewHosts
+// rejects it.
 func TestNewHostsRejectsNonAllowlistedDomain(t *testing.T) {
 	t.Parallel()
 
-	hostile := []Domain{testHostileDomain, "garmin.com." + testHostileDomain, "sso.garmin.com", "GARMIN.COM"}
+	hostile := []Domain{
+		"", testHostileDomain, "garmin.com." + testHostileDomain, "sso.garmin.com",
+		testCaseVariantDomain, " garmin.com", "garmin.com.",
+	}
 
 	for _, domain := range hostile {
 		t.Run(string(domain), func(t *testing.T) {
 			t.Parallel()
 
-			h := NewHosts(domain)
-			if got := h.Domain(); got != DomainGlobal {
-				t.Fatalf("Domain() = %q, want %q", got, DomainGlobal)
+			h, err := NewHosts(domain)
+			if err == nil {
+				t.Fatalf("NewHosts(%q) = %v, want an error", domain, h)
 			}
-			urls := []string{
-				h.SSOBase(), h.ConnectBase(), h.ConnectAPIBase(), h.DIAuthBase(),
-				h.MobileIntegrationBase(), h.MobileLoginURL(), h.PortalLoginURL(),
-				h.WidgetSignInURL(), h.WidgetRequestMFACodeURL(), h.DITokenURL(),
-				h.SocialProfileURL(), h.IOSServiceURL(), h.PortalServiceURL(),
+			if !errors.Is(err, ErrUnsupportedDomain) {
+				t.Fatalf("NewHosts(%q) error = %v, want ErrUnsupportedDomain", domain, err)
 			}
-			for _, u := range urls {
-				for _, forbidden := range []string{testHostileDomain, "sso.sso.garmin.com"} {
-					if strings.Contains(u, forbidden) {
-						t.Fatalf("url %q points at %q", u, forbidden)
-					}
-				}
-			}
+			assertZeroHosts(t, h)
 		})
+	}
+}
+
+// A zero ValidatedDomain is a programming error. It must yield no URL at all,
+// rather than the global region.
+func TestNewHostsForValidatedDomainZeroValueYieldsNoURLs(t *testing.T) {
+	t.Parallel()
+
+	h := NewHostsForValidatedDomain(ValidatedDomain{})
+	if got := h.Domain(); got != "" {
+		t.Fatalf("Domain() = %q, want the zero Domain", got)
+	}
+	assertZeroHosts(t, h)
+}
+
+func TestNewHostsForValidatedDomainAcceptsParsedInput(t *testing.T) {
+	t.Parallel()
+
+	validated, err := ParseDomain(" GARMIN.CN ")
+	if err != nil {
+		t.Fatalf("ParseDomain unexpected error: %v", err)
+	}
+
+	h := NewHostsForValidatedDomain(validated)
+	assertEqual(t, "SSOBase", h.SSOBase(), "https://sso.garmin.cn")
+	if got := h.Domain(); got != DomainChina {
+		t.Fatalf("Domain() = %q, want %q", got, DomainChina)
+	}
+}
+
+// assertZeroHosts reports a failure unless every URL h can build is empty.
+func assertZeroHosts(t *testing.T, h Hosts) {
+	t.Helper()
+
+	urls := map[string]string{
+		"SSOBase":                 h.SSOBase(),
+		"ConnectBase":             h.ConnectBase(),
+		"ConnectAPIBase":          h.ConnectAPIBase(),
+		"DIAuthBase":              h.DIAuthBase(),
+		"MobileIntegrationBase":   h.MobileIntegrationBase(),
+		"MobileLoginURL":          h.MobileLoginURL(),
+		"PortalLoginURL":          h.PortalLoginURL(),
+		"PortalSignInPageURL":     h.PortalSignInPageURL(),
+		"WidgetEmbedURL":          h.WidgetEmbedURL(),
+		"WidgetSignInURL":         h.WidgetSignInURL(),
+		"WidgetServiceURL":        h.WidgetServiceURL(),
+		"MobileMFAVerifyCodeURL":  h.MobileMFAVerifyCodeURL(),
+		"PortalMFAVerifyCodeURL":  h.PortalMFAVerifyCodeURL(),
+		"WidgetVerifyMFAURL":      h.WidgetVerifyMFAURL(),
+		"WidgetRequestMFACodeURL": h.WidgetRequestMFACodeURL(),
+		"DITokenURL":              h.DITokenURL(),
+		"SocialProfileURL":        h.SocialProfileURL(),
+		"IOSServiceURL":           h.IOSServiceURL(),
+		"PortalServiceURL":        h.PortalServiceURL(),
+	}
+	for name, got := range urls {
+		if got != "" {
+			t.Fatalf("%s = %q, want empty for an unusable Hosts", name, got)
+		}
 	}
 }
 
 func TestHostsEndpointURLs(t *testing.T) {
 	t.Parallel()
 
-	h := NewHosts(DomainGlobal)
+	h := mustHosts(t, DomainGlobal)
 
 	tests := []struct {
 		name string
@@ -127,7 +176,7 @@ func TestHostsEndpointURLs(t *testing.T) {
 func TestHostsWithOverridesDoesNotMutateReceiver(t *testing.T) {
 	t.Parallel()
 
-	base := NewHosts(DomainGlobal)
+	base := mustHosts(t, DomainGlobal)
 	fake := base.WithOverrides(Overrides{
 		SSO:               "http://127.0.0.1:1/sso-host",
 		Connect:           "http://127.0.0.1:1/connect-host",
@@ -150,7 +199,7 @@ func TestHostsWithOverridesDoesNotMutateReceiver(t *testing.T) {
 func TestOverridesAreTheOnlyPathToAnArbitraryHost(t *testing.T) {
 	t.Parallel()
 
-	h := NewHosts(DomainChina).WithOverrides(Overrides{SSO: "http://example.test/sso/"})
+	h := mustHosts(t, DomainChina).WithOverrides(Overrides{SSO: "http://example.test/sso/"})
 
 	assertEqual(t, "overridden sso trimmed", h.MobileLoginURL(), "http://example.test/sso/mobile/api/login")
 	assertEqual(t, "untouched diauth", h.DITokenURL(), "https://diauth.garmin.cn/di-oauth2-service/oauth/token")
@@ -162,14 +211,41 @@ func TestOverridesAreTheOnlyPathToAnArbitraryHost(t *testing.T) {
 func TestHostsDomain(t *testing.T) {
 	t.Parallel()
 
-	if got := NewHosts("").Domain(); got != DomainGlobal {
+	if got := mustHosts(t, DomainGlobal).Domain(); got != DomainGlobal {
 		t.Fatalf("Domain() = %q, want %q", got, DomainGlobal)
 	}
+}
+
+// mustHosts builds hosts for a domain the test knows is allowlisted.
+func mustHosts(t *testing.T, domain Domain) Hosts {
+	t.Helper()
+
+	h, err := NewHosts(domain)
+	if err != nil {
+		t.Fatalf("NewHosts(%q) unexpected error: %v", domain, err)
+	}
+	return h
 }
 
 func assertEqual(t *testing.T, what, got, want string) {
 	t.Helper()
 	if got != want {
 		t.Fatalf("%s = %q, want %q", what, got, want)
+	}
+}
+
+// An unvalidated Domain must not silently become the global region: a China
+// account's credentials would then be sent to garmin.com.
+func TestNewHostsFailsClosedOnUnvalidatedDomain(t *testing.T) {
+	t.Parallel()
+
+	for _, domain := range []Domain{"", testHostileDomain, DomainChina + "."} {
+		h, err := NewHosts(domain)
+		if err == nil {
+			t.Fatalf("NewHosts(%q) accepted an unvalidated domain", domain)
+		}
+		if strings.Contains(h.SSOBase(), string(DomainGlobal)) {
+			t.Fatalf("SSOBase() = %q; an unvalidated domain must not become the global region", h.SSOBase())
+		}
 	}
 }

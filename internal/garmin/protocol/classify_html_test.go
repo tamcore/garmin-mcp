@@ -8,7 +8,7 @@ import (
 )
 
 func htmlResponse(status int, body string) Response {
-	return Response{Status: status, ContentType: contentTypeHTML + ";charset=UTF-8", Body: []byte(body)}
+	return NewResponseFromParts(status, contentTypeHTML+";charset=UTF-8", nil, []byte(body))
 }
 
 func widgetPage(title, extra string) string {
@@ -162,11 +162,8 @@ func TestClassifyWidgetSignInPage(t *testing.T) {
 			wantOutcome: OutcomeUnknown,
 		},
 		{
-			name: "rate limited",
-			response: Response{
-				Status: http.StatusTooManyRequests,
-				Header: http.Header{HeaderRetryAfter: []string{"5"}},
-			},
+			name:        "rate limited",
+			response:    NewResponseFromParts(http.StatusTooManyRequests, "", http.Header{HeaderRetryAfter: []string{"5"}}, nil),
 			wantOutcome: OutcomeRateLimited,
 		},
 		{
@@ -185,11 +182,11 @@ func TestClassifyWidgetSignInPage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := ClassifyWidgetSignInPage(tc.response)
-			if got.Outcome != tc.wantOutcome {
-				t.Fatalf("Outcome = %v, want %v", got.Outcome, tc.wantOutcome)
+			if got.Outcome() != tc.wantOutcome {
+				t.Fatalf("Outcome = %v, want %v", got.Outcome(), tc.wantOutcome)
 			}
-			if got.CSRFToken != tc.wantCSRF {
-				t.Fatalf("CSRFToken = %q, want %q", got.CSRFToken, tc.wantCSRF)
+			if got.CSRFToken() != tc.wantCSRF {
+				t.Fatalf("CSRFToken = %q, want %q", got.CSRFToken(), tc.wantCSRF)
 			}
 		})
 	}
@@ -297,12 +294,12 @@ func TestClassifyWidgetLoginTitleHeuristics(t *testing.T) {
 		},
 		{
 			name: "http 429 wins over title",
-			response: Response{
-				Status:      http.StatusTooManyRequests,
-				ContentType: contentTypeHTML,
-				Header:      http.Header{HeaderRetryAfter: []string{"9"}},
-				Body:        []byte(widgetPage("Success", "?ticket=ST-fake-0008")),
-			},
+			response: NewResponseFromParts(
+				http.StatusTooManyRequests,
+				contentTypeHTML,
+				http.Header{HeaderRetryAfter: []string{"9"}},
+				[]byte(widgetPage("Success", "?ticket=ST-fake-0008")),
+			),
 			wantOutcome: OutcomeRateLimited,
 		},
 	}
@@ -311,14 +308,14 @@ func TestClassifyWidgetLoginTitleHeuristics(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := ClassifyWidgetLogin(tc.response)
-			if got.Outcome != tc.wantOutcome {
-				t.Fatalf("Outcome = %v, want %v (title %q)", got.Outcome, tc.wantOutcome, got.PageTitle)
+			if got.Outcome() != tc.wantOutcome {
+				t.Fatalf("Outcome = %v, want %v (title %q)", got.Outcome(), tc.wantOutcome, got.PageTitle())
 			}
-			if got.ServiceTicket != tc.wantTicket {
-				t.Fatalf("ServiceTicket = %q, want %q", got.ServiceTicket, tc.wantTicket)
+			if got.ServiceTicket() != tc.wantTicket {
+				t.Fatalf("ServiceTicket = %q, want %q", got.ServiceTicket(), tc.wantTicket)
 			}
-			if got.MFADeliveryUncertain != tc.wantUncertain {
-				t.Fatalf("MFADeliveryUncertain = %v, want %v", got.MFADeliveryUncertain, tc.wantUncertain)
+			if got.MFADeliveryUncertain() != tc.wantUncertain {
+				t.Fatalf("MFADeliveryUncertain = %v, want %v", got.MFADeliveryUncertain(), tc.wantUncertain)
 			}
 		})
 	}
@@ -327,21 +324,22 @@ func TestClassifyWidgetLoginTitleHeuristics(t *testing.T) {
 func TestClassifyWidgetLoginKeepsCSRFAndRetryAfter(t *testing.T) {
 	t.Parallel()
 
-	got := ClassifyWidgetLogin(Response{
-		Status:      http.StatusTooManyRequests,
-		ContentType: contentTypeHTML,
-		Header:      http.Header{HeaderRetryAfter: []string{"45"}},
-	})
-	if got.RetryAfter != 45*time.Second {
-		t.Fatalf("RetryAfter = %v, want 45s", got.RetryAfter)
+	got := ClassifyWidgetLogin(NewResponseFromParts(
+		http.StatusTooManyRequests,
+		contentTypeHTML,
+		http.Header{HeaderRetryAfter: []string{"45"}},
+		nil,
+	))
+	if got.RetryAfter() != 45*time.Second {
+		t.Fatalf("RetryAfter = %v, want 45s", got.RetryAfter())
 	}
 
 	mfa := ClassifyWidgetLogin(htmlResponse(http.StatusOK,
 		widgetPage("Enter MFA code for login", `<input name="_csrf" value="fake-csrf-0009">`)))
-	if mfa.CSRFToken != "fake-csrf-0009" {
-		t.Fatalf("CSRFToken = %q, want %q", mfa.CSRFToken, "fake-csrf-0009")
+	if mfa.CSRFToken() != "fake-csrf-0009" {
+		t.Fatalf("CSRFToken = %q, want %q", mfa.CSRFToken(), "fake-csrf-0009")
 	}
-	if mfa.PageTitle != "Enter MFA code for login" {
-		t.Fatalf("PageTitle = %q", mfa.PageTitle)
+	if mfa.PageTitle() != "Enter MFA code for login" {
+		t.Fatalf("PageTitle = %q", mfa.PageTitle())
 	}
 }

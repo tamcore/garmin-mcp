@@ -30,13 +30,10 @@ func TestJSONFixturesClassifyAsIntended(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := protocol.ClassifyJSONLogin(protocol.Response{
-				Status:      http.StatusOK,
-				ContentType: ContentTypeJSON,
-				Body:        []byte(tc.body),
-			})
-			if got.Outcome != tc.wantOutcome {
-				t.Fatalf("Outcome = %v, want %v", got.Outcome, tc.wantOutcome)
+			resp := protocol.NewResponseFromParts(http.StatusOK, ContentTypeJSON, nil, []byte(tc.body))
+			got := protocol.ClassifyJSONLogin(resp)
+			if got.Outcome() != tc.wantOutcome {
+				t.Fatalf("Outcome = %v, want %v", got.Outcome(), tc.wantOutcome)
 			}
 		})
 	}
@@ -64,13 +61,10 @@ func TestHTMLFixturesClassifyAsIntended(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := protocol.ClassifyWidgetLogin(protocol.Response{
-				Status:      http.StatusOK,
-				ContentType: ContentTypeHTML,
-				Body:        []byte(tc.body),
-			})
-			if got.Outcome != tc.wantOutcome {
-				t.Fatalf("Outcome = %v, want %v (title %q)", got.Outcome, tc.wantOutcome, got.PageTitle)
+			resp := protocol.NewResponseFromParts(http.StatusOK, ContentTypeHTML, nil, []byte(tc.body))
+			got := protocol.ClassifyWidgetLogin(resp)
+			if got.Outcome() != tc.wantOutcome {
+				t.Fatalf("Outcome = %v, want %v (title %q)", got.Outcome(), tc.wantOutcome, got.PageTitle())
 			}
 		})
 	}

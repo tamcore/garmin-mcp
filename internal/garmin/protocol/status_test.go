@@ -112,41 +112,43 @@ func TestClassifySessionValidation(t *testing.T) {
 	}{
 		{
 			name:        "accepted session",
-			response:    Response{Status: http.StatusOK, ContentType: contentTypeJSON, Body: []byte(`{"id":1}`)},
+			response:    NewResponseFromParts(http.StatusOK, contentTypeJSON, nil, []byte(`{"id":1}`)),
 			wantOutcome: OutcomeSuccess,
 		},
 		{
 			name:        "no content is still accepted",
-			response:    Response{Status: http.StatusNoContent},
+			response:    NewResponseFromParts(http.StatusNoContent, "", nil, nil),
 			wantOutcome: OutcomeSuccess,
 		},
 		{
 			name:        "401 rejects the session without blaming the password",
-			response:    Response{Status: http.StatusUnauthorized, Body: []byte(`{"message":"Token is not active"}`)},
+			response:    NewResponseFromParts(http.StatusUnauthorized, "", nil, []byte(`{"message":"Token is not active"}`)),
 			wantOutcome: OutcomeSessionRejected,
 		},
 		{
 			name:        "403 rejects the session",
-			response:    Response{Status: http.StatusForbidden},
+			response:    NewResponseFromParts(http.StatusForbidden, "", nil, nil),
 			wantOutcome: OutcomeSessionRejected,
 		},
 		{
 			name: "429 stays a rate limit",
-			response: Response{
-				Status: http.StatusTooManyRequests,
-				Header: http.Header{HeaderRetryAfter: []string{"12"}},
-			},
+			response: NewResponseFromParts(
+				http.StatusTooManyRequests,
+				"",
+				http.Header{HeaderRetryAfter: []string{"12"}},
+				nil,
+			),
 			wantOutcome: OutcomeRateLimited,
 			wantRetry:   12 * time.Second,
 		},
 		{
 			name:        "5xx is temporary",
-			response:    Response{Status: http.StatusBadGateway},
+			response:    NewResponseFromParts(http.StatusBadGateway, "", nil, nil),
 			wantOutcome: OutcomeTemporaryFailure,
 		},
 		{
 			name:        "unexpected 404 is inconclusive",
-			response:    Response{Status: http.StatusNotFound},
+			response:    NewResponseFromParts(http.StatusNotFound, "", nil, nil),
 			wantOutcome: OutcomeUnknown,
 		},
 	}
@@ -156,14 +158,14 @@ func TestClassifySessionValidation(t *testing.T) {
 			t.Parallel()
 
 			got := ClassifySessionValidation(tc.response)
-			if got.Outcome != tc.wantOutcome {
-				t.Fatalf("Outcome = %v, want %v", got.Outcome, tc.wantOutcome)
+			if got.Outcome() != tc.wantOutcome {
+				t.Fatalf("Outcome = %v, want %v", got.Outcome(), tc.wantOutcome)
 			}
-			if got.RetryAfter != tc.wantRetry {
-				t.Fatalf("RetryAfter = %v, want %v", got.RetryAfter, tc.wantRetry)
+			if got.RetryAfter() != tc.wantRetry {
+				t.Fatalf("RetryAfter = %v, want %v", got.RetryAfter(), tc.wantRetry)
 			}
-			if got.Status != tc.response.Status {
-				t.Fatalf("Status = %d, want %d", got.Status, tc.response.Status)
+			if got.Status() != tc.response.Status() {
+				t.Fatalf("Status = %d, want %d", got.Status(), tc.response.Status())
 			}
 		})
 	}
@@ -175,14 +177,14 @@ func TestClassifySessionValidation(t *testing.T) {
 func TestSessionRejectionNeverStopsFallback(t *testing.T) {
 	t.Parallel()
 
-	c := ClassifySessionValidation(Response{Status: http.StatusUnauthorized})
-	if c.Outcome == OutcomeInvalidCredentials {
+	c := ClassifySessionValidation(NewResponseFromParts(http.StatusUnauthorized, "", nil, nil))
+	if c.Outcome() == OutcomeInvalidCredentials {
 		t.Fatal("session rejection must not classify as invalid credentials")
 	}
-	if c.Outcome.StopsFallback() {
+	if c.Outcome().StopsFallback() {
 		t.Fatal("session rejection must not stop strategy fallback")
 	}
-	if c.Outcome.Retryable() {
+	if c.Outcome().Retryable() {
 		t.Fatal("session rejection must not be retried without a new login")
 	}
 }

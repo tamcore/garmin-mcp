@@ -2,7 +2,6 @@ package testkit
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -16,7 +15,7 @@ import (
 // contentTypeForm is the media type of the widget HTML form posts.
 const contentTypeForm = "application/x-www-form-urlencoded"
 
-func post(t *testing.T, client *http.Client, rawURL, contentType, body string) protocol.Response {
+func post(t *testing.T, doer Doer, rawURL, contentType, body string) protocol.Response {
 	t.Helper()
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, rawURL, strings.NewReader(body))
@@ -25,7 +24,7 @@ func post(t *testing.T, client *http.Client, rawURL, contentType, body string) p
 	}
 	req.Header.Set("Content-Type", contentType)
 
-	resp, err := client.Do(req)
+	resp, err := doer.Do(req)
 	if err != nil {
 		t.Fatalf("do request: %v", err)
 	}
@@ -35,17 +34,17 @@ func post(t *testing.T, client *http.Client, rawURL, contentType, body string) p
 	if err != nil {
 		t.Fatalf("read body: %v", err)
 	}
-	return protocol.Response{Status: resp.StatusCode, Header: resp.Header, Body: payload}
+	return protocol.NewResponse(resp, payload)
 }
 
-func get(t *testing.T, client *http.Client, rawURL string) protocol.Response {
+func get(t *testing.T, doer Doer, rawURL string) protocol.Response {
 	t.Helper()
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, rawURL, nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	resp, err := client.Do(req)
+	resp, err := doer.Do(req)
 	if err != nil {
 		t.Fatalf("do request: %v", err)
 	}
@@ -55,7 +54,7 @@ func get(t *testing.T, client *http.Client, rawURL string) protocol.Response {
 	if err != nil {
 		t.Fatalf("read body: %v", err)
 	}
-	return protocol.Response{Status: resp.StatusCode, Header: resp.Header, Body: payload}
+	return protocol.NewResponse(resp, payload)
 }
 
 func TestServerHostsPointAtTheFakeOnly(t *testing.T) {
@@ -144,17 +143,17 @@ func TestServerScriptedLoginScenarios(t *testing.T) {
 			srv := NewServer(t, NewScript().With(protocol.PathMobileLogin, tc.behavior))
 			hosts := srv.Hosts(protocol.DomainGlobal)
 
-			resp := post(t, srv.Client(), hosts.MobileLoginURL(), ContentTypeJSON, `{"username":"fake@example.test"}`)
+			resp := post(t, srv.Doer(), hosts.MobileLoginURL(), ContentTypeJSON, `{"username":"fake@example.test"}`)
 			got := protocol.ClassifyJSONLogin(resp)
 
-			if got.Outcome != tc.wantOutcome {
-				t.Fatalf("Outcome = %v, want %v", got.Outcome, tc.wantOutcome)
+			if got.Outcome() != tc.wantOutcome {
+				t.Fatalf("Outcome = %v, want %v", got.Outcome(), tc.wantOutcome)
 			}
-			if got.ServiceTicket != tc.wantTicket {
-				t.Fatalf("ServiceTicket = %q, want %q", got.ServiceTicket, tc.wantTicket)
+			if got.ServiceTicket() != tc.wantTicket {
+				t.Fatalf("ServiceTicket = %q, want %q", got.ServiceTicket(), tc.wantTicket)
 			}
-			if got.RetryAfter != tc.wantRetry {
-				t.Fatalf("RetryAfter = %v, want %v", got.RetryAfter, tc.wantRetry)
+			if got.RetryAfter() != tc.wantRetry {
+				t.Fatalf("RetryAfter = %v, want %v", got.RetryAfter(), tc.wantRetry)
 			}
 		})
 	}
@@ -172,25 +171,25 @@ func TestServerScriptsMFAThenVerifyCode(t *testing.T) {
 	srv := NewServer(t, script)
 	hosts := srv.Hosts(protocol.DomainGlobal)
 
-	login := protocol.ClassifyJSONLogin(post(t, srv.Client(), hosts.MobileLoginURL(), ContentTypeJSON, `{}`))
-	if login.Outcome != protocol.OutcomeMFARequired || login.MFAMethod != "sms" {
-		t.Fatalf("login = %v/%q, want mfa_required/sms", login.Outcome, login.MFAMethod)
+	login := protocol.ClassifyJSONLogin(post(t, srv.Doer(), hosts.MobileLoginURL(), ContentTypeJSON, `{}`))
+	if login.Outcome() != protocol.OutcomeMFARequired || login.MFAMethod() != "sms" {
+		t.Fatalf("login = %v/%q, want mfa_required/sms", login.Outcome(), login.MFAMethod())
 	}
 
-	first := protocol.ClassifyJSONLogin(post(t, srv.Client(), hosts.MobileMFAVerifyCodeURL(), ContentTypeJSON, `{}`))
-	if first.Outcome != protocol.OutcomeInvalidCredentials {
-		t.Fatalf("first verify = %v, want invalid_credentials", first.Outcome)
+	first := protocol.ClassifyJSONLogin(post(t, srv.Doer(), hosts.MobileMFAVerifyCodeURL(), ContentTypeJSON, `{}`))
+	if first.Outcome() != protocol.OutcomeInvalidCredentials {
+		t.Fatalf("first verify = %v, want invalid_credentials", first.Outcome())
 	}
 
-	second := protocol.ClassifyJSONLogin(post(t, srv.Client(), hosts.MobileMFAVerifyCodeURL(), ContentTypeJSON, `{}`))
-	if second.Outcome != protocol.OutcomeSuccess || second.ServiceTicket != "ST-fake-1002" {
-		t.Fatalf("second verify = %v/%q, want success/ST-fake-1002", second.Outcome, second.ServiceTicket)
+	second := protocol.ClassifyJSONLogin(post(t, srv.Doer(), hosts.MobileMFAVerifyCodeURL(), ContentTypeJSON, `{}`))
+	if second.Outcome() != protocol.OutcomeSuccess || second.ServiceTicket() != "ST-fake-1002" {
+		t.Fatalf("second verify = %v/%q, want success/ST-fake-1002", second.Outcome(), second.ServiceTicket())
 	}
 
 	// The last scripted behavior repeats once the queue is drained.
-	third := protocol.ClassifyJSONLogin(post(t, srv.Client(), hosts.MobileMFAVerifyCodeURL(), ContentTypeJSON, `{}`))
-	if third.Outcome != protocol.OutcomeSuccess {
-		t.Fatalf("third verify = %v, want success", third.Outcome)
+	third := protocol.ClassifyJSONLogin(post(t, srv.Doer(), hosts.MobileMFAVerifyCodeURL(), ContentTypeJSON, `{}`))
+	if third.Outcome() != protocol.OutcomeSuccess {
+		t.Fatalf("third verify = %v, want success", third.Outcome())
 	}
 }
 
@@ -207,55 +206,31 @@ func TestServerScriptsWidgetFlow(t *testing.T) {
 	srv := NewServer(t, script)
 	hosts := srv.Hosts(protocol.DomainChina)
 
-	embed := protocol.ClassifyWidgetSignInPage(get(t, srv.Client(), hosts.WidgetEmbedURL()))
-	if embed.Outcome != protocol.OutcomeSuccess || embed.CSRFToken != "fake-csrf-1001" {
-		t.Fatalf("embed = %v/%q", embed.Outcome, embed.CSRFToken)
+	embed := protocol.ClassifyWidgetSignInPage(get(t, srv.Doer(), hosts.WidgetEmbedURL()))
+	if embed.Outcome() != protocol.OutcomeSuccess || embed.CSRFToken() != "fake-csrf-1001" {
+		t.Fatalf("embed = %v/%q", embed.Outcome(), embed.CSRFToken())
 	}
 
-	signIn := protocol.ClassifyWidgetSignInPage(get(t, srv.Client(), hosts.WidgetSignInURL()))
-	if signIn.CSRFToken != "fake-csrf-1002" {
-		t.Fatalf("signin csrf = %q", signIn.CSRFToken)
+	signIn := protocol.ClassifyWidgetSignInPage(get(t, srv.Doer(), hosts.WidgetSignInURL()))
+	if signIn.CSRFToken() != "fake-csrf-1002" {
+		t.Fatalf("signin csrf = %q", signIn.CSRFToken())
 	}
 
-	credentials := protocol.ClassifyWidgetLogin(post(t, srv.Client(), hosts.WidgetSignInURL(),
+	credentials := protocol.ClassifyWidgetLogin(post(t, srv.Doer(), hosts.WidgetSignInURL(),
 		contentTypeForm, "username=fake%40example.test"))
-	if credentials.Outcome != protocol.OutcomeMFARequired {
-		t.Fatalf("credential post = %v, want mfa_required", credentials.Outcome)
+	if credentials.Outcome() != protocol.OutcomeMFARequired {
+		t.Fatalf("credential post = %v, want mfa_required", credentials.Outcome())
 	}
 
-	verified := protocol.ClassifyWidgetLogin(post(t, srv.Client(), hosts.WidgetVerifyMFAURL(),
+	verified := protocol.ClassifyWidgetLogin(post(t, srv.Doer(), hosts.WidgetVerifyMFAURL(),
 		contentTypeForm, "mfa-code=000000"))
-	if verified.Outcome != protocol.OutcomeSuccess || verified.ServiceTicket != "ST-fake-1003" {
-		t.Fatalf("verify = %v/%q", verified.Outcome, verified.ServiceTicket)
+	if verified.Outcome() != protocol.OutcomeSuccess || verified.ServiceTicket() != "ST-fake-1003" {
+		t.Fatalf("verify = %v/%q", verified.Outcome(), verified.ServiceTicket())
 	}
 }
 
-func TestServerSlowResponseTripsClientTimeout(t *testing.T) {
-	t.Parallel()
-
-	srv := NewServer(t, NewScript().With(
-		protocol.PathMobileLogin,
-		JSON(http.StatusOK, LoginSuccessJSON("ST-fake-1004")).WithDelay(300*time.Millisecond),
-	))
-
-	client := srv.Client()
-	client.Timeout = 20 * time.Millisecond
-
-	loginURL := srv.Hosts(protocol.DomainGlobal).MobileLoginURL()
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, loginURL, strings.NewReader("{}"))
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-
-	resp, err := client.Do(req)
-	if err == nil {
-		_ = resp.Body.Close()
-		t.Fatal("expected a timeout error")
-	}
-	if !errors.Is(err, context.DeadlineExceeded) && !strings.Contains(err.Error(), "timeout") {
-		t.Fatalf("err = %v, want a timeout", err)
-	}
-}
+// The scripted-delay path is exercised together with WithTimeout in
+// TestDoerWithTimeoutBoundsOneRequest.
 
 func TestServerRecordsRequestsWithoutSharingState(t *testing.T) {
 	t.Parallel()
@@ -266,7 +241,7 @@ func TestServerRecordsRequestsWithoutSharingState(t *testing.T) {
 		"locale":   {protocol.LoginLocale},
 	}.Encode()
 
-	_ = post(t, srv.Client(), target, ContentTypeJSON, `{"username":"fake@example.test"}`)
+	_ = post(t, srv.Doer(), target, ContentTypeJSON, `{"username":"fake@example.test"}`)
 
 	recorded := srv.Requests()
 	if len(recorded) != 1 {
@@ -295,9 +270,9 @@ func TestServerUnscriptedPathIsNotFound(t *testing.T) {
 
 	srv := NewServer(t, NewScript())
 
-	resp := get(t, srv.Client(), srv.BaseURL()+"/unscripted/path")
-	if resp.Status != http.StatusNotFound {
-		t.Fatalf("Status = %d, want 404", resp.Status)
+	resp := get(t, srv.Doer(), srv.BaseURL()+"/unscripted/path")
+	if resp.Status() != http.StatusNotFound {
+		t.Fatalf("Status = %d, want 404", resp.Status())
 	}
 	if len(srv.Requests()) != 1 {
 		t.Fatal("unscripted request was not recorded")
@@ -313,16 +288,16 @@ func TestScriptWithDoesNotMutateTheReceiver(t *testing.T) {
 		With(protocol.PathPortalLogin, JSON(http.StatusOK, LoginSuccessJSON("ST-fake-1007")))
 
 	baseSrv := NewServer(t, base)
-	got := protocol.ClassifyJSONLogin(post(t, baseSrv.Client(),
+	got := protocol.ClassifyJSONLogin(post(t, baseSrv.Doer(),
 		baseSrv.Hosts(protocol.DomainGlobal).MobileLoginURL(), ContentTypeJSON, "{}"))
-	if got.Outcome != protocol.OutcomeSuccess {
-		t.Fatalf("base script changed: Outcome = %v", got.Outcome)
+	if got.Outcome() != protocol.OutcomeSuccess {
+		t.Fatalf("base script changed: Outcome = %v", got.Outcome())
 	}
 
 	derivedSrv := NewServer(t, derived)
-	got = protocol.ClassifyJSONLogin(post(t, derivedSrv.Client(),
+	got = protocol.ClassifyJSONLogin(post(t, derivedSrv.Doer(),
 		derivedSrv.Hosts(protocol.DomainGlobal).MobileLoginURL(), ContentTypeJSON, "{}"))
-	if got.Outcome != protocol.OutcomeInvalidCredentials {
-		t.Fatalf("derived script Outcome = %v, want invalid_credentials", got.Outcome)
+	if got.Outcome() != protocol.OutcomeInvalidCredentials {
+		t.Fatalf("derived script Outcome = %v, want invalid_credentials", got.Outcome())
 	}
 }

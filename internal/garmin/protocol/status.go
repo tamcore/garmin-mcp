@@ -96,14 +96,15 @@ func sessionValidationOutcome(status int) (Outcome, bool) {
 // upstream keeps the token on a transient error, so a caller must not treat
 // OutcomeTemporaryFailure or OutcomeUnknown here as a rejection.
 func ClassifySessionValidation(r Response) Classification {
-	c := Classification{Status: r.Status, RetryAfter: r.retryAfter()}
+	status := r.Status()
+	f := classificationFields{status: status, retryAfter: r.retryAfter()}
 
-	if outcome, ok := statusOutcomeFor(contextSessionValidation, r.Status); ok {
-		c.Outcome = outcome
-		return c
+	if outcome, ok := statusOutcomeFor(contextSessionValidation, status); ok {
+		f.outcome = outcome
+		return newClassification(f)
 	}
-	if r.Status >= http.StatusOK && r.Status < http.StatusMultipleChoices {
-		c.Outcome = OutcomeSuccess
+	if status >= http.StatusOK && status < http.StatusMultipleChoices {
+		f.outcome = OutcomeSuccess
 	}
-	return c
+	return newClassification(f)
 }

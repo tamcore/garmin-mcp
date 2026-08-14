@@ -81,14 +81,14 @@ func ExtractServiceTicket(body []byte) (string, bool) {
 // whose only success condition is a usable _csrf token.
 // Source: _widget_web_login steps 1 and 2.
 func ClassifyWidgetSignInPage(r Response) Classification {
-	c := newWidgetClassification(r, contextWidgetPage)
-	if c.Outcome != OutcomeUnknown {
-		return c
+	f := newWidgetFields(r, contextWidgetPage)
+	if f.outcome != OutcomeUnknown {
+		return newClassification(f)
 	}
-	if c.CSRFToken != "" {
-		c.Outcome = OutcomeSuccess
+	if f.csrfToken != "" {
+		f.outcome = OutcomeSuccess
 	}
-	return c
+	return newClassification(f)
 }
 
 // ClassifyWidgetLogin classifies the HTML response to a widget credential or OTP
@@ -102,55 +102,56 @@ func ClassifyWidgetSignInPage(r Response) Classification {
 // code delivery. That variable parsing and the per-method delivery request are
 // not implemented here; only PathWidgetRequestMFACode is ported.
 func ClassifyWidgetLogin(r Response) Classification {
-	c := newWidgetClassification(r, contextLoginPOST)
-	if c.Outcome != OutcomeUnknown {
-		return c
+	f := newWidgetFields(r, contextLoginPOST)
+	if f.outcome != OutcomeUnknown {
+		return newClassification(f)
 	}
 
-	title := strings.ToLower(c.PageTitle)
+	title := strings.ToLower(f.pageTitle)
 	switch {
 	case containsAnyWordPhrase(title, titleHintsBotChallenge[:]...):
-		c.Outcome = OutcomeBotChallenge
+		f.outcome = OutcomeBotChallenge
 	case containsAnyWordPhrase(title, titleHintsTemporary[:]...):
-		c.Outcome = OutcomeTemporaryFailure
+		f.outcome = OutcomeTemporaryFailure
 	case containsAnyWordPhrase(title, titleHintsLocked[:]...):
-		c.Outcome = OutcomeAccountLocked
+		f.outcome = OutcomeAccountLocked
 	case containsAnyWordPhrase(title, titleHintsInvalid[:]...):
-		c.Outcome = OutcomeInvalidCredentials
+		f.outcome = OutcomeInvalidCredentials
 	case containsAnyWordPhrase(title, titleHintsRestricted[:]...):
 		// A Garmin child/family account cannot use web SSO. Upstream logs this
 		// and lets the remaining strategies try.
-		c.Outcome = OutcomeAccountRestricted
+		f.outcome = OutcomeAccountRestricted
 	case containsAnyWordPhrase(title, titleHintsMFA[:]...):
-		c.Outcome = OutcomeMFARequired
-		c.MFAMethod = MFAMethodEmail
+		f.outcome = OutcomeMFARequired
+		f.mfaMethod = MFAMethodEmail
 		// Scraped HTML cannot confirm that Garmin actually sent an OTP.
-		c.MFADeliveryUncertain = containsWordPhrase(title, titleHintMFAUncertainOTP)
-	case c.PageTitle == titleSuccess:
-		if ticket, ok := ExtractServiceTicket(r.Body); ok {
-			c.Outcome = OutcomeSuccess
-			c.ServiceTicket = ticket
+		f.mfaDeliveryUncertain = containsWordPhrase(title, titleHintMFAUncertainOTP)
+	case f.pageTitle == titleSuccess:
+		if ticket, ok := ExtractServiceTicket(r.body()); ok {
+			f.outcome = OutcomeSuccess
+			f.serviceTicket = ticket
 		}
 	}
-	return c
+	return newClassification(f)
 }
 
-// newWidgetClassification collects the fields shared by both widget classifiers
+// newWidgetFields collects the verdict fields shared by both widget classifiers
 // and applies the HTTP-status verdicts that outrank any page content.
-func newWidgetClassification(r Response, ctx statusContext) Classification {
-	c := Classification{
-		Status:     r.Status,
-		RetryAfter: r.retryAfter(),
-		PageTitle:  ExtractPageTitle(r.Body),
+func newWidgetFields(r Response, ctx statusContext) classificationFields {
+	status := r.Status()
+	f := classificationFields{
+		status:     status,
+		retryAfter: r.retryAfter(),
+		pageTitle:  ExtractPageTitle(r.body()),
 	}
-	if csrf, ok := ExtractCSRFToken(r.Body); ok {
-		c.CSRFToken = csrf
+	if csrf, ok := ExtractCSRFToken(r.body()); ok {
+		f.csrfToken = csrf
 	}
 
-	if r.Status >= http.StatusBadRequest {
-		if outcome, ok := statusOutcomeFor(ctx, r.Status); ok {
-			c.Outcome = outcome
+	if status >= http.StatusBadRequest {
+		if outcome, ok := statusOutcomeFor(ctx, status); ok {
+			f.outcome = outcome
 		}
 	}
-	return c
+	return f
 }

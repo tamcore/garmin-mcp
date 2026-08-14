@@ -4,10 +4,12 @@
 // httptest.Server: obtain the base URLs with Server.Hosts or Server.Overrides
 // and inject them into the client under test. All fixtures are synthetic.
 //
-// Reaching the real service is not merely unlikely, it is refused. Clients from
-// Server.Client carry an origin guard that fails any request or redirect aimed
-// at anything other than Server.BaseURL with an *OffOriginError, before DNS
-// resolution or dial.
+// Reaching the real service is not merely unlikely, it is refused. Server.Doer
+// is the package's only request path and it returns a Doer, an interface with a
+// single Do method and no exported fields. Every request and every redirect hop
+// whose scheme and host differ from Server.BaseURL fails with an
+// *OffOriginError before DNS resolution or dial, and no caller can reach past
+// the interface to remove that check.
 package testkit
 
 import (
@@ -74,6 +76,7 @@ func (s Script) With(path string, behaviors ...Behavior) Script {
 
 // Server is a scripted fake Garmin Connect endpoint set.
 type Server struct {
+	tb    testing.TB
 	inner *httptest.Server
 
 	mu       sync.Mutex
@@ -87,6 +90,7 @@ func NewServer(tb testing.TB, script Script) *Server {
 	tb.Helper()
 
 	srv := &Server{
+		tb:     tb,
 		steps:  make(map[string][]Behavior, len(script.steps)),
 		cursor: make(map[string]int, len(script.steps)),
 	}
@@ -102,20 +106,36 @@ func NewServer(tb testing.TB, script Script) *Server {
 // BaseURL is the fake server's origin, without a trailing slash.
 func (s *Server) BaseURL() string { return s.inner.URL }
 
-// Client returns a fresh HTTP client that can reach the fake server and
-// nothing else. Any request or redirect whose scheme and host differ from
-// BaseURL fails with an *OffOriginError before DNS resolution or dial, so no
-// test can reach the real Garmin service. Callers may adjust the returned
-// client, for example its Timeout, without affecting other tests.
-func (s *Server) Client() *http.Client {
+// Doer returns a fresh request path that can reach this fake server and nothing
+// else.
+//
+// Guaranteed, not merely documented: every request whose scheme and host differ
+// from BaseURL, and every redirect hop that leaves that origin, fails with an
+// *OffOriginError before any DNS lookup or dial. The guard is enforced at three
+// points a caller cannot reach, because the returned Doer is an interface over
+// an unexported struct with no exported fields and no method but Do: the
+// pre-dispatch check in Do, the round tripper, and the redirect policy.
+//
+// Not guaranteed: the returned Doer constrains only requests made through it.
+// Code that builds its own http.Client is unaffected, and the guard compares
+// scheme and host only, so it says nothing about paths or request contents.
+//
+// Each call returns an independent Doer configured by opts, so per-test
+// settings such as WithTimeout never leak between tests.
+func (s *Server) Doer(opts ...DoerOption) Doer {
+	cfg := doerConfig{}
+	for _, opt := range opts {
+		cfg = opt(cfg)
+	}
+
 	inner := s.inner.Client()
 	origin := s.BaseURL()
-	return &http.Client{
+	return guardedDoer{origin: origin, client: &http.Client{
 		Transport:     originGuard{origin: origin, next: inner.Transport},
 		CheckRedirect: checkRedirect(origin),
 		Jar:           inner.Jar,
-		Timeout:       inner.Timeout,
-	}
+		Timeout:       cfg.timeout,
+	}}
 }
 
 // Overrides maps every Garmin host onto the fake server.
@@ -131,9 +151,17 @@ func (s *Server) Overrides() protocol.Overrides {
 }
 
 // Hosts returns protocol hosts for domain with every base URL redirected to the
-// fake server.
+// fake server. An unsupported domain fails the test rather than falling back to
+// a real Garmin region.
 func (s *Server) Hosts(domain protocol.Domain) protocol.Hosts {
-	return protocol.NewHosts(domain).WithOverrides(s.Overrides())
+	s.tb.Helper()
+
+	hosts, err := protocol.NewHosts(domain)
+	if err != nil {
+		s.tb.Fatalf("testkit: unsupported domain %q: %v", domain, err)
+	}
+
+	return hosts.WithOverrides(s.Overrides())
 }
 
 // Requests returns a deep copy of the recorded requests, in arrival order.

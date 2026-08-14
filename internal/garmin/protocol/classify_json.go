@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // MaxResponseStatusTypeLen bounds the responseStatus.type token kept for
@@ -14,103 +13,33 @@ const MaxResponseStatusTypeLen = 64
 // HeaderRetryAfter is the response header carrying a rate-limit hint.
 const HeaderRetryAfter = "Retry-After"
 
-// Response is the classifier input: one HTTP response, already read into memory.
-//
-// It is secret-bearing: Body and Header hold whatever Garmin sent, including
-// Set-Cookie and Authorization values. String, GoString and MarshalJSON are
-// implemented so printing or serializing a Response emits only its shape. Never
-// hand these fields to a logger directly.
-type Response struct {
-	// Status is the HTTP status code, or 0 when the request never completed.
-	Status int
-	// Header is the response header set. It is only read, never modified.
-	Header http.Header
-	// ContentType is the media type. When empty it is taken from Header.
-	ContentType string
-	// Body is the response body. The classifier never copies it into an error.
-	Body []byte
-	// Now is the reference instant for Retry-After HTTP-dates. The zero value
-	// means time.Now().
-	Now time.Time
-}
-
-// Classification is the immutable verdict for one response.
-//
-// It is secret-bearing: ServiceTicket, CSRFToken and PageTitle carry credential
-// and page material. String, GoString and MarshalJSON are implemented so
-// printing or serializing a Classification reports presence rather than content.
-type Classification struct {
-	// Outcome is the classified meaning of the response.
-	Outcome Outcome
-	// Status echoes the HTTP status of the classified response.
-	Status int
-	// ServiceTicket is the extracted CAS service ticket on success.
-	ServiceTicket string
-	// MFAMethod is the delivery method Garmin last used, on OutcomeMFARequired.
-	MFAMethod string
-	// MFADeliveryUncertain marks an MFA challenge scraped from HTML, where OTP
-	// delivery is not confirmed. Upstream 0.3.10 removed the shelving this flag
-	// once drove and instead requests delivery explicitly via
-	// PathWidgetRequestMFACode; the flag is kept so a caller can decide.
-	MFADeliveryUncertain bool
-	// CSRFToken is the _csrf form value found in an HTML page, if any.
-	CSRFToken string
-	// PageTitle is the sanitized, length-bounded HTML <title>.
-	PageTitle string
-	// RetryAfter is the parsed Retry-After hint, or 0 when absent.
-	RetryAfter time.Duration
-	// ResponseStatusType is the sanitized responseStatus.type token, kept for
-	// diagnostics when the value is not recognized. Only recognized values reach
-	// a rendered form.
-	ResponseStatusType string
-}
-
-// Err returns nil for OutcomeSuccess and a *Error otherwise, wrapping cause.
-// OutcomeMFARequired is reported as an error too, so callers can match it with
-// errors.Is(err, ErrMFARequired) and route to the OTP step.
-//
-// op and endpoint are typed labels: pass an Op* and an Endpoint* constant. Any
-// other value renders as "unknown".
-func (c Classification) Err(op Op, endpoint Endpoint, cause error) error {
-	if c.Outcome == OutcomeSuccess {
-		return nil
-	}
-	return &Error{
-		Op:         op,
-		Endpoint:   endpoint,
-		Status:     c.Status,
-		Outcome:    c.Outcome,
-		RetryAfter: c.RetryAfter,
-		Err:        cause,
-	}
-}
-
 // ClassifyJSONLogin classifies a response from the mobile/iOS or portal JSON
 // login and MFA verify APIs. Source: the shared handling in _do_mobile_login,
 // _do_portal_web_login and _complete_mfa (client.py, 0.3.10).
 func ClassifyJSONLogin(r Response) Classification {
-	c := Classification{Status: r.Status, RetryAfter: r.retryAfter()}
+	status := r.Status()
+	f := classificationFields{status: status, retryAfter: r.retryAfter()}
 
 	// HTTP-level verdicts that upstream checks before touching the body.
-	switch r.Status {
+	switch status {
 	case http.StatusTooManyRequests:
-		c.Outcome = OutcomeRateLimited
-		return c
+		f.outcome = OutcomeRateLimited
+		return newClassification(f)
 	case http.StatusForbidden:
-		c.Outcome = OutcomeBotChallenge
-		return c
+		f.outcome = OutcomeBotChallenge
+		return newClassification(f)
 	}
 
 	if payload, ok := decodeLoginPayload(r); ok {
-		c = applyLoginPayload(c, payload)
+		f = applyLoginPayload(f, payload)
 	}
 
-	if c.Outcome == OutcomeUnknown {
-		if outcome, ok := statusOutcomeFor(contextLoginPOST, r.Status); ok {
-			c.Outcome = outcome
+	if f.outcome == OutcomeUnknown {
+		if outcome, ok := statusOutcomeFor(contextLoginPOST, status); ok {
+			f.outcome = outcome
 		}
 	}
-	return c
+	return newClassification(f)
 }
 
 type loginPayload struct {
@@ -125,7 +54,7 @@ type loginPayload struct {
 }
 
 func decodeLoginPayload(r Response) (loginPayload, bool) {
-	body := strings.TrimSpace(string(r.Body))
+	body := strings.TrimSpace(string(r.body()))
 	if body == "" {
 		return loginPayload{}, false
 	}
@@ -140,31 +69,31 @@ func decodeLoginPayload(r Response) (loginPayload, bool) {
 	return payload, true
 }
 
-func applyLoginPayload(c Classification, payload loginPayload) Classification {
-	out := c
-	out.ResponseStatusType = sanitizeToken(payload.ResponseStatus.Type, MaxResponseStatusTypeLen)
+func applyLoginPayload(f classificationFields, payload loginPayload) classificationFields {
+	out := f
+	out.responseStatusType = sanitizeToken(payload.ResponseStatus.Type, MaxResponseStatusTypeLen)
 
 	// A 429 can be reported inside an otherwise successful HTTP response.
 	// Source: res["error"]["status-code"] == "429".
 	if embeddedStatusCode(payload.Error) == "429" {
-		out.Outcome = OutcomeRateLimited
+		out.outcome = OutcomeRateLimited
 		return out
 	}
 
-	switch outcome := outcomeForStatusType(out.ResponseStatusType); outcome {
+	switch outcome := outcomeForStatusType(out.responseStatusType); outcome {
 	case OutcomeSuccess:
 		ticket := sanitizeToken(payload.ServiceTicketID, MaxServiceTicketLen)
 		if ticket == "" {
 			// SUCCESSFUL without a usable ticket is not a usable session.
 			return out
 		}
-		out.Outcome = OutcomeSuccess
-		out.ServiceTicket = ticket
+		out.outcome = OutcomeSuccess
+		out.serviceTicket = ticket
 	case OutcomeMFARequired:
-		out.Outcome = OutcomeMFARequired
-		out.MFAMethod = mfaMethodOrDefault(payload.CustomerMFAInfo.MFALastMethodUsed)
+		out.outcome = OutcomeMFARequired
+		out.mfaMethod = mfaMethodOrDefault(payload.CustomerMFAInfo.MFALastMethodUsed)
 	default:
-		out.Outcome = outcome
+		out.outcome = outcome
 	}
 	return out
 }
@@ -243,31 +172,6 @@ func hasAnyPart(parts map[string]bool, candidates ...string) bool {
 		}
 	}
 	return false
-}
-
-func (r Response) contentType() string {
-	if r.ContentType != "" {
-		return r.ContentType
-	}
-	if r.Header == nil {
-		return ""
-	}
-	return r.Header.Get("Content-Type")
-}
-
-func (r Response) retryAfter() time.Duration {
-	if r.Header == nil {
-		return 0
-	}
-	delay, _ := ParseRetryAfter(r.Header.Get(HeaderRetryAfter), r.now())
-	return delay
-}
-
-func (r Response) now() time.Time {
-	if r.Now.IsZero() {
-		return time.Now()
-	}
-	return r.Now
 }
 
 func isJSONContentType(value string) bool {

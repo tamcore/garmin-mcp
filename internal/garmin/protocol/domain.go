@@ -11,11 +11,25 @@
 // receiver.
 //
 // Secret handling: Response and Classification carry raw response material
-// (body, headers, service ticket, CSRF token, page title). Both implement
-// redacted String, GoString and MarshalJSON, so printing or serializing them
-// never emits that material. Error renders only the package's own sanitized
-// label constants plus a redacted cause; a caller that needs the real cause
-// must unwrap it and apply its own redaction.
+// (body, headers, service ticket, CSRF token, page title). Neither exposes it as
+// a field — the fields are unexported and sit behind a pointer, so a reflective
+// logger and a method-stripping alias both see an address — and both implement
+// redacted String, GoString, MarshalJSON and slog.LogValuer, so printing,
+// serializing or logging them never emits that material. Classification's
+// accessors hand the real values to a caller that asks deliberately.
+//
+// Error renders only the package's own sanitized label constants plus a redacted
+// cause. The cause rendering never uses a wrapper's own message text, because
+// fmt.Errorf lets a caller put a bearer token or a cookie there; a recognized
+// sentinel is rendered from the sentinel's own text, a *url.Error has its query
+// redacted, and an unrecognized cause degrades to a network failure category or to
+// its Go type name. Unwrap still exposes the real cause, so a caller that needs
+// its text must fetch and redact it deliberately.
+//
+// Region safety: a Domain is only usable once ParseDomain or Domain.Validate has
+// turned it into a ValidatedDomain. NewHosts fails closed on anything else rather
+// than coercing it to DomainGlobal, which would send a China account's
+// credentials to the global region.
 package protocol
 
 import (
@@ -30,8 +44,10 @@ import (
 var ErrUnsupportedDomain = errors.New("garmin: unsupported domain")
 
 // Domain is the Garmin host suffix that selects an account region. Only the two
-// official Garmin domains are valid; construct one with ParseDomain rather than
-// converting a caller-supplied string.
+// official Garmin domains are valid, and a Domain value alone carries no proof of
+// that: a plain string conversion produces one. Turn caller-supplied input into a
+// ValidatedDomain with ParseDomain, or an existing Domain with Domain.Validate,
+// before it can reach URL construction.
 type Domain string
 
 const (
@@ -70,22 +86,52 @@ func (d Domain) IsAllowed() bool {
 	return false
 }
 
+// ValidatedDomain is a Domain proven to be on the allowlist. It carries that
+// proof in the type, so a function taking one cannot be handed an
+// attacker-supplied host: the wrapped field is unexported, which makes
+// ParseDomain and Domain.Validate the only ways to obtain a populated value.
+//
+// The zero value holds no domain. It is not a region and does not default to one;
+// see NewHostsForValidatedDomain for what it yields.
+type ValidatedDomain struct {
+	domain Domain
+}
+
+// Domain returns the validated region, or the zero Domain for a zero
+// ValidatedDomain.
+func (v ValidatedDomain) Domain() Domain { return v.domain }
+
+// IsValid reports whether v holds an allowlisted domain. It is false only for the
+// zero value.
+func (v ValidatedDomain) IsValid() bool { return v.domain.IsAllowed() }
+
+// String renders the validated region, or "" for the zero value.
+func (v ValidatedDomain) String() string { return string(v.domain) }
+
 // ParseDomain validates a caller-supplied region. It trims surrounding space and
-// folds case; an empty value selects DomainGlobal. Any value outside the
-// allowlist is rejected with an error wrapping ErrUnsupportedDomain, so a
-// hostile domain can never reach URL construction.
+// folds case; an empty string selects DomainGlobal, which is the documented
+// default for an unspecified region. Any value outside the allowlist is rejected
+// with an error wrapping ErrUnsupportedDomain, so a hostile domain can never
+// reach URL construction.
 //
 // The error names the allowlist and never echoes the rejected input, which would
 // otherwise carry attacker-controlled text into a log line.
-func ParseDomain(value string) (Domain, error) {
-	candidate := Domain(strings.ToLower(strings.TrimSpace(value)))
-	if candidate == "" {
-		return DomainGlobal, nil
+func ParseDomain(value string) (ValidatedDomain, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ValidatedDomain{domain: DomainGlobal}, nil
 	}
-	if !candidate.IsAllowed() {
-		return "", errUnsupportedDomain()
+	return Domain(strings.ToLower(trimmed)).Validate()
+}
+
+// Validate proves that d is on the allowlist. Unlike ParseDomain it neither trims
+// nor folds case, and it rejects the zero Domain: a Domain value that was never
+// validated must not be read as a request for the default region.
+func (d Domain) Validate() (ValidatedDomain, error) {
+	if !d.IsAllowed() {
+		return ValidatedDomain{}, errUnsupportedDomain()
 	}
-	return candidate, nil
+	return ValidatedDomain{domain: d}, nil
 }
 
 func errUnsupportedDomain() error {
