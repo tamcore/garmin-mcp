@@ -38,6 +38,12 @@ var (
 	ErrMissingServiceTicket = errors.New("garmin auth: login succeeded without a service ticket")
 	// ErrMissingCSRFToken reports a widget page with no usable _csrf value.
 	ErrMissingCSRFToken = errors.New("garmin auth: widget page carried no CSRF token")
+	// ErrTokenPersistenceFailed reports that a validated token set could not be
+	// stored. It ends a login: another strategy cannot fix the store, and a
+	// compare-and-set conflict means the candidate is stale, so the login must be
+	// restarted rather than retried. The cause is wrapped, so ErrVersionConflict
+	// stays matchable.
+	ErrTokenPersistenceFailed = errors.New("garmin auth: the validated token set could not be stored")
 	// ErrNotIdempotent reports a request that may not be replayed after a 401.
 	ErrNotIdempotent = errors.New("garmin auth: request is not safe to retry")
 )

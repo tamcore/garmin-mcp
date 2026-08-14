@@ -68,11 +68,19 @@ func (a *Authenticator) beginMFA(principal string, strategy StrategyName, step s
 // CompleteMFA submits a one-time code for the transaction named by
 // transactionID.
 //
-// The transaction must belong to principal, must not have expired, must still
-// have attempts left and must not have been completed already; the registry
-// enforces all four. A successful verification is the single-use terminal
-// transition: the transaction is consumed, so the capability cannot be replayed.
-// A wrong code leaves the transaction usable until its attempt budget runs out.
+// The transaction must belong to principal, must not have expired, must still have
+// attempts left, must not be in the middle of another completion and must not have
+// been completed already; the registry enforces all five.
+//
+// The order of operations is the security property. Attempt takes the transaction's
+// single completion lease, so a second submission of the same capability performs no
+// external effect at all. The terminal success is then claimed — which re-checks the
+// absolute TTL, because verification is a network call that can outlive the
+// transaction — before the ticket is exchanged and before anything is saved. A
+// completion that fails after the claim leaves no usable transaction, so the user
+// restarts the login instead of retrying against a half-completed one. A wrong code
+// releases the lease and leaves the transaction usable until its attempt budget runs
+// out.
 //
 // code is not retained anywhere.
 func (a *Authenticator) CompleteMFA(
@@ -86,30 +94,44 @@ func (a *Authenticator) CompleteMFA(
 		return failedResult(""), ErrMissingMFACode
 	}
 
-	pending, err := a.registry.Attempt(transactionID, principal)
+	attempt, err := a.registry.Attempt(transactionID, principal)
 	if err != nil {
 		return failedResult(""), err
 	}
+	defer attempt.Release()
 
-	sess, err := newSession(a.doer)
+	pending := attempt.Pending()
+	class, err := a.submitCode(ctx, pending, code)
 	if err != nil {
 		return failedResult(pending.Strategy()), err
 	}
-	if err := sess.seed(a.hosts.SSOBase(), pending.Cookies()); err != nil {
-		return failedResult(pending.Strategy()), err
-	}
 
-	class, err := a.verifyCode(ctx, sess, pending, code)
-	if err != nil {
+	if err := attempt.Claim(); err != nil {
 		return failedResult(pending.Strategy()), err
 	}
 	if err := a.completeLogin(ctx, principal, class, pending.ServiceURL()); err != nil {
-		return failedResult(pending.Strategy()), err
-	}
-	if err := a.registry.Complete(transactionID); err != nil {
+		// The capability is consumed, so this login cannot be resumed: the caller
+		// must start a new one rather than replay the code.
 		return failedResult(pending.Strategy()), err
 	}
 	return authenticatedResult(pending.Strategy()), nil
+}
+
+// submitCode seeds a fresh session with the pending SSO cookies and verifies the
+// one-time code on the pending flow's endpoint.
+func (a *Authenticator) submitCode(
+	ctx context.Context,
+	pending Pending,
+	code string,
+) (protocol.Classification, error) {
+	sess, err := newSession(a.doer)
+	if err != nil {
+		return protocol.Classification{}, err
+	}
+	if err := sess.seed(a.hosts.SSOBase(), pending.Cookies()); err != nil {
+		return protocol.Classification{}, err
+	}
+	return a.verifyCode(ctx, sess, pending, code)
 }
 
 // verifyCode submits the OTP to the verify endpoint of the pending flow.

@@ -1,10 +1,8 @@
 package config
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 	"testing"
 )
@@ -49,34 +47,24 @@ func TestSecretPresence(t *testing.T) {
 	}
 }
 
+// secretRenderings collects every way a Secret can reach a human or a log sink:
+// the shared renderer plus the redacting methods themselves.
+func secretRenderings(t *testing.T, secret Secret) map[string]string {
+	t.Helper()
+
+	out := renderAll(t, secret)
+	out["String()"] = secret.String()
+	out["GoString()"] = secret.GoString()
+	out["LogValue()"] = fmt.Sprint(secret.LogValue())
+	return out
+}
+
 func TestSecretNeverRendersItsValue(t *testing.T) {
 	t.Parallel()
 
 	secret := NewSecret(sentinelSecret)
 
-	var jsonBuf, textBuf bytes.Buffer
-	slog.New(slog.NewJSONHandler(&jsonBuf, nil)).Info("effective", "masterKey", secret)
-	slog.New(slog.NewTextHandler(&textBuf, nil)).Info("effective", "masterKey", secret)
-
-	encoded, err := json.Marshal(secret)
-	if err != nil {
-		t.Fatalf("json.Marshal: %v", err)
-	}
-
-	renderings := map[string]string{
-		"%v":           fmt.Sprintf("%v", secret),
-		"%+v":          fmt.Sprintf("%+v", secret),
-		"%#v":          fmt.Sprintf("%#v", secret),
-		"%s":           fmt.Sprintf("[%s]", secret),
-		"pointer %v":   fmt.Sprintf("%v", &secret),
-		"json.Marshal": string(encoded),
-		"slog json":    jsonBuf.String(),
-		"slog text":    textBuf.String(),
-		"String()":     secret.String(),
-		"LogValue()":   fmt.Sprint(secret.LogValue()),
-	}
-
-	for verb, rendering := range renderings {
+	for verb, rendering := range secretRenderings(t, secret) {
 		if strings.Contains(rendering, sentinelSecret) {
 			t.Errorf("%s rendering leaks the secret: %s", verb, rendering)
 		}

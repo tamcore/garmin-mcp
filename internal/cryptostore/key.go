@@ -31,6 +31,15 @@
 // rather than to discard the record. Delete a retired key file only after every
 // record has been re-sealed.
 //
+// # One key per version, forever
+//
+// Key material for a version is installed exactly once. LoadOrCreateKey creates
+// the file with no-replace semantics, so two processes that start together elect
+// one winner and the loser discards its own material and loads the winner's.
+// Replacing an existing key file would leave every record already sealed under the
+// old material unreadable, so it is never done, not even when the existing file is
+// malformed or has unsafe permissions: that is an error for an operator to resolve.
+//
 // # Threat model
 //
 // A key file that sits next to the database protects backups and file
@@ -41,7 +50,8 @@
 // The key path must contain no symlinked component, including in its parent
 // directories, because a planted symlink is how key material gets redirected.
 // The configured directory therefore has to be a real path: on macOS a path
-// under /var is refused, since /var is a symlink to /private/var.
+// under /var is refused, since /var is a symlink to /private/var. See
+// internal/securefile for how every path component is verified.
 package cryptostore
 
 import (
@@ -51,18 +61,22 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strconv"
+
+	"github.com/tamcore/garmin-mcp/internal/securefile"
 )
 
 // keyLen is the master key size in bytes. 32 bytes selects AES-256-GCM.
 const keyLen = 32
 
+// maxKeyFileBytes bounds a key document read. A key file is a few hundred bytes;
+// anything larger is a mistake or an attempt to exhaust memory.
+const maxKeyFileBytes = 4 << 10
+
 // File and directory modes for key material. Both are enforced with an explicit
-// chmod after creation, because the modes passed to os.MkdirAll and
-// os.OpenFile are masked by the process umask, which is global and may be
-// hostile.
+// chmod after creation, because the modes passed to mkdir and open are masked by
+// the process umask, which is global and may be hostile.
 const (
 	keyFileMode = 0o600
 	keyDirMode  = 0o700
@@ -70,10 +84,11 @@ const (
 
 // Key is one versioned master key.
 //
-// It is secret-bearing. The material sits behind an unexported pointer, so a
-// reflective logger, a direct field print and a method-stripping alias
-// (type Raw cryptostore.Key) all see an address rather than the key. String,
-// GoString, MarshalJSON and LogValue report only the version.
+// It is secret-bearing. The material sits behind two levels of unexported
+// indirection, so a reflective logger, a direct field print and a
+// method-stripping alias (type Raw cryptostore.Key) all see an address rather
+// than the key. String, GoString, MarshalJSON and LogValue report only the
+// version.
 //
 // A Key is immutable after construction and safe to copy and share. The zero
 // value is inert: Encrypt and Decrypt reject it.
@@ -86,18 +101,34 @@ type Key struct {
 	secret *keySecret
 }
 
+// keyMaterial is the raw key bytes under their own type, so the field that holds
+// them can be a pointer.
+type keyMaterial []byte
+
 // keySecret holds the raw key. It is never mutated after construction.
+//
+// material is a pointer, not a plain slice. fmt's %s and %q on a value with no
+// String method fall into badVerb, which re-prints the value at depth zero, and
+// depth zero dereferences a pointer to a struct and prints its unexported fields.
+// A plain []byte field would surface there as its decimal bytes; a pointer field
+// renders as an address at that depth.
 type keySecret struct {
-	material []byte
+	material *keyMaterial
 }
 
 // bytes returns the raw key material, or nil for the zero Key. It is unexported:
 // nothing outside this package may hold the key.
 func (k Key) bytes() []byte {
-	if k.secret == nil {
+	if k.secret == nil || k.secret.material == nil {
 		return nil
 	}
-	return k.secret.material
+	return []byte(*k.secret.material)
+}
+
+// newKey wraps material in the indirection every Key uses.
+func newKey(version int, material []byte) Key {
+	held := keyMaterial(material)
+	return Key{version: version, secret: &keySecret{material: &held}}
 }
 
 // GenerateKey returns a new random key with the given version. The key exists
@@ -110,34 +141,37 @@ func GenerateKey(version int) (Key, error) {
 	if _, err := rand.Read(material); err != nil {
 		return Key{}, fmt.Errorf("cryptostore: generate key material: %w", err)
 	}
-	return Key{version: version, secret: &keySecret{material: material}}, nil
+	return newKey(version, material), nil
 }
 
 // LoadKey reads the key file for version from dir. It refuses material that is
 // missing (ErrKeyNotFound), not owner-only (ErrInsecureKeyPermissions), reached
-// through a symlink (ErrInsecureKeyPath), or not a version id plus a base64
-// 32-byte key (ErrMalformedKey). No error text ever contains key material.
+// through a symlink or found as something other than a regular file
+// (ErrInsecureKeyPath), or not a version id plus a base64 32-byte key
+// (ErrMalformedKey). No error text ever contains key material.
 func LoadKey(dir string, version int) (Key, error) {
 	if version <= 0 {
 		return Key{}, fmt.Errorf("cryptostore: load key version %d: %w", version, ErrInvalidKeyVersion)
 	}
-	path := keyFilePath(dir, version)
-	if err := checkNoSymlinkAncestry(path, ErrInsecureKeyPath); err != nil {
-		return Key{}, err
-	}
 
-	raw, err := readOwnerOnlyKeyFile(path)
+	path := keyFilePath(dir, version)
+	raw, err := securefile.ReadFile(path, maxKeyFileBytes)
 	if err != nil {
-		return Key{}, err
+		return Key{}, keyFileError("read", path, err)
 	}
 	return decodeKeyFile(raw, version, path)
 }
 
 // LoadOrCreateKey returns the key for version from dir, creating it if absent.
+//
 // The directory is created with mode 0700 and the key file with mode 0600, both
 // enforced by an explicit chmod so a permissive umask cannot widen them. An
 // existing file that is malformed or not owner-only is an error, never silently
 // replaced: overwriting it would destroy the only way to read existing records.
+//
+// Creation is a no-replace install. When another process wins the race, this call
+// discards the material it generated and returns the winner's, so no caller ever
+// holds a key that a restart will not load.
 func LoadOrCreateKey(dir string, version int) (Key, error) {
 	key, err := LoadKey(dir, version)
 	switch {
@@ -151,11 +185,12 @@ func LoadOrCreateKey(dir string, version int) (Key, error) {
 	if err != nil {
 		return Key{}, err
 	}
-	if err := writeKeyFile(dir, generated); err != nil {
+	if err := installKeyFile(dir, generated); err != nil && !errors.Is(err, fs.ErrExist) {
 		return Key{}, err
 	}
 	// Read back through the same validation the load path uses, so a created key
-	// is provably loadable and owner-only.
+	// is provably loadable and owner-only, and so a creator that lost the race
+	// returns the material that is actually on disk.
 	return LoadKey(dir, version)
 }
 
@@ -196,19 +231,18 @@ func decodeKeyFile(raw []byte, wantVersion int, path string) (Key, error) {
 	if len(material) != keyLen {
 		return malformed("key is " + strconv.Itoa(len(material)) + " bytes, want " + strconv.Itoa(keyLen))
 	}
-	return Key{version: wantVersion, secret: &keySecret{material: material}}, nil
+	return newKey(wantVersion, material), nil
 }
 
-// writeKeyFile persists key under dir. It writes a temporary sibling first and
-// renames it, so a concurrent reader never sees a half-written key.
-func writeKeyFile(dir string, key Key) error {
-	if err := os.MkdirAll(dir, keyDirMode); err != nil {
-		return fmt.Errorf("cryptostore: create key directory %q: %w", dir, err)
-	}
-	// MkdirAll's mode is masked by the umask and is a no-op for a directory that
-	// already exists; chmod enforces 0700 unconditionally.
-	if err := os.Chmod(dir, keyDirMode); err != nil {
-		return fmt.Errorf("cryptostore: secure key directory %q: %w", dir, err)
+// installKeyFile persists key under dir without replacing anything.
+//
+// The content is written and synced into a temporary sibling and then linked into
+// place, which fails when the name is already taken. A collision reports an error
+// wrapping fs.ErrExist, which is the caller's signal to discard its material and
+// load the winner's.
+func installKeyFile(dir string, key Key) error {
+	if err := securefile.EnsureDir(dir, keyDirMode); err != nil {
+		return keyFileError("prepare key directory", dir, err)
 	}
 
 	content, err := json.Marshal(keyFileContent{
@@ -220,37 +254,30 @@ func writeKeyFile(dir string, key Key) error {
 	}
 
 	path := keyFilePath(dir, key.version)
-	if err := checkNoSymlinkAncestry(path, ErrInsecureKeyPath); err != nil {
-		return err
-	}
-	if err := writeFileAtomically(path, content, keyFileMode); err != nil {
-		return fmt.Errorf("cryptostore: write key file %q: %w", path, err)
+	if err := securefile.InstallNewFile(path, content, keyFileMode); err != nil {
+		return keyFileError("install", path, err)
 	}
 	return nil
 }
 
-// readOwnerOnlyKeyFile reads path, refusing to follow a symlink and refusing
-// material any other local account can reach.
-func readOwnerOnlyKeyFile(path string) ([]byte, error) {
-	file, err := openNoFollow(path)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, fmt.Errorf("cryptostore: key file %q: %w: %w", path, ErrKeyNotFound, err)
-		}
-		return nil, fmt.Errorf("cryptostore: open key file %q: %w", path, err)
+// keyFileError translates a securefile failure onto this package's sentinels. The
+// cause is kept in the chain: it names paths, modes and sizes only, never
+// material.
+func keyFileError(operation, path string, err error) error {
+	sentinel := func(specific error) error {
+		return fmt.Errorf("cryptostore: %s key material %q: %w: %w", operation, path, specific, err)
 	}
-	defer func() { _ = file.Close() }()
 
-	info, err := file.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("cryptostore: stat key file %q: %w", path, err)
+	switch {
+	case errors.Is(err, securefile.ErrNotFound):
+		return sentinel(ErrKeyNotFound)
+	case errors.Is(err, securefile.ErrExists):
+		return fmt.Errorf("cryptostore: %s key material %q: material is already present: %w",
+			operation, path, err)
+	case errors.Is(err, securefile.ErrInsecurePermissions):
+		return sentinel(ErrInsecureKeyPermissions)
+	case errors.Is(err, securefile.ErrInsecurePath):
+		return sentinel(ErrInsecureKeyPath)
 	}
-	if err := checkOwnerOnly(info.Mode(), path, ErrInsecureKeyPermissions); err != nil {
-		return nil, err
-	}
-	raw, err := readBounded(file, maxKeyFileBytes)
-	if err != nil {
-		return nil, fmt.Errorf("cryptostore: read key file %q: %w", path, err)
-	}
-	return raw, nil
+	return fmt.Errorf("cryptostore: %s key material %q: %w", operation, path, err)
 }

@@ -20,14 +20,19 @@ type Credentials struct {
 	secrets *credentialSecrets
 }
 
+// credentialSecrets is the sealed content of a Credentials. Both halves sit behind
+// a pointer, so no rendering path can reflect them out; see secretString.
 type credentialSecrets struct {
-	email    string
-	password string
+	email    *secretString
+	password *secretString
 }
 
 // NewCredentials seals an email and password for one login call.
 func NewCredentials(email, password string) Credentials {
-	return Credentials{secrets: &credentialSecrets{email: email, password: password}}
+	return Credentials{secrets: &credentialSecrets{
+		email:    sealSecret(email),
+		password: sealSecret(password),
+	}}
 }
 
 func (c Credentials) s() credentialSecrets {
@@ -39,16 +44,16 @@ func (c Credentials) s() credentialSecrets {
 
 // Email is the account identifier. It is personal data: it belongs in a request
 // body, never in a log line.
-func (c Credentials) Email() string { return c.s().email }
+func (c Credentials) Email() string { return revealSecret(c.s().email) }
 
 // Password is the account password. It belongs in a request body and nowhere
 // else: never a field, a log, an error or a store.
-func (c Credentials) Password() string { return c.s().password }
+func (c Credentials) Password() string { return revealSecret(c.s().password) }
 
 // IsZero reports whether either half is missing.
 func (c Credentials) IsZero() bool {
 	secrets := c.s()
-	return secrets.email == "" || secrets.password == ""
+	return secrets.email == nil || secrets.password == nil
 }
 
 // redactedCredentials is the only shape a Credentials is ever rendered in.
@@ -62,8 +67,8 @@ func (c Credentials) redacted() redactedCredentials {
 	secrets := c.s()
 	return redactedCredentials{
 		Type:        "auth.Credentials",
-		HasEmail:    secrets.email != "",
-		HasPassword: secrets.password != "",
+		HasEmail:    secrets.email != nil,
+		HasPassword: secrets.password != nil,
 	}
 }
 

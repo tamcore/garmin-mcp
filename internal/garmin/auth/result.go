@@ -18,10 +18,12 @@ type Result struct {
 	secrets *resultSecrets
 }
 
+// resultSecrets is the sealed content of a Result. The transaction capability is a
+// bearer credential, so it sits behind a pointer; see secretString.
 type resultSecrets struct {
 	state                State
 	strategy             StrategyName
-	transactionID        string
+	transactionID        *secretString
 	mfaMethod            string
 	mfaDeliveryUncertain bool
 }
@@ -36,7 +38,7 @@ func mfaPendingResult(strategy StrategyName, transactionID string, pending Pendi
 	return Result{secrets: &resultSecrets{
 		state:                StateMFAPending,
 		strategy:             strategy,
-		transactionID:        transactionID,
+		transactionID:        sealSecret(transactionID),
 		mfaMethod:            pending.MFAMethod(),
 		mfaDeliveryUncertain: pending.MFADeliveryUncertain(),
 	}}
@@ -66,7 +68,7 @@ func (r Result) NeedsMFA() bool { return r.s().state == StateMFAPending }
 // TransactionID is the opaque capability for the pending MFA transaction, or ""
 // when no continuation is pending. It is a credential: hand it to the browser in
 // a host-only cookie and never log it.
-func (r Result) TransactionID() string { return r.s().transactionID }
+func (r Result) TransactionID() string { return revealSecret(r.s().transactionID) }
 
 // MFAMethod is the delivery method Garmin named for the challenge.
 func (r Result) MFAMethod() string { return r.s().mfaMethod }
@@ -91,7 +93,7 @@ func (r Result) redacted() redactedResult {
 		State:          secrets.state.String(),
 		Strategy:       secrets.strategy.String(),
 		MFAMethod:      knownMFAMethod(secrets.mfaMethod),
-		HasTransaction: secrets.transactionID != "",
+		HasTransaction: secrets.transactionID != nil,
 	}
 }
 

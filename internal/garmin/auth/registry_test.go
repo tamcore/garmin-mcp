@@ -17,6 +17,8 @@ import (
 const (
 	leakCSRF   = "csrf-secret-0400"
 	leakCookie = "cookie-secret-0401"
+	// principalA is the account most registry tests run as.
+	principalA = "principal-a"
 )
 
 func registryStart() time.Time { return time.Date(2026, 8, 14, 9, 0, 0, 0, time.UTC) }
@@ -48,7 +50,7 @@ func TestRegistryCreateAndAttempt(t *testing.T) {
 	clock := testkit.NewFakeClock(registryStart())
 	registry := newTestRegistry(t, clock, auth.RegistryConfig{})
 
-	id, err := registry.Create(pendingFor("principal-a", leakCSRF, leakCookie))
+	id, err := registry.Create(pendingFor(principalA, leakCSRF, leakCookie))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -59,10 +61,11 @@ func TestRegistryCreateAndAttempt(t *testing.T) {
 		t.Fatalf("Len() = %d, want 1", registry.Len())
 	}
 
-	pending, err := registry.Attempt(id, "principal-a")
+	attempt, err := registry.Attempt(id, principalA)
 	if err != nil {
 		t.Fatalf("Attempt: %v", err)
 	}
+	pending := attempt.Pending()
 	if pending.CSRFToken() != leakCSRF {
 		t.Errorf("CSRFToken() = %q", pending.CSRFToken())
 	}
@@ -84,7 +87,7 @@ func TestRegistryRejectsUnknownAndTamperedCapability(t *testing.T) {
 	clock := testkit.NewFakeClock(registryStart())
 	registry := newTestRegistry(t, clock, auth.RegistryConfig{})
 
-	id, err := registry.Create(pendingFor("principal-a", leakCSRF, leakCookie))
+	id, err := registry.Create(pendingFor(principalA, leakCSRF, leakCookie))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -95,7 +98,7 @@ func TestRegistryRejectsUnknownAndTamperedCapability(t *testing.T) {
 		"truncated": id[:len(id)-1],
 		"prefixed":  "x" + id,
 	} {
-		if _, err := registry.Attempt(candidate, "principal-a"); !errors.Is(err, auth.ErrUnknownTransaction) {
+		if _, err := registry.Attempt(candidate, principalA); !errors.Is(err, auth.ErrUnknownTransaction) {
 			t.Errorf("%s capability: err = %v, want ErrUnknownTransaction", name, err)
 		}
 	}
@@ -105,7 +108,7 @@ func TestRegistryRejectsCrossPrincipalAttempt(t *testing.T) {
 	clock := testkit.NewFakeClock(registryStart())
 	registry := newTestRegistry(t, clock, auth.RegistryConfig{})
 
-	id, err := registry.Create(pendingFor("principal-a", leakCSRF, leakCookie))
+	id, err := registry.Create(pendingFor(principalA, leakCSRF, leakCookie))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -123,21 +126,21 @@ func TestRegistryRejectsExpiredTransaction(t *testing.T) {
 	clock := testkit.NewFakeClock(registryStart())
 	registry := newTestRegistry(t, clock, auth.RegistryConfig{TTL: 2 * time.Minute})
 
-	id, err := registry.Create(pendingFor("principal-a", leakCSRF, leakCookie))
+	id, err := registry.Create(pendingFor(principalA, leakCSRF, leakCookie))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 
 	clock.Advance(2 * time.Minute)
 
-	if _, err := registry.Attempt(id, "principal-a"); !errors.Is(err, auth.ErrTransactionExpired) {
+	if _, err := registry.Attempt(id, principalA); !errors.Is(err, auth.ErrTransactionExpired) {
 		t.Fatalf("err = %v, want ErrTransactionExpired", err)
 	}
 	if registry.Len() != 0 {
 		t.Fatalf("expired transaction survived: Len() = %d", registry.Len())
 	}
 	// A second use of an expired capability must not reveal that it once existed.
-	if _, err := registry.Attempt(id, "principal-a"); !errors.Is(err, auth.ErrUnknownTransaction) {
+	if _, err := registry.Attempt(id, principalA); !errors.Is(err, auth.ErrUnknownTransaction) {
 		t.Fatalf("err = %v, want ErrUnknownTransaction", err)
 	}
 }
@@ -146,18 +149,20 @@ func TestRegistryBoundsAttempts(t *testing.T) {
 	clock := testkit.NewFakeClock(registryStart())
 	registry := newTestRegistry(t, clock, auth.RegistryConfig{MaxAttempts: 2})
 
-	id, err := registry.Create(pendingFor("principal-a", leakCSRF, leakCookie))
+	id, err := registry.Create(pendingFor(principalA, leakCSRF, leakCookie))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 
 	for i := range 2 {
-		if _, err := registry.Attempt(id, "principal-a"); err != nil {
+		attempt, err := registry.Attempt(id, principalA)
+		if err != nil {
 			t.Fatalf("attempt %d: %v", i+1, err)
 		}
+		attempt.Release()
 	}
 
-	if _, err := registry.Attempt(id, "principal-a"); !errors.Is(err, auth.ErrTransactionAttemptsExhausted) {
+	if _, err := registry.Attempt(id, principalA); !errors.Is(err, auth.ErrTransactionAttemptsExhausted) {
 		t.Fatalf("err = %v, want ErrTransactionAttemptsExhausted", err)
 	}
 	if registry.Len() != 0 {
@@ -171,7 +176,7 @@ func TestRegistryCrossPrincipalAttemptCountsAgainstTheBudget(t *testing.T) {
 	clock := testkit.NewFakeClock(registryStart())
 	registry := newTestRegistry(t, clock, auth.RegistryConfig{MaxAttempts: 1})
 
-	id, err := registry.Create(pendingFor("principal-a", leakCSRF, leakCookie))
+	id, err := registry.Create(pendingFor(principalA, leakCSRF, leakCookie))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -179,53 +184,61 @@ func TestRegistryCrossPrincipalAttemptCountsAgainstTheBudget(t *testing.T) {
 	if _, err := registry.Attempt(id, "principal-b"); !errors.Is(err, auth.ErrTransactionPrincipalMismatch) {
 		t.Fatalf("err = %v, want ErrTransactionPrincipalMismatch", err)
 	}
-	if _, err := registry.Attempt(id, "principal-a"); !errors.Is(err, auth.ErrTransactionAttemptsExhausted) {
+	if _, err := registry.Attempt(id, principalA); !errors.Is(err, auth.ErrTransactionAttemptsExhausted) {
 		t.Fatalf("err = %v, want ErrTransactionAttemptsExhausted", err)
 	}
 }
 
-func TestRegistryCompleteIsSingleUse(t *testing.T) {
+func TestRegistryClaimIsSingleUse(t *testing.T) {
 	clock := testkit.NewFakeClock(registryStart())
 	registry := newTestRegistry(t, clock, auth.RegistryConfig{})
 
-	id, err := registry.Create(pendingFor("principal-a", leakCSRF, leakCookie))
+	id, err := registry.Create(pendingFor(principalA, leakCSRF, leakCookie))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if _, err := registry.Attempt(id, "principal-a"); err != nil {
+	attempt, err := registry.Attempt(id, principalA)
+	if err != nil {
 		t.Fatalf("Attempt: %v", err)
 	}
 
-	if err := registry.Complete(id); err != nil {
-		t.Fatalf("Complete: %v", err)
+	if err := attempt.Claim(); err != nil {
+		t.Fatalf("Claim: %v", err)
 	}
 	if registry.Len() != 0 {
 		t.Fatalf("completed transaction survived: Len() = %d", registry.Len())
 	}
-	if err := registry.Complete(id); !errors.Is(err, auth.ErrUnknownTransaction) {
-		t.Fatalf("replayed Complete: err = %v, want ErrUnknownTransaction", err)
+	if err := attempt.Claim(); !errors.Is(err, auth.ErrUnknownTransaction) {
+		t.Fatalf("replayed Claim: err = %v, want ErrUnknownTransaction", err)
 	}
-	if _, err := registry.Attempt(id, "principal-a"); !errors.Is(err, auth.ErrUnknownTransaction) {
+	if _, err := registry.Attempt(id, principalA); !errors.Is(err, auth.ErrUnknownTransaction) {
 		t.Fatalf("replayed Attempt: err = %v, want ErrUnknownTransaction", err)
 	}
 }
 
-// Completing without a verified attempt is out of order: the terminal transition
-// may only follow a code submission.
-func TestRegistryRejectsOutOfOrderComplete(t *testing.T) {
+// The terminal success may only follow a code submission. That ordering is now
+// structural: it can only be reached through the Attempt that charged the budget,
+// and a released lease cannot claim anything.
+func TestRegistryReleasedAttemptCannotClaim(t *testing.T) {
 	clock := testkit.NewFakeClock(registryStart())
 	registry := newTestRegistry(t, clock, auth.RegistryConfig{})
 
-	id, err := registry.Create(pendingFor("principal-a", leakCSRF, leakCookie))
+	id, err := registry.Create(pendingFor(principalA, leakCSRF, leakCookie))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
+	attempt, err := registry.Attempt(id, principalA)
+	if err != nil {
+		t.Fatalf("Attempt: %v", err)
+	}
 
-	if err := registry.Complete(id); !errors.Is(err, auth.ErrTransactionOutOfOrder) {
-		t.Fatalf("err = %v, want ErrTransactionOutOfOrder", err)
+	attempt.Release()
+
+	if err := attempt.Claim(); !errors.Is(err, auth.ErrUnknownTransaction) {
+		t.Fatalf("err = %v, want ErrUnknownTransaction", err)
 	}
 	if registry.Len() != 1 {
-		t.Fatalf("a rejected transition destroyed the transaction: Len() = %d", registry.Len())
+		t.Fatalf("a released attempt destroyed the transaction: Len() = %d", registry.Len())
 	}
 }
 
@@ -233,7 +246,7 @@ func TestRegistryCancel(t *testing.T) {
 	clock := testkit.NewFakeClock(registryStart())
 	registry := newTestRegistry(t, clock, auth.RegistryConfig{})
 
-	id, err := registry.Create(pendingFor("principal-a", leakCSRF, leakCookie))
+	id, err := registry.Create(pendingFor(principalA, leakCSRF, leakCookie))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -244,7 +257,7 @@ func TestRegistryCancel(t *testing.T) {
 	if registry.Len() != 0 {
 		t.Fatalf("cancelled transaction survived: Len() = %d", registry.Len())
 	}
-	if _, err := registry.Attempt(id, "principal-a"); !errors.Is(err, auth.ErrUnknownTransaction) {
+	if _, err := registry.Attempt(id, principalA); !errors.Is(err, auth.ErrUnknownTransaction) {
 		t.Fatalf("err = %v, want ErrUnknownTransaction", err)
 	}
 	if err := registry.Cancel(id); !errors.Is(err, auth.ErrUnknownTransaction) {
@@ -252,19 +265,40 @@ func TestRegistryCancel(t *testing.T) {
 	}
 }
 
+// Fail is the abandon path for a login the server gives up on, as opposed to
+// Cancel, which is the caller's own abandonment.
+func TestRegistryFailRemovesTheTransaction(t *testing.T) {
+	clock := testkit.NewFakeClock(registryStart())
+	registry := newTestRegistry(t, clock, auth.RegistryConfig{})
+
+	id, err := registry.Create(pendingFor(principalA, leakCSRF, leakCookie))
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := registry.Fail(id); err != nil {
+		t.Fatalf("Fail: %v", err)
+	}
+	if registry.Len() != 0 {
+		t.Fatalf("a failed transaction survived: Len() = %d", registry.Len())
+	}
+	if err := registry.Fail(id); !errors.Is(err, auth.ErrUnknownTransaction) {
+		t.Fatalf("second Fail: err = %v, want ErrUnknownTransaction", err)
+	}
+}
+
 func TestRegistryIsBoundedAndSweepsExpiredEntries(t *testing.T) {
 	clock := testkit.NewFakeClock(registryStart())
 	registry := newTestRegistry(t, clock, auth.RegistryConfig{MaxEntries: 2, TTL: time.Minute})
 
-	for i := range 2 {
+	for i := range 3 {
 		if _, err := registry.Create(pendingFor(fmt.Sprintf("principal-%d", i), leakCSRF, leakCookie)); err != nil {
 			t.Fatalf("Create %d: %v", i, err)
 		}
 	}
-
-	_, err := registry.Create(pendingFor("principal-overflow", leakCSRF, leakCookie))
-	if !errors.Is(err, auth.ErrRegistryFull) {
-		t.Fatalf("err = %v, want ErrRegistryFull", err)
+	// The bound holds: the third start evicted the first rather than being refused.
+	if registry.Len() != 2 {
+		t.Fatalf("Len() = %d, want the configured bound of 2", registry.Len())
 	}
 
 	// Once the live entries age out, the space must come back.
@@ -295,7 +329,7 @@ func TestRegistryCapabilitiesAreUnique(t *testing.T) {
 }
 
 func TestPendingRenderingIsRedacted(t *testing.T) {
-	pending := pendingFor("principal-a", leakCSRF, leakCookie)
+	pending := pendingFor(principalA, leakCSRF, leakCookie)
 
 	for form, rendered := range map[string]string{
 		formString:   pending.String(),
@@ -317,9 +351,10 @@ func TestRegistryRejectsNonPositiveConfiguration(t *testing.T) {
 	clock := testkit.NewFakeClock(registryStart())
 
 	for name, cfg := range map[string]auth.RegistryConfig{
-		"negative TTL":         {TTL: -time.Second},
-		"negative attempts":    {MaxAttempts: -1},
-		"negative max entries": {MaxEntries: -1},
+		"negative TTL":           {TTL: -time.Second},
+		"negative attempts":      {MaxAttempts: -1},
+		"negative max entries":   {MaxEntries: -1},
+		"negative pending bytes": {MaxPendingBytes: -1},
 	} {
 		cfg.Clock = clock
 		if _, err := auth.NewRegistry(cfg); err == nil {

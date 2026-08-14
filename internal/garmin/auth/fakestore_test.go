@@ -21,6 +21,9 @@ type fakeStore struct {
 
 	// loadErr, when set, is returned by every Load instead of a stored set.
 	loadErr error
+	// saveErr, when set, is returned by every Save instead of persisting, so a
+	// test can drive the failed-persistence path.
+	saveErr error
 	// beforeSave runs inside Save, before the version check, so a test can
 	// simulate another writer winning the race.
 	beforeSave func(principal string)
@@ -63,6 +66,9 @@ func (s *fakeStore) Save(
 	defer s.mu.Unlock()
 
 	s.saves++
+	if s.saveErr != nil {
+		return 0, s.saveErr
+	}
 	if s.versions[principal] != expectedVersion {
 		return 0, fmt.Errorf("fake store: %q: %w", principal, auth.ErrVersionConflict)
 	}

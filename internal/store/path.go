@@ -1,9 +1,7 @@
 package store
 
 import (
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,7 +33,7 @@ func ResolveTokenFilePath(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := checkNoSymlinkAncestry(expanded); err != nil {
+	if err := checkPathAncestry(expanded); err != nil {
 		return "", err
 	}
 
@@ -78,29 +76,10 @@ func isDir(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-// checkNoSymlinkAncestry refuses path if it, or any parent directory, is a
-// symlink. A component that cannot be inspected is refused as well: an
-// uncheckable path is not a safe path.
+// The symlink ancestry rule lives in internal/securefile; checkPathAncestry in
+// secure.go is the entry point.
 //
-// Source: token_file_path in client.py (0.3.10), which walks Path.parents for
-// exactly this reason. The whole ancestry must be real: on macOS a path under /var
-// is refused, because /var is a symlink to /private/var.
-func checkNoSymlinkAncestry(path string) error {
-	for current := filepath.Clean(path); ; {
-		info, err := os.Lstat(current)
-		switch {
-		case err == nil && info.Mode()&fs.ModeSymlink != 0:
-			return fmt.Errorf("store: token path %q has a symlinked component %q: %w",
-				path, current, ErrInsecurePath)
-		case err != nil && !errors.Is(err, fs.ErrNotExist):
-			return fmt.Errorf("store: token path %q component %q cannot be checked: %w",
-				path, current, ErrInsecurePath)
-		}
-
-		parent := filepath.Dir(current)
-		if parent == current {
-			return nil
-		}
-		current = parent
-	}
-}
+// Source: token_file_path in client.py (0.3.10), which walks Path.parents rather
+// than relying on O_NOFOLLOW, which covers the last component only. The whole
+// ancestry must be real: on macOS a path under /var is refused, because /var is a
+// symlink to /private/var.

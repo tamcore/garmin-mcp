@@ -31,6 +31,15 @@ type RefreshConfig struct {
 	SafetyWindow time.Duration
 	// Logger receives redacted progress records. Nil means slog.Default.
 	Logger *slog.Logger
+	// TokenGate serializes this Refresher's token writes against the Authenticator
+	// that shares the same Store. Nil means a private gate, which serializes this
+	// Refresher against itself only; obtain a shared one from NewTokenGate.
+	TokenGate *TokenGate
+
+	// onFlightRetire is a test seam. It runs inside the critical section that
+	// publishes a refresh result and retires its flight, so a test can prove that
+	// no second caller can observe a retired-but-unpublished flight.
+	onFlightRetire func()
 }
 
 // Refresher keeps one principal's DI token set usable.
@@ -47,9 +56,13 @@ type RefreshConfig struct {
 type Refresher struct {
 	tokens tokenClient
 	store  TokenStore
+	gate   *TokenGate
 	clock  Clock
 	window time.Duration
 	logger *slog.Logger
+
+	// onFlightRetire is the test seam from RefreshConfig; nil in production.
+	onFlightRetire func()
 
 	// mu guards flights. Each flight is the single in-progress refresh for one
 	// principal, which is the stdlib equivalent of a singleflight group.
@@ -89,14 +102,21 @@ func NewRefresher(cfg RefreshConfig) (*Refresher, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	gate := cfg.TokenGate
+	if gate == nil {
+		gate = NewTokenGate()
+	}
 
 	return &Refresher{
 		tokens:  tokenClient{hosts: cfg.Hosts, doer: cfg.Transport, clock: clock},
 		store:   cfg.Store,
+		gate:    gate,
 		clock:   clock,
 		window:  window,
 		logger:  logger,
 		flights: make(map[string]*refreshFlight),
+
+		onFlightRetire: cfg.onFlightRetire,
 	}, nil
 }
 
@@ -140,9 +160,9 @@ func (r *Refresher) Refresh(ctx context.Context, principal string) (TokenSet, er
 		}
 	}
 
-	flight.set, flight.err = r.rotate(ctx, principal)
-	r.finishFlight(principal, flight)
-	return flight.set, flight.err
+	set, err := r.rotate(ctx, principal)
+	r.finishFlight(principal, flight, set, err)
+	return set, err
 }
 
 // joinFlight returns the flight for principal, creating it when none is running.
@@ -159,18 +179,37 @@ func (r *Refresher) joinFlight(principal string) (*refreshFlight, bool) {
 	return flight, true
 }
 
-// finishFlight publishes the result and retires the flight, so the next caller
-// starts a new one.
-func (r *Refresher) finishFlight(principal string, flight *refreshFlight) {
+// finishFlight publishes the result, closes the channel and retires the flight as
+// one mutex-protected operation.
+//
+// The three steps must not be separable. Retiring the flight before publishing
+// its result would open a window in which a caller finds no flight, becomes a
+// second leader and rotates the refresh token again, although a finished result
+// was one instruction away.
+func (r *Refresher) finishFlight(principal string, flight *refreshFlight, set TokenSet, err error) {
 	r.mu.Lock()
-	delete(r.flights, principal)
-	r.mu.Unlock()
+	defer r.mu.Unlock()
 
+	flight.set, flight.err = set, err
+	if r.onFlightRetire != nil {
+		r.onFlightRetire()
+	}
 	close(flight.done)
+	delete(r.flights, principal)
 }
 
 // rotate performs one refresh and persists the result with a compare-and-set.
+//
+// The read, the rotation and the write run under the principal's token gate, so an
+// interactive login for the same principal queues rather than interleaving with
+// them.
 func (r *Refresher) rotate(ctx context.Context, principal string) (TokenSet, error) {
+	release, err := r.gate.acquire(ctx, principal)
+	if err != nil {
+		return TokenSet{}, fmt.Errorf("garmin auth: await the token gate: %w", err)
+	}
+	defer release()
+
 	current, version, err := r.load(ctx, principal)
 	if err != nil {
 		return TokenSet{}, err

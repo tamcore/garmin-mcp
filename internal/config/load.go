@@ -70,7 +70,7 @@ func newStore(opts LoadOptions) (*viper.Viper, error) {
 	}
 	store.SetConfigFile(file)
 	if err := store.ReadInConfig(); err != nil {
-		return nil, &configFileError{Path: file, cause: err}
+		return nil, newConfigFileError(file, err)
 	}
 	return store, nil
 }

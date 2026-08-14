@@ -1,6 +1,13 @@
 package config
 
-import "errors"
+import (
+	"errors"
+	"io/fs"
+	"path/filepath"
+	"strings"
+
+	"github.com/spf13/viper"
+)
 
 // Configuration failure sentinels. Every configuration error matches
 // [ErrInvalidConfig] and, in addition, the sentinel that names why it failed, so
@@ -75,25 +82,96 @@ func (e *FieldError) Unwrap() []error {
 	return []error{ErrInvalidConfig, e.Err}
 }
 
-// configFileError reports an unreadable or unparsable configuration file. The
-// cause is reachable through errors.Is and errors.As but is never rendered: a
-// parser error commonly quotes the offending line, and that line may hold the
-// inline master key.
+// redactedPathMarker replaces a configuration file name that is not a plain,
+// bounded name. The delimiters match the markers in secret.go.
+const redactedPathMarker = "[redacted-path]"
+
+// maxConfigFileNameLen bounds the rendered file name, so an absurdly long name
+// cannot fill an operator's log line.
+const maxConfigFileNameLen = 64
+
+// The reasons a configuration file can be rejected. Each is authored here; none
+// comes from a parser.
+const (
+	reasonMissing    = "does not exist"
+	reasonUnreadable = "cannot be read"
+	reasonUnparsable = "cannot be parsed"
+	reasonForbidden  = "cannot be opened: permission denied"
+)
+
+// configFileError reports an unreadable or unparsable configuration file.
+//
+// Neither the underlying cause nor the full path is retained. A parser error
+// quotes the offending scalar — "cannot decode !!str `...` as a !!int" is one real
+// example — and that scalar may be the inline master key, so an error-chain walker
+// or a %+v-style logger would render the secret even though the top-level text is
+// clean. Only a sanitized file name and a reason authored by this package survive
+// construction, and Unwrap reports only this package's sentinels.
 type configFileError struct {
-	// Path is the file that could not be used.
-	Path string
-	// cause is the underlying read or parse failure.
-	cause error
+	// name is the sanitized base name of the file, or redactedPathMarker.
+	name string
+	// reason is one of the reason constants above.
+	reason string
 }
 
+// newConfigFileError builds a *configFileError from the path the operator gave and
+// the cause this package will not expose. cause is classified and then dropped.
+func newConfigFileError(path string, cause error) *configFileError {
+	return &configFileError{name: configFileName(path), reason: configFileReason(cause)}
+}
+
+// Error names the file and the reason, and nothing else.
 func (e *configFileError) Error() string {
-	return "config: configuration file " + e.Path + " cannot be read or parsed"
+	return "config: configuration file " + e.name + " " + e.reason
 }
 
-// Unwrap reports the sentinels plus the hidden cause.
+// GoString satisfies %#v with the same sanitized rendering, which reflection would
+// otherwise bypass.
+func (e *configFileError) GoString() string {
+	return "config.configFileError(" + e.Error() + ")"
+}
+
+// Unwrap reports only the sentinels this package documents. The cause is
+// deliberately absent from the chain.
 func (e *configFileError) Unwrap() []error {
-	if e.cause == nil {
-		return []error{ErrInvalidConfig, ErrConfigFile}
+	return []error{ErrInvalidConfig, ErrConfigFile}
+}
+
+// configFileReason classifies cause into one of this package's own reasons, so an
+// operator still learns whether the file was missing, unreadable, or malformed
+// without any parser text reaching the message.
+func configFileReason(cause error) string {
+	switch {
+	case cause == nil:
+		return reasonUnreadable
+	case errors.Is(cause, fs.ErrNotExist):
+		return reasonMissing
+	case errors.Is(cause, fs.ErrPermission):
+		return reasonForbidden
 	}
-	return []error{ErrInvalidConfig, ErrConfigFile, e.cause}
+	var parseErr viper.ConfigParseError
+	if errors.As(cause, &parseErr) {
+		return reasonUnparsable
+	}
+	return reasonUnreadable
+}
+
+// configFileName reduces path to its base name, and only when that name is a
+// plain, bounded one. The directory is dropped because it discloses the
+// deployment's layout, and an unusual name is replaced entirely because the name
+// is the last caller-supplied text in the message.
+func configFileName(path string) string {
+	name := filepath.Base(strings.TrimSpace(path))
+	if name == "." || name == string(filepath.Separator) || len(name) > maxConfigFileNameLen {
+		return redactedPathMarker
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '.' || r == '_' || r == '-':
+		default:
+			return redactedPathMarker
+		}
+	}
+	return name
 }

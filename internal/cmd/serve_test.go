@@ -23,6 +23,10 @@ const (
 	cmdVersion = "version"
 
 	flagStdio = "--transport=stdio"
+
+	// The synthetic build identity every command test injects.
+	testVersion = "v0.0.0-test"
+	testCommit  = "testcommit"
 )
 
 // clearGarminEnv removes every GARMIN_MCP_ variable for the duration of the test,
@@ -47,7 +51,7 @@ func runCommand(t *testing.T, args ...string) (stdout string, err error) {
 
 	var out, errOut bytes.Buffer
 	root := cmd.NewRootCommand(cmd.Options{
-		BuildInfo: cmd.BuildInfo{Version: "v0.0.0-test", Commit: "testcommit"},
+		BuildInfo: cmd.BuildInfo{Version: testVersion, Commit: testCommit},
 		Args:      args,
 		Stdout:    &out,
 		Stderr:    &errOut,
@@ -126,7 +130,7 @@ func TestServeStdioWritesNothingToStdout(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	code := cmd.Execute(context.Background(), cmd.Options{
-		BuildInfo: cmd.BuildInfo{Version: "v0.0.0-test", Commit: "testcommit"},
+		BuildInfo: cmd.BuildInfo{Version: testVersion, Commit: testCommit},
 		Args:      []string{cmdServe, flagStdio},
 		Stdout:    &stdout,
 		Stderr:    &stderr,

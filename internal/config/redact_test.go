@@ -1,10 +1,7 @@
 package config
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 	"testing"
 )
@@ -34,41 +31,11 @@ func populatedConfig(t *testing.T) Config {
 func configRenderings(t *testing.T, cfg Config) map[string]string {
 	t.Helper()
 
-	encoded, err := json.Marshal(cfg)
-	if err != nil {
-		t.Fatalf("json.Marshal(Config): %v", err)
-	}
-	encodedPtr, err := json.Marshal(&cfg)
-	if err != nil {
-		t.Fatalf("json.Marshal(*Config): %v", err)
-	}
-
-	var jsonBuf, textBuf, jsonGroup, textGroup bytes.Buffer
-	slog.New(slog.NewJSONHandler(&jsonBuf, nil)).Info("effective configuration", "config", cfg)
-	slog.New(slog.NewTextHandler(&textBuf, nil)).Info("effective configuration", "config", cfg)
-	slog.New(slog.NewJSONHandler(&jsonGroup, nil)).With("config", &cfg).Info("effective configuration")
-	slog.New(slog.NewTextHandler(&textGroup, nil)).With("config", &cfg).Info("effective configuration")
-
-	return map[string]string{
-		"%v":                fmt.Sprintf("%v", cfg),
-		"%+v":               fmt.Sprintf("%+v", cfg),
-		"%#v":               fmt.Sprintf("%#v", cfg),
-		"%s":                fmt.Sprintf("[%s]", cfg),
-		"pointer %v":        fmt.Sprintf("%v", &cfg),
-		"pointer %+v":       fmt.Sprintf("%+v", &cfg),
-		"pointer %#v":       fmt.Sprintf("%#v", &cfg),
-		"json.Marshal":      string(encoded),
-		"json.Marshal ptr":  string(encodedPtr),
-		"slog json":         jsonBuf.String(),
-		"slog text":         textBuf.String(),
-		"slog json pointer": jsonGroup.String(),
-		"slog text pointer": textGroup.String(),
-		"String()":          cfg.String(),
-		"GoString()":        cfg.GoString(),
-		"LogValue()":        fmt.Sprint(cfg.LogValue()),
-		"in slice":          fmt.Sprintf("%v", []Config{cfg}),
-		"in map":            fmt.Sprintf("%v", map[string]Config{"cfg": cfg}),
-	}
+	out := renderAll(t, cfg)
+	out["String()"] = cfg.String()
+	out["GoString()"] = cfg.GoString()
+	out["LogValue()"] = fmt.Sprint(cfg.LogValue())
+	return out
 }
 
 func TestConfigNeverRendersSecretMaterial(t *testing.T) {

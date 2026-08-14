@@ -52,12 +52,30 @@
 //
 // Pending cookies, the CSRF value, the selected strategy and the MFA metadata
 // stay server-side in a Registry: a bounded map with a short absolute TTL, an
-// attempt budget, cancellation and a single-use terminal transition. The caller
-// receives only an opaque 256-bit capability, and the registry stores its SHA-256
-// rather than the capability itself. Every login owns its own entry, so two
-// interleaved logins cannot observe or overwrite each other — the failure
-// upstream 0.3.10 had to fix. Cross-principal, expired, replayed and out-of-order
-// transitions are all refused.
+// attempt budget, a per-transaction byte bound, cancellation and a single-use
+// terminal transition. The caller receives only an opaque 256-bit capability, and
+// the registry stores its SHA-256 rather than the capability itself. A capability
+// must be canonical — 43 base64url characters — or it is refused before it is
+// hashed, and the stored digest is verified with a constant-time compare. Every
+// login owns its own entry, so two interleaved logins cannot observe or overwrite
+// each other — the failure upstream 0.3.10 had to fix. Cross-principal, expired,
+// replayed and out-of-order transitions are all refused.
+//
+// A completion is leased. Registry.Attempt charges one attempt and hands out an
+// *Attempt that holds the transaction's only completion lease, so a second
+// submission of the same capability performs no external effect at all. The lease
+// holder claims the terminal success — which re-checks the absolute TTL, because
+// the verification before it is a network call that can outlive the transaction —
+// and only then are the ticket exchanged and the tokens saved. A completion that
+// fails after the claim leaves no usable transaction, so the login restarts rather
+// than resuming a half-completed one. A wrong code releases the lease and the
+// transaction stays usable until its attempt budget runs out.
+//
+// Capacity pressure evicts rather than refuses: an abandoned start goes before one
+// a user is working on, and a transaction whose completion is in flight is never
+// evicted. A registry is reported full only when every resident transaction is
+// being completed, so a flood of abandoned starts cannot deny service to every new
+// login for a whole TTL.
 //
 // # Tokens
 //
@@ -68,7 +86,18 @@
 // Refresh happens inside a configurable safety window that defaults to the
 // upstream 15 minutes, is serialized per principal, and persists the rotated
 // refresh token with a compare-and-set so a slow writer cannot clobber a newer
-// token. After a 401, a safe or idempotent call is retried once, and only after a
+// token. Concurrent refreshes of one principal collapse into a single flight whose
+// result is published, closed and retired as one mutex-protected operation, so no
+// late caller can start a redundant rotation.
+//
+// Every token-producing operation reads its compare-and-set baseline before it
+// produces a candidate, and a conflict is final: the candidate is stale by
+// definition, so it is never rewritten, and the login reports
+// ErrTokenPersistenceFailed with the cause wrapped. Login and refresh serialize
+// against each other through a TokenGate; pass one gate to Config.TokenGate and
+// RefreshConfig.TokenGate whenever an Authenticator and a Refresher share a store.
+//
+// After a 401, a safe or idempotent call is retried once, and only after a
 // successful refresh.
 //
 // # Secrets
@@ -93,6 +122,11 @@
 //     protocol.PathWidgetRequestMFACode. The protocol package ports only the wire
 //     constant, so this package cannot build that request and does not send it;
 //     Pending.MFADeliveryUncertain reports the uncertainty instead.
+//   - MFA transaction binding. A pending transaction is bound to its principal
+//     only. It is not bound to the browser session, the OAuth client, the redirect
+//     URI, the requested resource or a PKCE challenge, so a capability that leaks
+//     to another client of the same principal is usable there. That binding belongs
+//     with the M2 OAuth transaction work and is deliberately not attempted here.
 //   - JWT_WEB cookie fallback. Upstream falls back to consuming the CAS ticket
 //     through the web front end when the DI exchange fails. This package requires
 //     the DI token set and reports the exchange failure instead.

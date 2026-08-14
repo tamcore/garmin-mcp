@@ -56,12 +56,15 @@ type Pending struct {
 }
 
 type pendingSecrets struct {
-	principal            string
+	// principal is account-identifying data and csrfToken is a credential, so both
+	// are sealed behind a pointer; see secretString. The cookies are already one
+	// indirection away, because they are stored as pointers.
+	principal            *secretString
 	strategy             StrategyName
 	machine              Machine
 	mfaMethod            string
 	mfaDeliveryUncertain bool
-	csrfToken            string
+	csrfToken            *secretString
 	cookies              []*http.Cookie
 	query                url.Values
 	referer              string
@@ -81,12 +84,12 @@ func NewPending(params PendingParams) Pending {
 	}
 
 	return Pending{secrets: &pendingSecrets{
-		principal:            params.Principal,
+		principal:            sealSecret(params.Principal),
 		strategy:             params.Strategy,
 		machine:              machine,
 		mfaMethod:            params.MFAMethod,
 		mfaDeliveryUncertain: params.MFADeliveryUncertain,
-		csrfToken:            params.CSRFToken,
+		csrfToken:            sealSecret(params.CSRFToken),
 		cookies:              copyCookies(params.Cookies),
 		query:                copyValues(params.Query),
 		referer:              params.Referer,
@@ -102,7 +105,7 @@ func (p Pending) s() pendingSecrets {
 }
 
 // Principal is the account the transaction belongs to.
-func (p Pending) Principal() string { return p.s().principal }
+func (p Pending) Principal() string { return revealSecret(p.s().principal) }
 
 // Strategy is the login flow that reached the MFA challenge.
 func (p Pending) Strategy() StrategyName { return p.s().strategy }
@@ -118,7 +121,7 @@ func (p Pending) MFAMethod() string { return p.s().mfaMethod }
 func (p Pending) MFADeliveryUncertain() bool { return p.s().mfaDeliveryUncertain }
 
 // CSRFToken is the widget form token. It is a credential: never log it.
-func (p Pending) CSRFToken() string { return p.s().csrfToken }
+func (p Pending) CSRFToken() string { return revealSecret(p.s().csrfToken) }
 
 // Cookies returns a deep copy of the SSO session cookies. Every value is a
 // credential.
@@ -132,6 +135,27 @@ func (p Pending) Referer() string { return p.s().referer }
 
 // ServiceURL is the CAS service URL the ticket must be issued for.
 func (p Pending) ServiceURL() string { return p.s().serviceURL }
+
+// storedBytes reports how many bytes of continuation state p holds. The registry
+// bounds it, so one login cannot park an unbounded SSO response in memory. Cookie
+// and query metadata counts, because it is stored too.
+func (p Pending) storedBytes() int {
+	secrets := p.s()
+
+	total := len(revealSecret(secrets.principal)) + len(secrets.mfaMethod) +
+		len(revealSecret(secrets.csrfToken)) + len(secrets.referer) +
+		len(secrets.serviceURL) + len(secrets.strategy)
+	for _, cookie := range secrets.cookies {
+		total += len(cookie.Name) + len(cookie.Value) + len(cookie.Domain) + len(cookie.Path)
+	}
+	for key, values := range secrets.query {
+		total += len(key)
+		for _, value := range values {
+			total += len(value)
+		}
+	}
+	return total
+}
 
 // withMachine returns a copy of p carrying machine. The receiver is unchanged.
 func (p Pending) withMachine(machine Machine) Pending {
@@ -190,7 +214,7 @@ func (p Pending) redacted() redactedPending {
 		State:         secrets.machine.State().String(),
 		Strategy:      secrets.strategy.String(),
 		MFAMethod:     knownMFAMethod(secrets.mfaMethod),
-		HasCSRFToken:  secrets.csrfToken != "",
+		HasCSRFToken:  secrets.csrfToken != nil,
 		CookieCount:   len(secrets.cookies),
 		QueryKeyCount: len(secrets.query),
 	}

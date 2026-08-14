@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -22,7 +22,17 @@ const recordType = "garmin_di_tokens"
 
 // recordSchema is the on-disk wrapper version. It changes only when the wrapper
 // fields change; the payload format is versioned by cryptostore.
-const recordSchema = 1
+//
+// Schema 2 binds the wrapper's schema and version into the AEAD additional data.
+// A schema 1 record cannot be opened by this code, and reports ErrCorruptRecord
+// rather than failing silently.
+const recordSchema = 2
+
+// maxRecordVersion bounds the compare-and-set counter far below the point where
+// the next increment could overflow, so a rewritten wrapper cannot turn a save
+// into a negative version. Reaching it honestly would take more saves than a
+// deployment can perform.
+const maxRecordVersion = int64(1) << 62
 
 // recordsDirName is the subdirectory holding one file per principal.
 const recordsDirName = "tokens"
@@ -105,7 +115,7 @@ func ResolveStoreDir(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := checkNoSymlinkAncestry(expanded); err != nil {
+	if err := checkPathAncestry(expanded); err != nil {
 		return "", err
 	}
 	return expanded, nil
@@ -170,9 +180,22 @@ func (s *FileStore) Save(ctx context.Context, principal string, set TokenSet, ex
 	return s.commit(principal, set, current+1)
 }
 
+// recordAAD binds a record to the wrapper that carries it.
+//
+// The schema and the version cannot live inside the ciphertext: a reader needs both
+// before it can decide how to read the file at all. They are authenticated as
+// additional data instead, so rewriting either one makes the AEAD fail rather than
+// silently changing the compare-and-set state. The record type stays the prefix, so
+// a record still cannot be opened as a different kind of record.
+func recordAAD(schema int, version int64) string {
+	return recordType + "/schema=" + strconv.Itoa(schema) +
+		"/version=" + strconv.FormatInt(version, 10)
+}
+
 // commit seals set and writes it atomically as the given version.
 func (s *FileStore) commit(principal string, set TokenSet, version int64) (int64, error) {
-	payload, err := cryptostore.Encrypt(s.key, principal, recordType, encodeRecordPayload(set))
+	payload, err := cryptostore.Encrypt(s.key, principal,
+		recordAAD(recordSchema, version), encodeRecordPayload(set))
 	if err != nil {
 		return 0, fmt.Errorf("store: seal record: %w", err)
 	}
@@ -207,15 +230,7 @@ func (s *FileStore) Delete(ctx context.Context, principal string) error {
 	unlock := s.locks.lock(principal)
 	defer unlock()
 
-	path := s.recordPath(principal)
-	if err := checkNoSymlinkAncestry(path); err != nil {
-		return err
-	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("store: remove record: %w", err)
-	}
-	syncDir(s.records)
-	return nil
+	return removeFile(s.recordPath(principal))
 }
 
 // recordPath is the file holding one principal's record. The name is a SHA-256
@@ -247,7 +262,8 @@ func (s *FileStore) readRecord(principal string) (storedRecord, error) {
 		return storedRecord{}, fmt.Errorf("store: not a record document (%d bytes): %w",
 			len(raw), ErrCorruptRecord)
 	}
-	if record.Schema != recordSchema || record.Version <= 0 || record.Payload == "" {
+	if record.Schema != recordSchema || record.Version <= 0 ||
+		record.Version > maxRecordVersion || record.Payload == "" {
 		return storedRecord{}, fmt.Errorf("store: record has schema %d and version %d: %w",
 			record.Schema, record.Version, ErrCorruptRecord)
 	}
@@ -260,7 +276,8 @@ func (s *FileStore) openRecord(principal string, record storedRecord) (TokenSet,
 	if err != nil {
 		return TokenSet{}, fmt.Errorf("store: record payload is not base64: %w", ErrCorruptRecord)
 	}
-	plaintext, err := cryptostore.Decrypt(s.key, principal, recordType, sealed)
+	plaintext, err := cryptostore.Decrypt(s.key, principal,
+		recordAAD(record.Schema, record.Version), sealed)
 	if err != nil {
 		// The cause is wrapped for operator diagnosis: it reports versions and
 		// sizes only, never material.
@@ -270,12 +287,20 @@ func (s *FileStore) openRecord(principal string, record storedRecord) (TokenSet,
 }
 
 // currentVersion reports the stored version, or 0 when no record exists.
+//
+// The wrapper's version is only trusted once the AEAD has authenticated it, so the
+// record is opened here even though the caller may not need its content. A rewritten
+// version therefore reports ErrCorruptRecord instead of moving the compare-and-set
+// state.
 func (s *FileStore) currentVersion(principal string) (int64, error) {
 	record, err := s.readRecord(principal)
 	switch {
 	case errors.Is(err, ErrNoTokens):
 		return 0, nil
 	case err != nil:
+		return 0, err
+	}
+	if _, err := s.openRecord(principal, record); err != nil {
 		return 0, err
 	}
 	return record.Version, nil

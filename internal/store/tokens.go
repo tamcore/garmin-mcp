@@ -76,9 +76,9 @@ import "time"
 // verifies, so it may be wrong or hostile: use it to decide when to refresh, never
 // to authorize anything.
 //
-// A TokenSet is secret-bearing. Its material sits behind an unexported pointer, so
-// a reflective logger, a direct field print and a method-stripping alias
-// (type Raw store.TokenSet) all see an address rather than the tokens. String,
+// A TokenSet is secret-bearing. Its material sits behind two levels of unexported
+// indirection, so a reflective logger, a direct field print and a method-stripping
+// alias (type Raw store.TokenSet) all see an address rather than the tokens. String,
 // GoString, MarshalJSON and LogValue report presence, not content.
 //
 // A TokenSet is immutable: the With* methods return a copy. The zero value is
@@ -90,21 +90,46 @@ type TokenSet struct {
 	parts *tokenParts
 }
 
+// secret is one secret-bearing value under its own type, so the field that holds it
+// can be a pointer.
+type secret string
+
 // tokenParts holds the material. It is copied, never mutated.
+//
+// Every string field is a pointer, not a plain string. fmt's %s and %q on a value
+// with no String method fall into badVerb, which re-prints the value at depth zero,
+// and depth zero dereferences a pointer to a struct and prints its unexported
+// fields — the token verbatim. A pointer field renders as an address there instead.
+// The client id is held the same way: it arrives from an imported file and is
+// therefore unverified text, not a value worth printing raw.
 type tokenParts struct {
-	token        string
-	refreshToken string
-	clientID     string
+	token        *secret
+	refreshToken *secret
+	clientID     *secret
 	expiresAt    time.Time
+}
+
+// heldSecret wraps value so it can be stored behind a pointer.
+func heldSecret(value string) *secret {
+	held := secret(value)
+	return &held
+}
+
+// secretValue reads a held value, reporting "" for an absent one.
+func secretValue(held *secret) string {
+	if held == nil {
+		return ""
+	}
+	return string(*held)
 }
 
 // NewTokenSet builds a TokenSet. expiresAt is the unverified exp claim; pass the
 // zero time when it is unknown.
 func NewTokenSet(token, refreshToken, clientID string, expiresAt time.Time) TokenSet {
 	return TokenSet{parts: &tokenParts{
-		token:        token,
-		refreshToken: refreshToken,
-		clientID:     clientID,
+		token:        heldSecret(token),
+		refreshToken: heldSecret(refreshToken),
+		clientID:     heldSecret(clientID),
 		expiresAt:    expiresAt,
 	}}
 }
@@ -114,7 +139,7 @@ func (s TokenSet) Token() string {
 	if s.parts == nil {
 		return ""
 	}
-	return s.parts.token
+	return secretValue(s.parts.token)
 }
 
 // RefreshToken returns the di_refresh_token, or "" for the zero TokenSet. This is
@@ -123,7 +148,7 @@ func (s TokenSet) RefreshToken() string {
 	if s.parts == nil {
 		return ""
 	}
-	return s.parts.refreshToken
+	return secretValue(s.parts.refreshToken)
 }
 
 // ClientID returns the di_client_id, or "" for the zero TokenSet. It names the
@@ -132,7 +157,7 @@ func (s TokenSet) ClientID() string {
 	if s.parts == nil {
 		return ""
 	}
-	return s.parts.clientID
+	return secretValue(s.parts.clientID)
 }
 
 // ExpiresAt returns the unverified exp claim as scheduling metadata, or the zero
@@ -150,13 +175,13 @@ func (s TokenSet) IsZero() bool { return s.parts == nil }
 // WithToken returns a copy whose di_token is token. The receiver is unchanged, so
 // a refreshed token never mutates a value another goroutine holds.
 func (s TokenSet) WithToken(token string) TokenSet {
-	return s.with(func(parts *tokenParts) { parts.token = token })
+	return s.with(func(parts *tokenParts) { parts.token = heldSecret(token) })
 }
 
 // WithRefreshToken returns a copy whose di_refresh_token is refreshToken. Garmin
 // rotates the refresh token, and the rotated value must be persisted.
 func (s TokenSet) WithRefreshToken(refreshToken string) TokenSet {
-	return s.with(func(parts *tokenParts) { parts.refreshToken = refreshToken })
+	return s.with(func(parts *tokenParts) { parts.refreshToken = heldSecret(refreshToken) })
 }
 
 // WithExpiresAt returns a copy whose scheduling expiry is expiresAt.

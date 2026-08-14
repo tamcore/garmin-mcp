@@ -34,19 +34,20 @@ func TestRegistryInterleavedTransactionsAreIsolated(t *testing.T) {
 				return
 			}
 
-			pending, err := registry.Attempt(id, principal)
+			attempt, err := registry.Attempt(id, principal)
 			if err != nil {
 				t.Errorf("%s: Attempt: %v", principal, err)
 				return
 			}
+			pending := attempt.Pending()
 			if pending.CSRFToken() != csrf {
 				t.Errorf("%s: saw CSRF %q, want %q", principal, pending.CSRFToken(), csrf)
 			}
 			if got := pending.Cookies(); len(got) != 1 || got[0].Value != cookie {
 				t.Errorf("%s: saw cookies %v, want %q", principal, got, cookie)
 			}
-			if err := registry.Complete(id); err != nil {
-				t.Errorf("%s: Complete: %v", principal, err)
+			if err := attempt.Claim(); err != nil {
+				t.Errorf("%s: Claim: %v", principal, err)
 			}
 		}(i)
 	}
@@ -57,18 +58,16 @@ func TestRegistryInterleavedTransactionsAreIsolated(t *testing.T) {
 	}
 }
 
-// TestRegistryConcurrentCompleteIsSingleUse proves the terminal transition is
-// won by exactly one caller. Run under -race.
-func TestRegistryConcurrentCompleteIsSingleUse(t *testing.T) {
+// TestRegistryConcurrentAttemptAdmitsOneCompletion proves that a burst of callers
+// presenting one capability yields exactly one completion: the lease admits one, and
+// the claim is single-use. Run under -race.
+func TestRegistryConcurrentAttemptAdmitsOneCompletion(t *testing.T) {
 	clock := testkit.NewFakeClock(registryStart())
 	registry := newTestRegistry(t, clock, auth.RegistryConfig{MaxAttempts: 32})
 
-	id, err := registry.Create(pendingFor("principal-a", leakCSRF, leakCookie))
+	id, err := registry.Create(pendingFor(principalA, leakCSRF, leakCookie))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
-	}
-	if _, err := registry.Attempt(id, "principal-a"); err != nil {
-		t.Fatalf("Attempt: %v", err)
 	}
 
 	const callers = 8
@@ -82,7 +81,14 @@ func TestRegistryConcurrentCompleteIsSingleUse(t *testing.T) {
 	for range callers {
 		go func() {
 			defer wg.Done()
-			if err := registry.Complete(id); err == nil {
+
+			attempt, err := registry.Attempt(id, principalA)
+			if err != nil {
+				return
+			}
+			defer attempt.Release()
+
+			if err := attempt.Claim(); err == nil {
 				mu.Lock()
 				succeeded++
 				mu.Unlock()
@@ -93,5 +99,8 @@ func TestRegistryConcurrentCompleteIsSingleUse(t *testing.T) {
 
 	if succeeded != 1 {
 		t.Fatalf("%d callers completed the transaction, want exactly 1", succeeded)
+	}
+	if registry.Len() != 0 {
+		t.Fatalf("Len() = %d, want 0", registry.Len())
 	}
 }

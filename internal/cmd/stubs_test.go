@@ -1,6 +1,8 @@
 package cmd_test
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -49,13 +51,80 @@ func TestUnimplementedCommandsFailLoudly(t *testing.T) {
 	}
 }
 
+// TestUnimplementedCommandsExitNonZeroWithEmptyStdout goes through Execute, which
+// is what the process does: the exit status must be non-zero, standard output must
+// be byte-empty because it is reserved for MCP frames, and the operator must learn
+// about the gap on the error stream.
+func TestUnimplementedCommandsExitNonZeroWithEmptyStdout(t *testing.T) {
+	clearGarminEnv(t)
+
+	for _, args := range pendingCommandArgs() {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := cmd.Execute(context.Background(), cmd.Options{
+				BuildInfo: cmd.BuildInfo{Version: testVersion, Commit: testCommit},
+				Args:      args,
+				Stdout:    &stdout,
+				Stderr:    &stderr,
+			})
+
+			if code == 0 {
+				t.Error("exit code = 0 for a subsystem that does not exist")
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("stdout = %q, want byte-empty", stdout.String())
+			}
+			if !strings.Contains(stderr.String(), "not implemented in this milestone") {
+				t.Errorf("stderr = %q, want the not-implemented diagnostic", stderr.String())
+			}
+		})
+	}
+}
+
+// TestUnimplementedCommandsReportConfigurationFaultsBeforeTheGap fixes the
+// ordering through Execute as well: a misconfigured deployment is reported as
+// such, and the not-implemented diagnostic never reaches the operator instead.
+func TestUnimplementedCommandsReportConfigurationFaultsBeforeTheGap(t *testing.T) {
+	clearGarminEnv(t)
+
+	for _, args := range pendingCommandArgs() {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := cmd.Execute(context.Background(), cmd.Options{
+				Args:   append(args, "--log-level=trace"),
+				Stdout: &stdout,
+				Stderr: &stderr,
+			})
+
+			if code == 0 {
+				t.Error("exit code = 0 for an invalid log level")
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("stdout = %q, want byte-empty", stdout.String())
+			}
+			if strings.Contains(stderr.String(), "not implemented in this milestone") {
+				t.Errorf("stderr = %q, want the configuration fault instead of the gap", stderr.String())
+			}
+			if !strings.Contains(stderr.String(), "log-level") {
+				t.Errorf("stderr = %q, want it to name the rejected setting", stderr.String())
+			}
+		})
+	}
+}
+
+// pendingCommandArgs lists the invocations whose subsystem is still missing. Each
+// call returns a fresh slice, so a subtest may append to it.
+func pendingCommandArgs() [][]string {
+	return [][]string{{cmdAuth}, {cmdDoctor}, {cmdTools, cmdList}, {cmdMigrate}}
+}
+
 // TestUnimplementedCommandsStillValidateConfiguration keeps configuration a real
 // gate rather than something a stub skips: a bad setting must be reported as
 // such, not masked by the missing subsystem.
 func TestUnimplementedCommandsStillValidateConfiguration(t *testing.T) {
 	clearGarminEnv(t)
 
-	for _, args := range [][]string{{cmdAuth}, {cmdDoctor}, {cmdTools, cmdList}, {cmdMigrate}} {
+	for _, args := range pendingCommandArgs() {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			_, err := runCommand(t, append(args, "--log-level=trace")...)
 

@@ -17,9 +17,15 @@ import (
 const (
 	testToken        = "eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3NjcyMjU2MDB9.c3ludGhldGljLXNpZ25hdHVyZQ"
 	testRefreshToken = "synthetic-refresh-6b1f4c0d9a2e"
-	testClientID     = "CONNECT_MOBILE_SYNTHETIC"
-	testPrincipal    = "8f1c0f52-0f4b-4f2e-9a3a-7f2b1d6c5e40"
-	testOther        = "1c4d9f70-0aa1-4f11-9df0-3b0c8a5e2d31"
+	// testClientID is one of the candidate DI client ids, so it survives the
+	// allowlist a rendering applies.
+	testClientID = "GARMIN_CONNECT_MOBILE_ANDROID_DI"
+	// testForeignClientID is not a candidate DI client id. Garmin controls this
+	// field and an imported token file supplies it verbatim, so an unrecognized
+	// value must never reach a log line.
+	testForeignClientID = "SECRET-LOOKING-VALUE-eyJhbGciOiJIUzI1NiJ9"
+	testPrincipal       = "8f1c0f52-0f4b-4f2e-9a3a-7f2b1d6c5e40"
+	testOther           = "1c4d9f70-0aa1-4f11-9df0-3b0c8a5e2d31"
 )
 
 func testExpiry() time.Time { return time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC) }
@@ -116,6 +122,55 @@ func TestTokenSetRenderingsNeverRevealSecrets(t *testing.T) {
 	}
 }
 
+// TestTokenSetAliasCannotBypassRedactionUnderAnyVerb covers the verbs the map above
+// does not. %s and %q on a value with no String method reach fmt's badVerb path,
+// which re-prints the value at depth zero, and depth zero dereferences a pointer to
+// a struct and prints its unexported fields. A plain string or []byte field would
+// surface the token there verbatim or as its decimal bytes.
+func TestTokenSetAliasCannotBypassRedactionUnderAnyVerb(t *testing.T) {
+	set := newTestTokens().WithToken(testToken).WithRefreshToken(testRefreshToken)
+	stripped := strippedTokenSet(set)
+
+	for _, verb := range []string{"%v", "%+v", "%#v", "%s", "%q", "%d", "%x"} {
+		assertNoTokenSecrets(t, "stripped alias under "+verb, fmt.Sprintf(verb, stripped), set)
+		assertNoTokenSecrets(t, "pointer to a stripped alias under "+verb,
+			fmt.Sprintf(verb, &stripped), set)
+	}
+}
+
+// TestTokenSetRenderingsSanitizeAnUnknownClientID is the log-injection half: the
+// di_client_id of an imported token file is unverified text, so only a recognized
+// DI client id is echoed and anything else collapses to a label.
+func TestTokenSetRenderingsSanitizeAnUnknownClientID(t *testing.T) {
+	set := NewTokenSet(testToken, testRefreshToken, testForeignClientID, testExpiry())
+
+	encoded, err := json.Marshal(set)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	var buf bytes.Buffer
+	slog.New(slog.NewJSONHandler(&buf, nil)).Info("tokens", slog.Any("tokens", set))
+
+	for label, rendered := range map[string]string{
+		"String":      set.String(),
+		"GoString":    set.GoString(),
+		"MarshalJSON": string(encoded),
+		"slog":        buf.String(),
+	} {
+		if strings.Contains(rendered, testForeignClientID) {
+			t.Fatalf("%s echoed an unrecognized client id: %q", label, rendered)
+		}
+		if !strings.Contains(rendered, "unknown") {
+			t.Fatalf("%s should report the client id as unknown, got %q", label, rendered)
+		}
+	}
+	// The accessor still reports the stored value: a refresh has to send back the
+	// client id the token was issued for, whatever it is.
+	if set.ClientID() != testForeignClientID {
+		t.Fatalf("ClientID() = %q, want the stored value", set.ClientID())
+	}
+}
+
 func TestTokenSetRenderingsReportShape(t *testing.T) {
 	set := newTestTokens()
 
@@ -187,7 +242,7 @@ func TestUnverifiedExpiryToleratesHostileClaims(t *testing.T) {
 		return "eyJhbGciOiJIUzI1NiJ9." + base64.RawURLEncoding.EncodeToString([]byte(payload)) + ".sig"
 	}
 	cases := map[string]string{
-		"not a jwt":            "opaque-token",
+		"not a jwt":            opaqueToken,
 		"two segments":         "a.b",
 		"payload not base64":   "a.!!!.c",
 		"payload not json":     jwtWith("not json"),

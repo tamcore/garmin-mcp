@@ -18,7 +18,14 @@ import "time"
 type Classification struct {
 	// fields is a pointer on purpose; see Response.parts. It is never mutated
 	// after construction.
-	fields *classificationFields
+	fields *sealedFields
+}
+
+// sealedFields is the same deliberate extra indirection as sealedParts in
+// response.go: it keeps a service ticket, a CSRF token and a page title out of
+// reach of fmt's badVerb path on a method-stripping alias.
+type sealedFields struct {
+	inner *classificationFields
 }
 
 // classificationFields is the builder the classifiers fill in. It is copied into a
@@ -38,15 +45,15 @@ type classificationFields struct {
 // newClassification seals a builder into an immutable Classification, copying the
 // fields so the caller's builder cannot be observed afterwards.
 func newClassification(f classificationFields) Classification {
-	return Classification{fields: &f}
+	return Classification{fields: &sealedFields{inner: &f}}
 }
 
 // f returns a copy of the verdict fields, or the zero fields for a zero value.
 func (c Classification) f() classificationFields {
-	if c.fields == nil {
+	if c.fields == nil || c.fields.inner == nil {
 		return classificationFields{}
 	}
-	return *c.fields
+	return *c.fields.inner
 }
 
 // Outcome is the classified meaning of the response.

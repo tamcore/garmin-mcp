@@ -35,7 +35,7 @@ const (
 )
 
 func secretTokenSet() auth.TokenSet {
-	return auth.NewTokenSet(leakToken, leakRefresh, "GARMIN_CONNECT_MOBILE_ANDROID_DI",
+	return auth.NewTokenSet(leakToken, leakRefresh, testClientID,
 		time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC))
 }
 
@@ -55,7 +55,7 @@ func assertNoTokenLeak(t *testing.T, form, rendered string) {
 
 func TestTokenSetAccessors(t *testing.T) {
 	expires := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
-	set := auth.NewTokenSet(leakToken, leakRefresh, "GARMIN_CONNECT_MOBILE_ANDROID_DI", expires)
+	set := auth.NewTokenSet(leakToken, leakRefresh, testClientID, expires)
 
 	if set.Token() != leakToken {
 		t.Errorf("Token() = %q", set.Token())
@@ -63,7 +63,7 @@ func TestTokenSetAccessors(t *testing.T) {
 	if set.RefreshToken() != leakRefresh {
 		t.Errorf("RefreshToken() = %q", set.RefreshToken())
 	}
-	if set.ClientID() != "GARMIN_CONNECT_MOBILE_ANDROID_DI" {
+	if set.ClientID() != testClientID {
 		t.Errorf("ClientID() = %q", set.ClientID())
 	}
 	if !set.ExpiresAt().Equal(expires) {

@@ -40,6 +40,12 @@ const aadContext = "garmin-mcp/cryptostore/v1"
 // a ciphertext cannot be replayed under a different principal or as a different
 // kind of record: such a Decrypt fails with ErrAuthentication.
 //
+// recordType is an opaque label, not an enumeration, so a caller may append the
+// wrapper state a reader must see before it can decrypt — a schema and a record
+// version, say. Appending it here is what authenticates it. Every part is
+// length-prefixed in the additional data, so no two different pairs can produce the
+// same binding.
+//
 // The returned envelope is self-describing: it carries the format version and
 // the key version, so a later rotation can find the key that opens it.
 func Encrypt(key Key, principal, recordType string, plaintext []byte) ([]byte, error) {

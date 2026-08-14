@@ -33,10 +33,14 @@ type TokenSet struct {
 
 // tokenSecrets is the sealed content of a TokenSet.
 type tokenSecrets struct {
-	token        string
-	refreshToken string
-	clientID     string
-	expiresAt    time.Time
+	// token and refreshToken are sealed behind a pointer, so even a
+	// method-stripping alias rendered under %s or %q shows an address; see
+	// secretString.
+	token        *secretString
+	refreshToken *secretString
+	// clientID is not a secret: it is one of the pinned DI client ids.
+	clientID  string
+	expiresAt time.Time
 }
 
 // NewTokenSet seals a DI token set. expiresAt is scheduling metadata read from
@@ -44,8 +48,8 @@ type tokenSecrets struct {
 // anything.
 func NewTokenSet(token, refreshToken, clientID string, expiresAt time.Time) TokenSet {
 	return TokenSet{secrets: &tokenSecrets{
-		token:        token,
-		refreshToken: refreshToken,
+		token:        sealSecret(token),
+		refreshToken: sealSecret(refreshToken),
 		clientID:     clientID,
 		expiresAt:    expiresAt,
 	}}
@@ -61,11 +65,11 @@ func (t TokenSet) s() tokenSecrets {
 
 // Token is the DI bearer token (di_token). It is a credential: never put it in a
 // log line or an error message.
-func (t TokenSet) Token() string { return t.s().token }
+func (t TokenSet) Token() string { return revealSecret(t.s().token) }
 
 // RefreshToken is the DI refresh token (di_refresh_token). It is a credential
 // and it rotates: persist the rotated value with a compare-and-set.
-func (t TokenSet) RefreshToken() string { return t.s().refreshToken }
+func (t TokenSet) RefreshToken() string { return revealSecret(t.s().refreshToken) }
 
 // ClientID is the DI OAuth2 client id (di_client_id) the token belongs to.
 func (t TokenSet) ClientID() string { return t.s().clientID }
@@ -76,7 +80,7 @@ func (t TokenSet) ClientID() string { return t.s().clientID }
 func (t TokenSet) ExpiresAt() time.Time { return t.s().expiresAt }
 
 // IsZero reports whether the set carries no token at all.
-func (t TokenSet) IsZero() bool { return t.secrets == nil || t.s().token == "" }
+func (t TokenSet) IsZero() bool { return t.secrets == nil || t.s().token == nil }
 
 // WithRotated returns a copy of t carrying a refreshed token. An empty
 // refreshToken keeps the current one, because Garmin's refresh response may omit
@@ -84,10 +88,10 @@ func (t TokenSet) IsZero() bool { return t.secrets == nil || t.s().token == "" }
 // Client._refresh_di_token (client.py, 0.3.10). The receiver is not modified.
 func (t TokenSet) WithRotated(token, refreshToken string, expiresAt time.Time) TokenSet {
 	next := t.s()
-	next.token = token
+	next.token = sealSecret(token)
 	next.expiresAt = expiresAt
 	if refreshToken != "" {
-		next.refreshToken = refreshToken
+		next.refreshToken = sealSecret(refreshToken)
 	}
 	return TokenSet{secrets: &next}
 }
@@ -125,8 +129,8 @@ func (t TokenSet) redacted() redactedTokenSet {
 	secrets := t.s()
 	out := redactedTokenSet{
 		Type:            "auth.TokenSet",
-		HasToken:        secrets.token != "",
-		HasRefreshToken: secrets.refreshToken != "",
+		HasToken:        secrets.token != nil,
+		HasRefreshToken: secrets.refreshToken != nil,
 		ClientID:        knownDIClientID(secrets.clientID),
 	}
 	if !secrets.expiresAt.IsZero() {

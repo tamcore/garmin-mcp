@@ -41,6 +41,18 @@ type harness struct {
 
 func newHarness(t *testing.T, script testkit.Script) *harness {
 	t.Helper()
+	return newHarnessWithTransport(t, script, nil)
+}
+
+// newHarnessWithTransport is newHarness with the fake server's Doer wrapped, so a
+// test can hold a request open at a chosen point and force an interleaving
+// deterministically. A nil wrap means the unwrapped Doer.
+func newHarnessWithTransport(
+	t *testing.T,
+	script testkit.Script,
+	wrap func(auth.Doer) auth.Doer,
+) *harness {
+	t.Helper()
 
 	server := testkit.NewServer(t, script)
 	clock := testkit.NewFakeClock(fakeStart())
@@ -51,9 +63,14 @@ func newHarness(t *testing.T, script testkit.Script) *harness {
 		t.Fatalf("NewRegistry: %v", err)
 	}
 
+	transport := auth.Doer(server.Doer())
+	if wrap != nil {
+		transport = wrap(transport)
+	}
+
 	authenticator, err := auth.NewAuthenticator(auth.Config{
 		Hosts:     server.Hosts(protocol.DomainGlobal),
-		Transport: server.Doer(),
+		Transport: transport,
 		Store:     store,
 		Registry:  registry,
 		Clock:     clock,

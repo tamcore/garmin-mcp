@@ -215,7 +215,7 @@ func TestRecordOnDiskHoldsNoPlaintextToken(t *testing.T) {
 	if err := json.Unmarshal(raw, &record); err != nil {
 		t.Fatalf("record is not JSON: %v", err)
 	}
-	if record.Schema != 1 || record.Version != 1 || record.Payload == "" {
+	if record.Schema != recordSchema || record.Version != 1 || record.Payload == "" {
 		t.Fatalf("unexpected record shape: %+v", record)
 	}
 	if !strings.HasPrefix(store.recordPath(testPrincipal), dir) {

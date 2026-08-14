@@ -48,9 +48,17 @@ func TestSaveCreatesOwnerOnlyFilesInOwnerOnlyDirectories(t *testing.T) {
 	assertOwnerOnly(t, dir, 0o700)
 }
 
-// TestHostileUmaskIsIgnored runs the store in a subprocess whose umask is 0, the
-// most permissive possible. Without an explicit chmod the record would land at
-// 0666 and any local account could read the refresh token.
+// hostileUmask strips the owner's write bit as well as every group and other bit.
+//
+// A umask of 0 would be useless here: it leaves the requested 0600 and 0700 modes
+// exactly as passed, so the test would pass even with every explicit chmod deleted.
+// This mask changes the outcome instead — without the chmod the record lands at 0400
+// and the directories at 0500 — so the assertions below can only hold if the chmod
+// ran.
+const hostileUmask = 0o277
+
+// TestHostileUmaskIsIgnored runs the store in a subprocess whose umask masks away
+// bits the store requires. umask is process-global, so this cannot run in-process.
 func TestHostileUmaskIsIgnored(t *testing.T) {
 	if os.Getenv(umaskChildEnv) != "" {
 		t.Skip("this is the child process")
@@ -94,7 +102,7 @@ func TestHostileUmaskChild(t *testing.T) {
 		t.Fatalf("%s is not set", umaskDirEnv)
 	}
 
-	previous := syscall.Umask(0)
+	previous := syscall.Umask(hostileUmask)
 	defer syscall.Umask(previous)
 
 	key, err := cryptostore.LoadOrCreateKey(filepath.Join(dir, "keys"), 1)

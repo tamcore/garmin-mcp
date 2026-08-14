@@ -89,11 +89,21 @@ func TestKeyLogValueRedacts(t *testing.T) {
 	}
 }
 
+// TestKeyAliasCannotBypassRedaction covers every verb, not only the reflective
+// ones. %s and %q on a value with no String method reach fmt's badVerb path, which
+// re-prints the value at depth zero, and depth zero dereferences a pointer to a
+// struct and prints its unexported fields. A []byte field would surface there as
+// its decimal bytes, which reveals the material just as plainly as the text does.
 func TestKeyAliasCannotBypassRedaction(t *testing.T) {
 	key := mustKey(t, 1)
 	stripped := strippedKey(key)
-	rendered := fmt.Sprintf("%v|%+v|%#v", stripped, stripped, stripped)
-	assertNoKeyMaterial(t, "method-stripped alias", rendered, key)
+
+	for _, verb := range []string{"%v", "%+v", "%#v", "%s", "%q", "%d", "%x"} {
+		rendered := fmt.Sprintf(verb, stripped)
+		assertNoKeyMaterial(t, "method-stripped alias under "+verb, rendered, key)
+		assertNoKeyMaterial(t, "pointer to a method-stripped alias under "+verb,
+			fmt.Sprintf(verb, &stripped), key)
+	}
 }
 
 func TestZeroKeyRendersWithoutPanicking(t *testing.T) {

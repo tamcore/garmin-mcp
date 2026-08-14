@@ -28,6 +28,10 @@ type Config struct {
 	Store TokenStore
 	// Registry holds pending MFA transactions.
 	Registry *Registry
+	// TokenGate serializes this Authenticator's token writes against the Refresher
+	// that shares the same Store. Nil means a private gate, which serializes this
+	// Authenticator against itself only; obtain a shared one from NewTokenGate.
+	TokenGate *TokenGate
 	// Clock is the time source. Nil means the system clock.
 	Clock Clock
 	// Sleeper waits out the anti-WAF pacing. Nil means the system clock.
@@ -51,6 +55,7 @@ type Authenticator struct {
 	tokens   tokenClient
 	store    TokenStore
 	registry *Registry
+	gate     *TokenGate
 	clock    Clock
 	sleeper  Sleeper
 	jitter   Jitter
@@ -73,10 +78,14 @@ func NewAuthenticator(cfg Config) (*Authenticator, error) {
 		doer:     cfg.Transport,
 		store:    cfg.Store,
 		registry: cfg.Registry,
+		gate:     cfg.TokenGate,
 		clock:    cfg.Clock,
 		sleeper:  cfg.Sleeper,
 		jitter:   cfg.Jitter,
 		logger:   cfg.Logger,
+	}
+	if authenticator.gate == nil {
+		authenticator.gate = NewTokenGate()
 	}
 	if authenticator.clock == nil {
 		authenticator.clock = systemClock{}
@@ -152,8 +161,10 @@ func (a *Authenticator) attemptStrategy(
 	case protocol.OutcomeSuccess:
 		if err := a.completeLogin(ctx, principal, step.class, step.serviceURL); err != nil {
 			// A rejected or unverifiable session says nothing about the
-			// password, so the next strategy still gets a turn.
-			return failedResult(strategy), err, false
+			// password, so the next strategy still gets a turn. A failed
+			// persistence is different: no other strategy can fix the store, and
+			// a stale candidate must not be rewritten, so the chain ends.
+			return failedResult(strategy), err, errors.Is(err, ErrTokenPersistenceFailed)
 		}
 		return authenticatedResult(strategy), nil, true
 
@@ -173,6 +184,9 @@ func (a *Authenticator) attemptStrategy(
 // completeLogin turns a success verdict into a stored, validated token set: the
 // CAS ticket is exchanged for DI tokens, the candidate session is validated
 // against the API tier, and only then is it persisted.
+//
+// The whole sequence runs under the principal's token gate, so it cannot interleave
+// with a refresh of the same principal.
 func (a *Authenticator) completeLogin(
 	ctx context.Context,
 	principal string,
@@ -184,6 +198,40 @@ func (a *Authenticator) completeLogin(
 		return ErrMissingServiceTicket
 	}
 
+	return a.storeTicketTokens(ctx, principal, ticket, serviceURL)
+}
+
+// storeTicketTokens exchanges ticket and persists the result under the principal's
+// token gate, so it cannot interleave with a refresh of the same principal.
+func (a *Authenticator) storeTicketTokens(
+	ctx context.Context,
+	principal, ticket, serviceURL string,
+) error {
+	release, err := a.gate.acquire(ctx, principal)
+	if err != nil {
+		return fmt.Errorf("garmin auth: await the token gate: %w", err)
+	}
+	defer release()
+
+	return a.exchangeAndSave(ctx, principal, ticket, serviceURL)
+}
+
+// exchangeAndSave produces the candidate token set and persists it. The caller must
+// hold the principal's token gate.
+//
+// The compare-and-set baseline is read before the candidate is produced, not after.
+// Reading it afterwards would make a refresh that rotated the tokens during the
+// exchange invisible: the login would read the rotated version and overwrite a
+// refresh token it never saw, silently destroying the only usable one.
+func (a *Authenticator) exchangeAndSave(
+	ctx context.Context,
+	principal, ticket, serviceURL string,
+) error {
+	baseline, err := a.storedVersion(ctx, principal)
+	if err != nil {
+		return err
+	}
+
 	set, err := a.tokens.exchangeTicket(ctx, ticket, serviceURL)
 	if err != nil {
 		return err
@@ -191,30 +239,20 @@ func (a *Authenticator) completeLogin(
 	if err := a.tokens.validateSession(ctx, set); err != nil {
 		return err
 	}
-	return a.saveTokens(ctx, principal, set)
+	return a.saveTokens(ctx, principal, set, baseline)
 }
 
-// saveTokens stores set with a compare-and-set against the version it just read.
+// saveTokens stores set with a compare-and-set against baseline, the version read
+// before set was produced.
 //
-// A conflict means another writer stored a set in between. A fresh interactive
-// login is the newer fact, so the version is re-read once and the write retried;
-// a second conflict is reported rather than forced.
-func (a *Authenticator) saveTokens(ctx context.Context, principal string, set TokenSet) error {
-	version, err := a.storedVersion(ctx, principal)
-	if err != nil {
-		return err
-	}
-
-	if _, err := a.store.Save(ctx, principal, set, version); err != nil {
-		if !errors.Is(err, ErrVersionConflict) {
-			return fmt.Errorf("garmin auth: save tokens: %w", err)
-		}
-		if version, err = a.storedVersion(ctx, principal); err != nil {
-			return err
-		}
-		if _, err := a.store.Save(ctx, principal, set, version); err != nil {
-			return fmt.Errorf("garmin auth: save tokens: %w", err)
-		}
+// A conflict is final. The candidate is stale by definition — another writer stored
+// a newer token set while this one was being produced — so re-reading the version
+// and rewriting the candidate would clobber that newer set. The conflict is reported
+// instead, and it is comparable with errors.Is against ErrVersionConflict, so a
+// caller can restart the login.
+func (a *Authenticator) saveTokens(ctx context.Context, principal string, set TokenSet, baseline int64) error {
+	if _, err := a.store.Save(ctx, principal, set, baseline); err != nil {
+		return fmt.Errorf("garmin auth: save tokens: %w: %w", ErrTokenPersistenceFailed, err)
 	}
 	return nil
 }

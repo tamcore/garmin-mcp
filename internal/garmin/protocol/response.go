@@ -22,7 +22,18 @@ type Response struct {
 	// so a nested unexported pointer renders as an address, whereas a nested
 	// unexported struct renders its field values. It is never mutated after
 	// construction.
-	parts *responseParts
+	parts *sealedParts
+}
+
+// sealedParts is a deliberate extra level of indirection. fmt dereferences a
+// pointer to a struct at depth 0, which is what its badVerb path does for a verb
+// the outer type does not support, so a method-stripping alias of Response would
+// otherwise print every field of responseParts — including the body as decimal
+// bytes. A pointer field at depth greater than zero renders as an address, so
+// wrapping the material one level deeper keeps it unreadable. Methods cannot
+// close the hole: fmt refuses to call a method on an unexported field.
+type sealedParts struct {
+	inner *responseParts
 }
 
 // responseParts holds the response material. It is copied, never mutated.
@@ -42,12 +53,12 @@ func NewResponse(resp *http.Response, body []byte) Response {
 	if resp == nil {
 		return Response{}
 	}
-	return Response{parts: &responseParts{
+	return Response{parts: seal(&responseParts{
 		status:    resp.StatusCode,
 		header:    resp.Header.Clone(),
 		mediaType: resp.Header.Get("Content-Type"),
 		body:      body,
-	}}
+	})}
 }
 
 // NewResponseFromParts builds a Response from its parts, for a caller that has no
@@ -59,12 +70,12 @@ func NewResponseFromParts(status int, contentType string, header http.Header, bo
 	if mediaType == "" {
 		mediaType = header.Get("Content-Type")
 	}
-	return Response{parts: &responseParts{
+	return Response{parts: seal(&responseParts{
 		status:    status,
 		header:    header.Clone(),
 		mediaType: mediaType,
 		body:      body,
-	}}
+	})}
 }
 
 // WithNow returns a copy of r whose reference instant for a Retry-After HTTP-date
@@ -72,7 +83,7 @@ func NewResponseFromParts(status int, contentType string, header http.Header, bo
 func (r Response) WithNow(now time.Time) Response {
 	parts := r.p()
 	parts.now = now
-	return Response{parts: &parts}
+	return Response{parts: seal(&parts)}
 }
 
 // Status is the HTTP status code, or 0 when the request never completed.
@@ -92,10 +103,10 @@ func (r Response) HeaderLen() int { return len(r.p().header) }
 
 // p returns a copy of the response parts, or the zero parts for a zero Response.
 func (r Response) p() responseParts {
-	if r.parts == nil {
+	if r.parts == nil || r.parts.inner == nil {
 		return responseParts{}
 	}
-	return *r.parts
+	return *r.parts.inner
 }
 
 // contentType is the raw, unsanitized media type, for content sniffing inside
@@ -120,3 +131,6 @@ func (r Response) refTime() time.Time {
 	}
 	return time.Now()
 }
+
+// seal wraps response material in the extra indirection described on sealedParts.
+func seal(parts *responseParts) *sealedParts { return &sealedParts{inner: parts} }

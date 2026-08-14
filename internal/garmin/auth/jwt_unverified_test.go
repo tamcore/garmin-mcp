@@ -78,7 +78,7 @@ func TestUnverifiedExpiry(t *testing.T) {
 		},
 		{
 			name:  "missing exp is rejected",
-			token: jwtLike(signedHeader, `{"client_id":"GARMIN_CONNECT_MOBILE_ANDROID_DI"}`, fakeSignature),
+			token: jwtLike(signedHeader, `{"client_id":"`+testClientID+`"}`, fakeSignature),
 		},
 		{
 			name:  "non-finite exp is rejected",
@@ -166,8 +166,8 @@ func TestUnverifiedClientID(t *testing.T) {
 	}{
 		{
 			name:  "string client_id",
-			token: jwtLike(signedHeader, `{"client_id":"GARMIN_CONNECT_MOBILE_ANDROID_DI"}`, fakeSignature),
-			want:  "GARMIN_CONNECT_MOBILE_ANDROID_DI",
+			token: jwtLike(signedHeader, `{"client_id":"`+testClientID+`"}`, fakeSignature),
+			want:  testClientID,
 			ok:    true,
 		},
 		{
@@ -188,7 +188,7 @@ func TestUnverifiedClientID(t *testing.T) {
 		},
 		{
 			name:  "unsigned token is rejected",
-			token: jwtLike(unsignedHeader, `{"client_id":"GARMIN_CONNECT_MOBILE_ANDROID_DI"}`, fakeSignature),
+			token: jwtLike(unsignedHeader, `{"client_id":"`+testClientID+`"}`, fakeSignature),
 		},
 	}
 

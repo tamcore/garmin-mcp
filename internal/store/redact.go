@@ -3,14 +3,40 @@ package store
 import (
 	"encoding/json"
 	"log/slog"
+	"slices"
 	"time"
+
+	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
 )
 
 // This file follows internal/garmin/protocol/redact.go: a secret-bearing type
 // renders through one redacted shape, and String, GoString, MarshalJSON and
 // LogValue all use it. The di_token and di_refresh_token collapse to a presence
-// flag. The di_client_id and the scheduling expiry are reported, because neither
-// is a secret and both are needed to correlate a refresh in the logs.
+// flag. The scheduling expiry is reported as-is, and the di_client_id is reported
+// only when it is a client id Garmin actually uses, because both are needed to
+// correlate a refresh in the logs.
+
+// labelUnknown is what an unrecognized client id renders as.
+const labelUnknown = "unknown"
+
+// knownDIClientID renders a client id only when it is one of the candidate DI
+// client ids.
+//
+// The field is not a secret, but it is also not ours: it comes from Garmin's
+// unverified client_id claim or, worse, verbatim from an imported 0.3.x token file
+// that anyone may have written. Echoing it would put attacker-chosen text — possibly
+// secret-shaped, possibly a forged log line — into every record that mentions the
+// token set. internal/garmin/auth applies the same allowlist to its own TokenSet;
+// the shared list lives in internal/garmin/protocol.
+func knownDIClientID(value string) string {
+	if value == "" {
+		return ""
+	}
+	if slices.Contains(protocol.DIClientIDs(), value) {
+		return value
+	}
+	return labelUnknown
+}
 
 // redactedTokenSet is the only shape a TokenSet is ever rendered or serialized in.
 type redactedTokenSet struct {
@@ -26,9 +52,9 @@ func (s TokenSet) redacted() redactedTokenSet {
 	if s.parts == nil {
 		return red
 	}
-	red.TokenPresent = s.parts.token != ""
-	red.RefreshTokenPresent = s.parts.refreshToken != ""
-	red.ClientID = s.parts.clientID
+	red.TokenPresent = secretValue(s.parts.token) != ""
+	red.RefreshTokenPresent = secretValue(s.parts.refreshToken) != ""
+	red.ClientID = knownDIClientID(secretValue(s.parts.clientID))
 	if !s.parts.expiresAt.IsZero() {
 		red.ExpiresAt = s.parts.expiresAt.UTC().Format(time.RFC3339)
 	}
