@@ -118,13 +118,24 @@ func newRefreshHarness(
 	handler func(req *http.Request, call int) (*http.Response, error),
 ) *refreshHarness {
 	t.Helper()
+	return newRefreshHarnessWithHosts(t, offlineHosts(t), handler)
+}
+
+// newRefreshHarnessWithHosts is newRefreshHarness for a chosen set of bases, so a
+// test can vary the region the Refresher is configured for.
+func newRefreshHarnessWithHosts(
+	t *testing.T,
+	hosts protocol.Hosts,
+	handler func(req *http.Request, call int) (*http.Response, error),
+) *refreshHarness {
+	t.Helper()
 
 	clock := testkit.NewFakeClock(refreshStart())
 	store := newFakeStore()
 	transport := &stubTransport{handler: handler}
 
 	refresher, err := auth.NewRefresher(auth.RefreshConfig{
-		Hosts:     offlineHosts(t),
+		Hosts:     hosts,
 		Transport: transport,
 		Store:     store,
 		Clock:     clock,

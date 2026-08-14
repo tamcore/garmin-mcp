@@ -46,6 +46,11 @@ var (
 	ErrTokenPersistenceFailed = errors.New("garmin auth: the validated token set could not be stored")
 	// ErrNotIdempotent reports a request that may not be replayed after a 401.
 	ErrNotIdempotent = errors.New("garmin auth: request is not safe to retry")
+	// ErrForeignHost reports a request whose scheme and host are not one of the
+	// bases the Refresher's Hosts was configured with. The DI bearer token is not
+	// attached and nothing is sent. The refused destination is not rendered: the
+	// caller owns the request and can inspect its URL itself.
+	ErrForeignHost = errors.New("garmin auth: refused to send an authorized request outside the configured Garmin hosts")
 )
 
 // transportError wraps a transport-level failure in a sanitized protocol error,

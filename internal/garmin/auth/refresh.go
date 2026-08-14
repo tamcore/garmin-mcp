@@ -55,11 +55,13 @@ type RefreshConfig struct {
 // writer never clobbers a newer refresh token.
 type Refresher struct {
 	tokens tokenClient
-	store  TokenStore
-	gate   *TokenGate
-	clock  Clock
-	window time.Duration
-	logger *slog.Logger
+	// allowed is the origin boundary for Do, derived from the configured Hosts.
+	allowed originAllowlist
+	store   TokenStore
+	gate    *TokenGate
+	clock   Clock
+	window  time.Duration
+	logger  *slog.Logger
 
 	// onFlightRetire is the test seam from RefreshConfig; nil in production.
 	onFlightRetire func()
@@ -109,6 +111,7 @@ func NewRefresher(cfg RefreshConfig) (*Refresher, error) {
 
 	return &Refresher{
 		tokens:  tokenClient{hosts: cfg.Hosts, doer: cfg.Transport, clock: clock},
+		allowed: newOriginAllowlist(cfg.Hosts),
 		store:   cfg.Store,
 		gate:    gate,
 		clock:   clock,

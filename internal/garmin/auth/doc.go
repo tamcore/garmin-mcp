@@ -100,6 +100,15 @@
 // After a 401, a safe or idempotent call is retried once, and only after a
 // successful refresh.
 //
+// Refresher.Do attaches a DI bearer token only to a request whose scheme and host
+// exactly match one of the bases the configured protocol.Hosts exposes. Every
+// other destination — a foreign host, a suffix of a Garmin host, a plaintext
+// downgrade, a URL carrying userinfo — is refused with ErrForeignHost before the
+// token is attached and before anything is dispatched, on the first attempt and on
+// the replay alike. The boundary follows the configured Hosts, so it moves with the
+// region and with a test's protocol.Overrides. It cannot cover redirects the
+// caller's Doer follows on its own; see Refresher.Do for that residual risk.
+//
 // # Secrets
 //
 // No password and no OTP is ever stored in a field that outlives its request.

@@ -20,12 +20,30 @@ var errNilRequest = errors.New("garmin auth: request is nil")
 //
 // The caller owns the returned response body. Do sets Authorization and leaves
 // every other header alone.
+//
+// Boundary: req must point at one of the bases the configured protocol.Hosts
+// exposes, compared by exact scheme and host. Anything else is refused with
+// ErrForeignHost before the token is attached and before anything is dispatched,
+// so a caller cannot use this method to hand the user's Garmin token to another
+// host. The check is repeated for the 401 replay, so a request that is rewritten
+// between the two attempts cannot redirect the authorized retry.
+//
+// Residual risk, not handled here: the Doer is supplied by the caller, and this
+// package cannot inspect or replace its redirect policy. If that Doer is an
+// *http.Client with the default policy, it follows redirects, and although the
+// stdlib drops Authorization on a hop that leaves the initial request's domain,
+// the redirected request itself — method, headers and body — is still sent to
+// whatever host Garmin's response names. A caller that needs the boundary to hold
+// across redirects must pass a Doer that refuses off-origin hops, as
+// internal/testkit's Doer does.
 func (r *Refresher) Do(ctx context.Context, principal string, req *http.Request) (*http.Response, error) {
 	if principal == "" {
 		return nil, ErrMissingPrincipal
 	}
-	if req == nil {
-		return nil, errNilRequest
+	if err := r.allowed.check(req); err != nil {
+		// Checked before Fresh, so a refused destination cannot even trigger a
+		// token rotation.
+		return nil, err
 	}
 
 	set, err := r.Fresh(ctx, principal)
@@ -53,9 +71,16 @@ func (r *Refresher) Do(ctx context.Context, principal string, req *http.Request)
 
 // send performs one attempt with set's bearer token, on a clone of req so the
 // caller's request stays reusable.
+//
+// The boundary is re-checked on the clone that is about to be dispatched, so every
+// attempt — the first and the replay — is proven on-boundary immediately before
+// the token is attached.
 func (r *Refresher) send(ctx context.Context, req *http.Request, set TokenSet) (*http.Response, error) {
 	attempt, err := cloneRequest(ctx, req)
 	if err != nil {
+		return nil, err
+	}
+	if err := r.allowed.check(attempt); err != nil {
 		return nil, err
 	}
 	attempt.Header.Set("Authorization", "Bearer "+set.Token())
