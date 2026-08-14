@@ -6,9 +6,12 @@ import (
 	"time"
 )
 
-// SSO client identities and locale. Source: the module-level constants in
-// client.py (IOS_SSO_CLIENT_ID, PORTAL_SSO_CLIENT_ID) and the "locale" login
-// parameter sent by every JSON login call.
+// SSO client identities and locale. Source: the module-level constants
+// IOS_SSO_CLIENT_ID and PORTAL_SSO_CLIENT_ID in client.py (0.3.10), and the
+// "locale": "en-US" login parameter every JSON login and MFA verify call sends
+// (_do_mobile_login, _do_portal_web_login, _complete_mfa).
+//
+// Both values are unchanged from 0.3.8.
 const (
 	// ClientIDIOS is the iOS app SSO client id used by login strategies 1 and 2.
 	ClientIDIOS = "GCM_IOS_DARK"
@@ -18,10 +21,22 @@ const (
 	LoginLocale = "en-US"
 )
 
+// Documented gaps in the identity surface, all unchanged between 0.3.8 and
+// 0.3.10 and all outside the login strategies this package models:
+//
+//   - MOBILE_SSO_CLIENT_ID ("GCM_ANDROID_DARK"), MOBILE_SSO_SERVICE_URL
+//     (mobile.integration/gcm/android) and MOBILE_SSO_USER_AGENT are upstream
+//     legacy aliases kept for backward compatibility; no strategy uses them.
+//   - The /mobile/sso/en_US/sign-in page used by upstream's JWT_WEB session
+//     refresh is not modeled here.
+//   - MOBILE_IMPERSONATIONS and PORTAL_IMPERSONATIONS select curl_cffi TLS
+//     fingerprints, which Go's standard TLS stack cannot reproduce.
+
 // User agents. Source: IOS_LOGIN_UA, DESKTOP_USER_AGENT, NATIVE_API_USER_AGENT
-// and NATIVE_X_GARMIN_USER_AGENT in client.py. Standard Go TLS cannot reproduce
-// the curl_cffi browser TLS fingerprint that upstream pairs with these strings;
-// only the headers are ported.
+// and NATIVE_X_GARMIN_USER_AGENT in client.py (0.3.10); all four are unchanged
+// from 0.3.8. Standard Go TLS cannot reproduce the curl_cffi browser TLS
+// fingerprint that upstream pairs with these strings; only the headers are
+// ported.
 const (
 	// UserAgentIOSLogin is sent by the iOS mobile login flow.
 	UserAgentIOSLogin = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) " +
@@ -29,6 +44,7 @@ const (
 
 	// UserAgentDesktop is the static desktop fallback used by the portal and
 	// widget HTML flows when no randomized browser header set is available.
+	// Source: the _random_browser_headers fallback when ua_generator is absent.
 	UserAgentDesktop = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
 		"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
@@ -40,8 +56,8 @@ const (
 		"Google/sdk_gphone64_arm64/google; Android/33; Dalvik/2.1.0"
 )
 
-// DI OAuth2 grant types. Source: DI_GRANT_TYPE and the refresh call in
-// Client._refresh_di_token.
+// DI OAuth2 grant types. Source: DI_GRANT_TYPE in client.py (0.3.10) and the
+// refresh call in Client._refresh_di_token. Unchanged from 0.3.8.
 const (
 	// DIGrantTypeServiceTicket exchanges a CAS service ticket for a DI token.
 	// The value is an opaque grant-type identifier: it always names the .com
@@ -53,14 +69,16 @@ const (
 )
 
 // MFAMethodEmail is the assumed delivery method when Garmin reports MFA without
-// naming one. Source: the "email" default for customerMfaInfo.mfaLastMethodUsed.
+// naming one. Source: the "email" default for
+// customerMfaInfo.mfaLastMethodUsed in _do_mobile_login and _do_portal_web_login.
 const MFAMethodEmail = "email"
 
-// Anti-WAF pacing bounds. Source: LOGIN_DELAY_MIN_S/LOGIN_DELAY_MAX_S and
-// WIDGET_DELAY_MIN_S/WIDGET_DELAY_MAX_S. Cloudflare flags rapid GET-then-POST
-// sequences as bot-like, so a randomized delay is part of the protocol, not
-// decoration. The widget flow sits in a different rate-limit bucket and uses the
-// shorter range.
+// Anti-WAF pacing bounds. Source: LOGIN_DELAY_MIN_S = 10.0 /
+// LOGIN_DELAY_MAX_S = 20.0 and WIDGET_DELAY_MIN_S = 3.0 /
+// WIDGET_DELAY_MAX_S = 8.0 in client.py (0.3.10); all four are unchanged from
+// 0.3.8. Cloudflare flags rapid GET-then-POST sequences as bot-like, so a
+// randomized delay is part of the protocol, not decoration. The widget flow sits
+// in a different rate-limit bucket and uses the shorter range.
 const (
 	PortalPacingMin = 10 * time.Second
 	PortalPacingMax = 20 * time.Second
@@ -69,7 +87,8 @@ const (
 )
 
 // diClientIDs are the DI OAuth2 client ids tried in order until one is accepted.
-// Source: DI_CLIENT_IDS in client.py.
+// Source: DI_CLIENT_IDS in client.py (0.3.10); the tuple and its order are
+// unchanged from 0.3.8.
 var diClientIDs = [...]string{
 	"GARMIN_CONNECT_MOBILE_ANDROID_DI_2025Q2",
 	"GARMIN_CONNECT_MOBILE_ANDROID_DI_2024Q4",
@@ -86,7 +105,8 @@ func DIClientIDs() []string {
 }
 
 // NativeAPIHeaders returns a fresh header set identifying the native mobile app
-// to the DI auth host and the API tier. Source: _native_headers in client.py.
+// to the DI auth host and the API tier. Source: _native_headers in client.py
+// (0.3.10); every value is unchanged from 0.3.8.
 func NativeAPIHeaders() http.Header {
 	h := make(http.Header, 8)
 	h.Set("User-Agent", UserAgentNativeAPI)

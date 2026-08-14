@@ -170,7 +170,7 @@ func TestClassifyWidgetSignInPage(t *testing.T) {
 			wantOutcome: OutcomeRateLimited,
 		},
 		{
-			name:        "forbidden is a bot challenge",
+			name:        "widget page forbidden is a bot challenge",
 			response:    htmlResponse(http.StatusForbidden, widgetPage("Just a moment...", "")),
 			wantOutcome: OutcomeBotChallenge,
 		},
@@ -267,6 +267,27 @@ func TestClassifyWidgetLoginTitleHeuristics(t *testing.T) {
 		{
 			name:        "unrecognized title is unknown",
 			response:    htmlResponse(http.StatusOK, widgetPage("Garmin Connect", "")),
+			wantOutcome: OutcomeUnknown,
+		},
+		{
+			// "unlocked" must not match the "locked" hint by substring.
+			name:        "unlocked title is not a lockout",
+			response:    htmlResponse(http.StatusOK, widgetPage("Account Unlocked", "")),
+			wantOutcome: OutcomeUnknown,
+		},
+		{
+			name:        "invalidate title is not a credential rejection",
+			response:    htmlResponse(http.StatusOK, widgetPage("Session invalidated", "")),
+			wantOutcome: OutcomeUnknown,
+		},
+		{
+			name:        "hyphenated locked title still matches",
+			response:    htmlResponse(http.StatusOK, widgetPage("Account-Locked", "")),
+			wantOutcome: OutcomeAccountLocked,
+		},
+		{
+			name:        "digit hint needs a word boundary",
+			response:    htmlResponse(http.StatusOK, widgetPage("Error 5030 occurred", "")),
 			wantOutcome: OutcomeUnknown,
 		},
 		{

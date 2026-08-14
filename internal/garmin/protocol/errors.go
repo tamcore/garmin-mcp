@@ -14,28 +14,44 @@ var (
 	ErrInvalidCredentials = errors.New("garmin: invalid credentials")
 	ErrAccountLocked      = errors.New("garmin: account locked")
 	ErrAccountRestricted  = errors.New("garmin: account not permitted to use this login flow")
+	ErrSessionRejected    = errors.New("garmin: session rejected by the API tier")
 	ErrBotChallenge       = errors.New("garmin: bot challenge or forbidden")
 	ErrRateLimited        = errors.New("garmin: rate limited")
 	ErrTemporary          = errors.New("garmin: temporary failure")
 	ErrUnknownResponse    = errors.New("garmin: unrecognized response")
 )
 
+// sentinels is the set this package renders verbatim inside a redacted cause,
+// because the package authored every one of these strings.
+var sentinels = [...]error{
+	ErrMFARequired, ErrInvalidCredentials, ErrAccountLocked, ErrAccountRestricted,
+	ErrSessionRejected, ErrBotChallenge, ErrRateLimited, ErrTemporary, ErrUnknownResponse,
+	ErrUnsupportedDomain,
+}
+
 // Error is the structured protocol failure. It deliberately holds no body,
-// header, cookie, token or credential material: only an operation name, a
-// sanitized endpoint label, the HTTP status, the classified outcome, any parsed
-// Retry-After hint, and a wrapped cause.
+// header, cookie, token or credential material: only sanitized Op and Endpoint
+// labels, the HTTP status, the classified outcome, any parsed Retry-After hint,
+// and a wrapped cause.
+//
+// The rendered message never contains raw cause text. Only recognized error
+// shapes are described (a *url.Error with its query redacted, a context error, a
+// nested *Error, one of this package's sentinels); anything else degrades to its
+// Go type name. Unwrap still exposes the real cause, so a caller that needs its
+// text must fetch and redact it deliberately.
 type Error struct {
-	// Op names the logical operation, for example "ios_login".
-	Op string
-	// Endpoint is one of the Endpoint* labels: never a URL with a query string.
-	Endpoint string
+	// Op names the logical operation. Only an Op* constant is rendered.
+	Op Op
+	// Endpoint is the sanitized endpoint label. Only an Endpoint* constant is
+	// rendered: never a URL with a query string.
+	Endpoint Endpoint
 	// Status is the HTTP status code, or 0 when no response was received.
 	Status int
 	// Outcome is the classified meaning of the response.
 	Outcome Outcome
 	// RetryAfter is the parsed Retry-After hint, or 0 when absent.
 	RetryAfter time.Duration
-	// Err is the wrapped cause, if any.
+	// Err is the wrapped cause, if any. It is never rendered verbatim.
 	Err error
 }
 
@@ -47,9 +63,9 @@ func (e *Error) Error() string {
 
 	var b strings.Builder
 	b.WriteString("garmin ")
-	b.WriteString(orUnknown(e.Op))
+	b.WriteString(e.Op.String())
 	b.WriteString(" [")
-	b.WriteString(orUnknown(e.Endpoint))
+	b.WriteString(e.Endpoint.String())
 	b.WriteString("]: ")
 	b.WriteString(e.Outcome.String())
 	if e.Status != 0 {
@@ -61,14 +77,14 @@ func (e *Error) Error() string {
 		b.WriteString(" retry after ")
 		b.WriteString(e.RetryAfter.String())
 	}
-	if e.Err != nil {
+	if cause := redactedCause(e.Err); cause != "" {
 		b.WriteString(": ")
-		b.WriteString(e.Err.Error())
+		b.WriteString(cause)
 	}
 	return b.String()
 }
 
-// Unwrap exposes the wrapped cause.
+// Unwrap exposes the wrapped cause, so errors.Is and errors.As keep working.
 func (e *Error) Unwrap() error {
 	if e == nil {
 		return nil
@@ -102,6 +118,8 @@ func sentinelFor(o Outcome) error {
 		return ErrAccountLocked
 	case OutcomeAccountRestricted:
 		return ErrAccountRestricted
+	case OutcomeSessionRejected:
+		return ErrSessionRejected
 	case OutcomeBotChallenge:
 		return ErrBotChallenge
 	case OutcomeRateLimited:
@@ -111,13 +129,6 @@ func sentinelFor(o Outcome) error {
 	default:
 		return ErrUnknownResponse
 	}
-}
-
-func orUnknown(s string) string {
-	if s == "" {
-		return labelUnknown
-	}
-	return s
 }
 
 // ParseRetryAfter interprets a Retry-After header value relative to now. It

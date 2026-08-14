@@ -1,9 +1,13 @@
 // Package testkit provides a scripted fake Garmin Connect server for tests.
 //
 // Every host the protocol package knows about is mapped onto one
-// httptest.Server, so a test can never reach the real service: obtain the base
-// URLs with Server.Hosts or Server.Overrides and inject them into the client
-// under test. All fixtures are synthetic.
+// httptest.Server: obtain the base URLs with Server.Hosts or Server.Overrides
+// and inject them into the client under test. All fixtures are synthetic.
+//
+// Reaching the real service is not merely unlikely, it is refused. Clients from
+// Server.Client carry an origin guard that fails any request or redirect aimed
+// at anything other than Server.BaseURL with an *OffOriginError, before DNS
+// resolution or dial.
 package testkit
 
 import (
@@ -98,15 +102,19 @@ func NewServer(tb testing.TB, script Script) *Server {
 // BaseURL is the fake server's origin, without a trailing slash.
 func (s *Server) BaseURL() string { return s.inner.URL }
 
-// Client returns a fresh HTTP client for the fake. Callers may adjust its
-// Timeout without affecting other tests.
+// Client returns a fresh HTTP client that can reach the fake server and
+// nothing else. Any request or redirect whose scheme and host differ from
+// BaseURL fails with an *OffOriginError before DNS resolution or dial, so no
+// test can reach the real Garmin service. Callers may adjust the returned
+// client, for example its Timeout, without affecting other tests.
 func (s *Server) Client() *http.Client {
-	client := s.inner.Client()
+	inner := s.inner.Client()
+	origin := s.BaseURL()
 	return &http.Client{
-		Transport:     client.Transport,
-		CheckRedirect: client.CheckRedirect,
-		Jar:           client.Jar,
-		Timeout:       client.Timeout,
+		Transport:     originGuard{origin: origin, next: inner.Transport},
+		CheckRedirect: checkRedirect(origin),
+		Jar:           inner.Jar,
+		Timeout:       inner.Timeout,
 	}
 }
 

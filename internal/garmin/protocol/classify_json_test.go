@@ -8,10 +8,23 @@ import (
 	"time"
 )
 
-// Shared literals for the classifier tests.
+// Shared literals for the classifier, label and redaction tests.
 const (
 	contentTypeJSON = "application/json"
 	contentTypeHTML = "text/html"
+
+	// testHostileDomain is a domain that must never reach URL construction.
+	testHostileDomain = "attacker.example"
+	// Real Garmin URLs the URL builders and the redactor must produce.
+	testSSOEmbedURL    = "https://sso.garmin.com/sso/embed"
+	testMobileLoginURL = "https://sso.garmin.com/mobile/api/login"
+	// Header and cookie names that must never appear in a rendered form.
+	testHeaderCookie        = "Cookie"
+	testHeaderSetCookie     = "Set-Cookie"
+	testHeaderAuthorization = "Authorization"
+	testCookieName          = "SESSIONID"
+	// testHTTPVerbPost is the *url.Error Op a failed POST carries.
+	testHTTPVerbPost = "Post"
 )
 
 // jsonResponse builds a 200 JSON response; non-200 cases spell out Response.
@@ -50,7 +63,7 @@ func TestClassifyJSONLogin(t *testing.T) {
 			response: jsonResponse(
 				`{"responseStatus":{"type":"MFA_REQUIRED"},"customerMfaInfo":{"mfaLastMethodUsed":"sms"}}`),
 			wantOutcome:   OutcomeMFARequired,
-			wantMFAMethod: "sms",
+			wantMFAMethod: mfaMethodSMS,
 		},
 		{
 			name:          "mfa required defaults to email",
@@ -104,8 +117,19 @@ func TestClassifyJSONLogin(t *testing.T) {
 			wantOutcome: OutcomeBotChallenge,
 		},
 		{
-			name:        "http 401 without recognizable json",
+			// A bare 401 is a session, CSRF or protocol fault; only an explicit
+			// credential rejection in the body may blame the password.
+			name:        "http 401 without recognizable json is unknown",
 			response:    Response{Status: http.StatusUnauthorized, ContentType: "text/plain", Body: []byte("Unauthorized")},
+			wantOutcome: OutcomeUnknown,
+		},
+		{
+			name: "http 401 with explicit credential rejection",
+			response: Response{
+				Status:      http.StatusUnauthorized,
+				ContentType: contentTypeJSON,
+				Body:        []byte(`{"responseStatus":{"type":"INVALID_USERNAME_PASSWORD"}}`),
+			},
 			wantOutcome: OutcomeInvalidCredentials,
 		},
 		{
@@ -131,6 +155,33 @@ func TestClassifyJSONLogin(t *testing.T) {
 			name:        "unrecognized response status type is unknown",
 			response:    jsonResponse(`{"responseStatus":{"type":"SOMETHING_NEW"}}`),
 			wantOutcome: OutcomeUnknown,
+		},
+		{
+			// Substring matching used to read UNLOCKED as LOCKED and stop the
+			// strategy chain on an account that is fine.
+			name:        "account unlocked is not a lockout",
+			response:    jsonResponse(`{"responseStatus":{"type":"ACCOUNT_UNLOCKED"}}`),
+			wantOutcome: OutcomeUnknown,
+		},
+		{
+			name:        "unlocked alone is not a lockout",
+			response:    jsonResponse(`{"responseStatus":{"type":"UNLOCKED"}}`),
+			wantOutcome: OutcomeUnknown,
+		},
+		{
+			name:        "invalid token is not a credential rejection",
+			response:    jsonResponse(`{"responseStatus":{"type":"INVALID_TOKEN"}}`),
+			wantOutcome: OutcomeUnknown,
+		},
+		{
+			name:        "invalid password variant still recognized",
+			response:    jsonResponse(`{"responseStatus":{"type":"INVALID_PASSWORD"}}`),
+			wantOutcome: OutcomeInvalidCredentials,
+		},
+		{
+			name:        "locked token recognized inside a compound type",
+			response:    jsonResponse(`{"responseStatus":{"type":"USER_ACCOUNT_LOCKED_OUT"}}`),
+			wantOutcome: OutcomeAccountLocked,
 		},
 		{
 			name: "content type sniffed from header when field empty",
@@ -191,7 +242,7 @@ func TestClassificationErr(t *testing.T) {
 		t.Parallel()
 		c := ClassifyJSONLogin(jsonResponse(
 			`{"responseStatus":{"type":"SUCCESSFUL"},"serviceTicketId":"ST-fake-0003"}`))
-		if err := c.Err("ios_login", EndpointMobileLogin, nil); err != nil {
+		if err := c.Err(OpMobileLogin, EndpointMobileLogin, nil); err != nil {
 			t.Fatalf("Err() = %v, want nil", err)
 		}
 	})
@@ -202,13 +253,13 @@ func TestClassificationErr(t *testing.T) {
 			Status: http.StatusTooManyRequests,
 			Header: http.Header{HeaderRetryAfter: []string{"15"}},
 		})
-		err := c.Err("ios_login", EndpointMobileLogin, cause)
+		err := c.Err(OpMobileLogin, EndpointMobileLogin, cause)
 
 		var pe *Error
 		if !errors.As(err, &pe) {
 			t.Fatalf("Err() = %T, want *protocol.Error", err)
 		}
-		if pe.Op != "ios_login" || pe.Endpoint != EndpointMobileLogin {
+		if pe.Op != OpMobileLogin || pe.Endpoint != EndpointMobileLogin {
 			t.Fatalf("Op/Endpoint = %q/%q", pe.Op, pe.Endpoint)
 		}
 		if pe.Status != http.StatusTooManyRequests || pe.RetryAfter != 15*time.Second {
@@ -223,40 +274,14 @@ func TestClassificationErr(t *testing.T) {
 		t.Parallel()
 		const body = `{"responseStatus":{"type":"INVALID_USERNAME_PASSWORD"},"password":"S3cr3t","cookie":"SESSIONID=abc"}`
 		c := ClassifyJSONLogin(jsonResponse(body))
-		err := c.Err("ios_login", EndpointMobileLogin, nil)
+		err := c.Err(OpMobileLogin, EndpointMobileLogin, nil)
 		if !errors.Is(err, ErrInvalidCredentials) {
 			t.Fatalf("errors.Is(ErrInvalidCredentials) = false for %v", err)
 		}
-		for _, forbidden := range []string{"S3cr3t", "SESSIONID", "password", "cookie"} {
+		for _, forbidden := range []string{"S3cr3t", testCookieName, "password", "cookie"} {
 			if strings.Contains(err.Error(), forbidden) {
 				t.Fatalf("error %q leaked %q", err.Error(), forbidden)
 			}
 		}
 	})
-}
-
-func TestEndpointNamesAreSanitized(t *testing.T) {
-	t.Parallel()
-
-	names := []string{
-		EndpointMobileLogin,
-		EndpointPortalLogin,
-		EndpointPortalSignInPage,
-		EndpointWidgetEmbed,
-		EndpointWidgetSignIn,
-		EndpointMobileMFAVerifyCode,
-		EndpointPortalMFAVerifyCode,
-		EndpointWidgetVerifyMFA,
-		EndpointDIToken,
-		EndpointSocialProfile,
-	}
-
-	for _, name := range names {
-		if name == "" {
-			t.Fatal("endpoint name must not be empty")
-		}
-		if strings.Contains(name, "://") || strings.Contains(name, "?") {
-			t.Fatalf("endpoint name %q must be a host-free, query-free label", name)
-		}
-	}
 }

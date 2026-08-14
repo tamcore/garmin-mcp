@@ -2,6 +2,8 @@ package testkit
 
 import (
 	"net/http"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -74,33 +76,73 @@ func TestHTMLFixturesClassifyAsIntended(t *testing.T) {
 	}
 }
 
+// forbiddenInFixtures returns the patterns no fixture may contain, matched
+// against lowercased text. Each entry names what it rules out so a failure is
+// readable.
+func forbiddenInFixtures() []struct {
+	what    string
+	pattern *regexp.Regexp
+} {
+	return []struct {
+		what    string
+		pattern *regexp.Regexp
+	}{
+		{"a real Garmin hostname", regexp.MustCompile(`garmin\.[a-z]{2,}`)},
+		{"a real Garmin subdomain", regexp.MustCompile(`\b(sso|connect|connectapi|diauth|omt)\.[a-z0-9-]+\.[a-z]{2,}`)},
+		{"a real mail domain", regexp.MustCompile(`@(gmail|googlemail|yahoo|outlook|hotmail|icloud)\.`)},
+		{"a password field", regexp.MustCompile(`"pass(word|phrase|wordhash)"\s*:`)},
+		{"a JWT header prefix", regexp.MustCompile(`eyj[a-z0-9_-]`)},
+		{"a JWT-shaped token", regexp.MustCompile(`[a-z0-9_-]{8,}\.[a-z0-9_-]{8,}\.[a-z0-9_-]{8,}`)},
+	}
+}
+
+func assertNoRealisticSecrets(t *testing.T, label, text string) {
+	t.Helper()
+
+	lower := strings.ToLower(text)
+	for _, rule := range forbiddenInFixtures() {
+		if match := rule.pattern.FindString(lower); match != "" {
+			t.Fatalf("%s contains %s (%q)", label, rule.what, match)
+		}
+	}
+}
+
 func TestFixturesContainNoRealisticSecrets(t *testing.T) {
 	t.Parallel()
 
-	bodies := []string{
-		LoginSuccessJSON("ST-fake-2003"),
-		LoginMFARequiredJSON("sms"),
-		LoginInvalidCredentialsJSON(),
-		LoginAccountLockedJSON(),
-		LoginCaptchaRequiredJSON(),
-		LoginRateLimitedBodyJSON(),
-		DITokenJSON("fake-access-2001", "fake-refresh-2001"),
-		SocialProfileJSON("fake-display-2001"),
-		WidgetSignInPageHTML("fake-csrf-2001"),
-		WidgetSuccessHTML("ST-fake-2004"),
-		WidgetMFAHTML(WidgetTitleEmailMFA),
-		WidgetErrorHTML("Account Locked"),
-		BotChallengeHTML(),
+	bodies := map[string]string{
+		"LoginSuccessJSON":            LoginSuccessJSON("ST-fake-2003"),
+		"LoginMFARequiredJSON":        LoginMFARequiredJSON("sms"),
+		"LoginInvalidCredentialsJSON": LoginInvalidCredentialsJSON(),
+		"LoginAccountLockedJSON":      LoginAccountLockedJSON(),
+		"LoginCaptchaRequiredJSON":    LoginCaptchaRequiredJSON(),
+		"LoginRateLimitedBodyJSON":    LoginRateLimitedBodyJSON(),
+		"DITokenJSON":                 DITokenJSON("fake-access-2001", "fake-refresh-2001"),
+		"SocialProfileJSON":           SocialProfileJSON("fake-display-2001"),
+		"WidgetSignInPageHTML":        WidgetSignInPageHTML("fake-csrf-2001"),
+		"WidgetSuccessHTML":           WidgetSuccessHTML("ST-fake-2004"),
+		"WidgetMFAHTML/totp":          WidgetMFAHTML(WidgetTitleTOTPMFA),
+		"WidgetMFAHTML/email":         WidgetMFAHTML(WidgetTitleEmailMFA),
+		"WidgetErrorHTML":             WidgetErrorHTML("Account Locked"),
+		"BotChallengeHTML":            BotChallengeHTML(),
+		"RateLimited":                 RateLimited(30).Body,
 	}
 
-	for _, body := range bodies {
-		lower := strings.ToLower(body)
-		for _, forbidden := range []string{"garmin.com", "garmin.cn", "@gmail", `password":"`, "eyj"} {
-			if strings.Contains(lower, forbidden) {
-				t.Fatalf("fixture %q contains %q", body, forbidden)
-			}
-		}
+	for name, body := range bodies {
+		assertNoRealisticSecrets(t, "fixture "+name+" ("+body+")", body)
 	}
+}
+
+// TestFixtureSourceContainsNoRealisticSecrets scans fixtures.go itself, so a
+// fixture added later is covered even if nobody lists it above.
+func TestFixtureSourceContainsNoRealisticSecrets(t *testing.T) {
+	t.Parallel()
+
+	source, err := os.ReadFile("fixtures.go")
+	if err != nil {
+		t.Fatalf("read fixtures.go: %v", err)
+	}
+	assertNoRealisticSecrets(t, "fixtures.go", string(source))
 }
 
 func TestDITokenFixtureCarriesInjectedValues(t *testing.T) {

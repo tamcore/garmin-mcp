@@ -1,9 +1,11 @@
 package protocol
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +23,7 @@ func TestErrorSentinelMatching(t *testing.T) {
 		{name: "invalid credentials", outcome: OutcomeInvalidCredentials, want: ErrInvalidCredentials},
 		{name: "locked", outcome: OutcomeAccountLocked, want: ErrAccountLocked},
 		{name: "restricted", outcome: OutcomeAccountRestricted, want: ErrAccountRestricted},
+		{name: "session rejected", outcome: OutcomeSessionRejected, want: ErrSessionRejected},
 		{name: "bot challenge", outcome: OutcomeBotChallenge, want: ErrBotChallenge},
 		{name: "rate limited", outcome: OutcomeRateLimited, want: ErrRateLimited},
 		{name: "temporary", outcome: OutcomeTemporaryFailure, want: ErrTemporary},
@@ -30,7 +33,12 @@ func TestErrorSentinelMatching(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			err := &Error{Op: "login", Endpoint: EndpointMobileLogin, Status: http.StatusOK, Outcome: tc.outcome}
+			err := &Error{
+				Op:       OpMobileLogin,
+				Endpoint: EndpointMobileLogin,
+				Status:   http.StatusOK,
+				Outcome:  tc.outcome,
+			}
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("errors.Is(%v, %v) = false, want true", err, tc.want)
 			}
@@ -45,7 +53,12 @@ func TestErrorWrapsCause(t *testing.T) {
 	t.Parallel()
 
 	cause := errors.New("synthetic dial failure")
-	err := &Error{Op: "login", Endpoint: EndpointMobileLogin, Outcome: OutcomeTemporaryFailure, Err: cause}
+	err := &Error{
+		Op:       OpMobileLogin,
+		Endpoint: EndpointMobileLogin,
+		Outcome:  OutcomeTemporaryFailure,
+		Err:      cause,
+	}
 
 	if !errors.Is(err, cause) {
 		t.Fatal("errors.Is did not reach the wrapped cause")
@@ -63,30 +76,141 @@ func TestErrorWrapsCause(t *testing.T) {
 	}
 }
 
-func TestErrorMessageIsSanitized(t *testing.T) {
+func TestErrorMessageRendersLabelsAndStatus(t *testing.T) {
 	t.Parallel()
 
-	const secret = "S3cr3t-Passw0rd"
 	err := &Error{
-		Op:         "verify_mfa",
+		Op:         OpVerifyMFA,
 		Endpoint:   EndpointMobileMFAVerifyCode,
 		Status:     http.StatusTooManyRequests,
 		Outcome:    OutcomeRateLimited,
 		RetryAfter: 30 * time.Second,
-		Err:        errors.New("upstream throttled"),
 	}
 
 	msg := err.Error()
-	for _, forbidden := range []string{secret, "Cookie", "Bearer", "<html"} {
-		if strings.Contains(msg, forbidden) {
-			t.Fatalf("error message %q leaked %q", msg, forbidden)
-		}
-	}
-	wantParts := []string{"verify_mfa", EndpointMobileMFAVerifyCode, "429", "rate_limited", "30s", "upstream throttled"}
-	for _, want := range wantParts {
+	for _, want := range []string{
+		string(OpVerifyMFA), string(EndpointMobileMFAVerifyCode), "429", "rate_limited", "30s",
+	} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("error message %q missing %q", msg, want)
 		}
+	}
+}
+
+// A *url.Error carries the full request URL. On the CAS flow that URL holds the
+// service ticket, and the nested cause may hold header material.
+func TestErrorMessageRedactsWrappedURLError(t *testing.T) {
+	t.Parallel()
+
+	cause := &url.Error{
+		Op:  testHTTPVerbPost,
+		URL: testSSOEmbedURL + "?ticket=ST-secret-0001&clientId=GCM_IOS_DARK",
+		Err: errors.New(testHeaderCookie + ": " + testCookieName + "=abc123; " +
+			testHeaderAuthorization + ": Bearer super-secret"),
+	}
+	err := &Error{
+		Op:       OpExchangeServiceTicket,
+		Endpoint: EndpointDIToken,
+		Status:   http.StatusBadGateway,
+		Outcome:  OutcomeTemporaryFailure,
+		Err:      cause,
+	}
+
+	msg := err.Error()
+	forbidden := []string{
+		"ST-secret-0001", testCookieName, "abc123", testHeaderAuthorization, "Bearer", "super-secret", testHeaderCookie,
+	}
+	for _, bad := range forbidden {
+		if strings.Contains(msg, bad) {
+			t.Fatalf("error message %q leaked %q", msg, bad)
+		}
+	}
+	for _, want := range []string{testSSOEmbedURL, "redacted"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("error message %q missing %q", msg, want)
+		}
+	}
+
+	// Unwrap must still reach the real cause for errors.Is/errors.As.
+	var target *url.Error
+	if !errors.As(err, &target) || target.URL != cause.URL {
+		t.Fatal("errors.As must still reach the wrapped *url.Error")
+	}
+}
+
+// Free-form text in a cause is never rendered: only recognized error shapes get
+// a rendered form, everything else degrades to its Go type name.
+func TestErrorMessageDoesNotRenderArbitraryCauseText(t *testing.T) {
+	t.Parallel()
+
+	cause := errors.New("garmin said: " + testHeaderSetCookie + ": JWT_WEB=eyJhbGciOi.secret")
+	err := &Error{
+		Op:       OpPortalLogin,
+		Endpoint: EndpointPortalLogin,
+		Outcome:  OutcomeTemporaryFailure,
+		Err:      cause,
+	}
+
+	msg := err.Error()
+	for _, bad := range []string{testHeaderSetCookie, "JWT_WEB", "eyJhbGciOi.secret", "garmin said"} {
+		if strings.Contains(msg, bad) {
+			t.Fatalf("error message %q leaked %q", msg, bad)
+		}
+	}
+	if !errors.Is(err, cause) {
+		t.Fatal("errors.Is must still reach the wrapped cause")
+	}
+}
+
+func TestErrorMessageRendersRecognizedCauses(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		cause error
+		want  string
+	}{
+		{name: "deadline", cause: context.DeadlineExceeded, want: "deadline exceeded"},
+		{name: "canceled", cause: context.Canceled, want: "canceled"},
+		{name: "package sentinel", cause: ErrRateLimited, want: ErrRateLimited.Error()},
+		{
+			name:  "nested protocol error",
+			cause: &Error{Op: OpValidateSession, Endpoint: EndpointSocialProfile, Outcome: OutcomeSessionRejected},
+			want:  string(EndpointSocialProfile),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := &Error{Op: OpMobileLogin, Endpoint: EndpointMobileLogin, Outcome: OutcomeUnknown, Err: tc.cause}
+			if msg := err.Error(); !strings.Contains(msg, tc.want) {
+				t.Fatalf("error message %q missing %q", msg, tc.want)
+			}
+		})
+	}
+}
+
+// Op and Endpoint are typed labels; a value that is not a package constant is
+// rendered as "unknown" instead of being echoed.
+func TestErrorMessageRejectsFreeFormLabels(t *testing.T) {
+	t.Parallel()
+
+	err := &Error{
+		Op:       Op(testSSOEmbedURL + "?ticket=ST-secret-0002"),
+		Endpoint: Endpoint(testHeaderCookie + ": " + testCookieName + "=abc123"),
+		Outcome:  OutcomeUnknown,
+	}
+
+	msg := err.Error()
+	for _, bad := range []string{"ST-secret-0002", testCookieName, "abc123", "://", "?"} {
+		if strings.Contains(msg, bad) {
+			t.Fatalf("error message %q leaked %q", msg, bad)
+		}
+	}
+	if strings.Count(msg, labelUnknown) < 2 {
+		t.Fatalf("error message %q must render both labels as %q", msg, labelUnknown)
 	}
 }
 

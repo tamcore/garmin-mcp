@@ -15,6 +15,7 @@ func TestOutcomeString(t *testing.T) {
 		{OutcomeInvalidCredentials, "invalid_credentials"},
 		{OutcomeAccountLocked, "account_locked"},
 		{OutcomeAccountRestricted, "account_restricted"},
+		{OutcomeSessionRejected, "session_rejected"},
 		{OutcomeBotChallenge, "bot_challenge"},
 		{OutcomeRateLimited, "rate_limited"},
 		{OutcomeTemporaryFailure, "temporary_failure"},
@@ -48,6 +49,10 @@ func TestOutcomeRetryableAndFallback(t *testing.T) {
 		},
 		{name: "account locked stops fallback", outcome: OutcomeAccountLocked, wantRetryable: false, wantStops: true},
 		{name: "restricted account continues", outcome: OutcomeAccountRestricted, wantRetryable: false, wantStops: false},
+		{
+			name: "session rejected continues", outcome: OutcomeSessionRejected,
+			wantRetryable: false, wantStops: false,
+		},
 		{name: "bot challenge continues", outcome: OutcomeBotChallenge, wantRetryable: false, wantStops: false},
 		{name: "rate limited retryable", outcome: OutcomeRateLimited, wantRetryable: true, wantStops: false},
 		{name: "temporary retryable", outcome: OutcomeTemporaryFailure, wantRetryable: true, wantStops: false},

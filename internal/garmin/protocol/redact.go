@@ -1,0 +1,208 @@
+package protocol
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
+)
+
+// Redaction markers. redactedValue replaces a query value; redactedURLMarker
+// replaces a URL that cannot be parsed, because an unparsable string cannot be
+// split into a safe prefix and a secret-bearing query.
+const (
+	redactedValue     = "<redacted>"
+	redactedURLMarker = "<redacted-url>"
+)
+
+// redactURL keeps the scheme, host and path of rawURL and replaces every query
+// value with redactedValue. Userinfo and the fragment are dropped entirely:
+// both carry credentials on the Garmin login path.
+//
+// Source: _sanitize_exception_text and _QUERY_VALUE_RE in client.py (0.3.10),
+// which redact query values because requests embeds the full URL — including
+// ?ticket=ST-... — in its exception text.
+func redactURL(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return redactedURLMarker
+	}
+
+	safe := url.URL{Scheme: parsed.Scheme, Host: parsed.Host, Opaque: parsed.Opaque, Path: parsed.Path}
+	out := safe.String()
+	if parsed.RawQuery == "" {
+		return out
+	}
+	return out + "?" + redactQuery(parsed.RawQuery)
+}
+
+// redactQuery replaces every value in a raw query string, preserving key order
+// and duplicates so the shape of the request stays diagnosable.
+func redactQuery(rawQuery string) string {
+	pairs := strings.Split(rawQuery, "&")
+	out := make([]string, 0, len(pairs))
+	for _, pair := range pairs {
+		if pair == "" {
+			continue
+		}
+		key, _, found := strings.Cut(pair, "=")
+		safeKey := sanitizeToken(key, MaxQueryKeyLen)
+		if !found {
+			out = append(out, safeKey)
+			continue
+		}
+		out = append(out, safeKey+"="+redactedValue)
+	}
+	return strings.Join(out, "&")
+}
+
+// redactedCause describes err without rendering arbitrary text. Only shapes this
+// package can reason about are described; anything else degrades to its Go type
+// name, because a third-party error message may embed a cookie, an Authorization
+// header or a response body.
+func redactedCause(err error) string {
+	if err == nil {
+		return ""
+	}
+	if isSentinel(err) {
+		return err.Error()
+	}
+	if nested, ok := err.(*Error); ok {
+		return nested.Error()
+	}
+
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return "url error " + sanitizeToken(urlErr.Op, MaxURLOpLen) + " " +
+			redactURL(urlErr.URL) + " (" + redactedCause(urlErr.Err) + ")"
+	}
+
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "context deadline exceeded"
+	case errors.Is(err, context.Canceled):
+		return "context canceled"
+	}
+	return "cause of type " + fmt.Sprintf("%T", err)
+}
+
+func isSentinel(err error) bool {
+	for _, sentinel := range sentinels {
+		if errors.Is(err, sentinel) {
+			return true
+		}
+	}
+	return false
+}
+
+// redactedResponse is the only shape a Response is ever rendered or serialized
+// in. It reports the size and presence of the raw material, never its content.
+type redactedResponse struct {
+	Type        string `json:"type"`
+	Status      int    `json:"status"`
+	ContentType string `json:"contentType,omitempty"`
+	BodyBytes   int    `json:"bodyBytes"`
+	HeaderKeys  int    `json:"headerKeys"`
+}
+
+func (r Response) redacted() redactedResponse {
+	return redactedResponse{
+		Type:        "protocol.Response",
+		Status:      r.Status,
+		ContentType: sanitizeMediaType(r.contentType()),
+		BodyBytes:   len(r.Body),
+		HeaderKeys:  len(r.Header),
+	}
+}
+
+// String renders a Response without its body or header values.
+func (r Response) String() string {
+	red := r.redacted()
+	return "protocol.Response{status:" + strconv.Itoa(red.Status) +
+		" contentType:" + quoteLabel(red.ContentType) +
+		" bodyBytes:" + strconv.Itoa(red.BodyBytes) +
+		" headerKeys:" + strconv.Itoa(red.HeaderKeys) + "}"
+}
+
+// GoString satisfies the %#v verb with the same redacted rendering.
+func (r Response) GoString() string { return r.String() }
+
+// MarshalJSON serializes the redacted form, so a Response embedded in a log
+// record cannot leak its body or headers.
+func (r Response) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.redacted())
+}
+
+// redactedClassification is the only shape a Classification is ever rendered or
+// serialized in. Secret-bearing fields collapse to a presence flag.
+type redactedClassification struct {
+	Type                 string `json:"type"`
+	Outcome              string `json:"outcome"`
+	Status               int    `json:"status"`
+	HasServiceTicket     bool   `json:"serviceTicketPresent"`
+	MFAMethod            string `json:"mfaMethod,omitempty"`
+	MFADeliveryUncertain bool   `json:"mfaDeliveryUncertain"`
+	HasCSRFToken         bool   `json:"csrfTokenPresent"`
+	HasPageTitle         bool   `json:"pageTitlePresent"`
+	RetryAfterSeconds    int    `json:"retryAfterSeconds"`
+	ResponseStatusType   string `json:"responseStatusType,omitempty"`
+}
+
+func (c Classification) redacted() redactedClassification {
+	return redactedClassification{
+		Type:                 "protocol.Classification",
+		Outcome:              c.Outcome.String(),
+		Status:               c.Status,
+		HasServiceTicket:     c.ServiceTicket != "",
+		MFAMethod:            knownMFAMethod(c.MFAMethod),
+		MFADeliveryUncertain: c.MFADeliveryUncertain,
+		HasCSRFToken:         c.CSRFToken != "",
+		HasPageTitle:         c.PageTitle != "",
+		RetryAfterSeconds:    int(c.RetryAfter.Seconds()),
+		ResponseStatusType:   knownResponseStatusType(c.ResponseStatusType),
+	}
+}
+
+// String renders a Classification without its ticket, CSRF token or page title.
+func (c Classification) String() string {
+	red := c.redacted()
+	return "protocol.Classification{outcome:" + red.Outcome +
+		" status:" + strconv.Itoa(red.Status) +
+		" serviceTicket:" + presence(red.HasServiceTicket) +
+		" mfaMethod:" + quoteLabel(red.MFAMethod) +
+		" mfaDeliveryUncertain:" + strconv.FormatBool(red.MFADeliveryUncertain) +
+		" csrfToken:" + presence(red.HasCSRFToken) +
+		" pageTitle:" + presence(red.HasPageTitle) +
+		" retryAfterSeconds:" + strconv.Itoa(red.RetryAfterSeconds) +
+		" responseStatusType:" + quoteLabel(red.ResponseStatusType) + "}"
+}
+
+// GoString satisfies the %#v verb with the same redacted rendering.
+func (c Classification) GoString() string { return c.String() }
+
+// MarshalJSON serializes the redacted form, so a Classification embedded in a
+// log record cannot leak its ticket, CSRF token or page title.
+func (c Classification) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c.redacted())
+}
+
+func presence(present bool) string {
+	if present {
+		return "present"
+	}
+	return "absent"
+}
+
+func quoteLabel(value string) string {
+	if value == "" {
+		return `""`
+	}
+	return `"` + value + `"`
+}

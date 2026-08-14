@@ -15,6 +15,11 @@ const MaxResponseStatusTypeLen = 64
 const HeaderRetryAfter = "Retry-After"
 
 // Response is the classifier input: one HTTP response, already read into memory.
+//
+// It is secret-bearing: Body and Header hold whatever Garmin sent, including
+// Set-Cookie and Authorization values. String, GoString and MarshalJSON are
+// implemented so printing or serializing a Response emits only its shape. Never
+// hand these fields to a logger directly.
 type Response struct {
 	// Status is the HTTP status code, or 0 when the request never completed.
 	Status int
@@ -30,6 +35,10 @@ type Response struct {
 }
 
 // Classification is the immutable verdict for one response.
+//
+// It is secret-bearing: ServiceTicket, CSRFToken and PageTitle carry credential
+// and page material. String, GoString and MarshalJSON are implemented so
+// printing or serializing a Classification reports presence rather than content.
 type Classification struct {
 	// Outcome is the classified meaning of the response.
 	Outcome Outcome
@@ -40,8 +49,9 @@ type Classification struct {
 	// MFAMethod is the delivery method Garmin last used, on OutcomeMFARequired.
 	MFAMethod string
 	// MFADeliveryUncertain marks an MFA challenge scraped from HTML, where OTP
-	// delivery is not confirmed. Source: the _mfa_delivery_uncertain flag set
-	// for the widget "authentication application" page.
+	// delivery is not confirmed. Upstream 0.3.10 removed the shelving this flag
+	// once drove and instead requests delivery explicitly via
+	// PathWidgetRequestMFACode; the flag is kept so a caller can decide.
 	MFADeliveryUncertain bool
 	// CSRFToken is the _csrf form value found in an HTML page, if any.
 	CSRFToken string
@@ -50,14 +60,18 @@ type Classification struct {
 	// RetryAfter is the parsed Retry-After hint, or 0 when absent.
 	RetryAfter time.Duration
 	// ResponseStatusType is the sanitized responseStatus.type token, kept for
-	// diagnostics when the value is not recognized.
+	// diagnostics when the value is not recognized. Only recognized values reach
+	// a rendered form.
 	ResponseStatusType string
 }
 
 // Err returns nil for OutcomeSuccess and a *Error otherwise, wrapping cause.
 // OutcomeMFARequired is reported as an error too, so callers can match it with
 // errors.Is(err, ErrMFARequired) and route to the OTP step.
-func (c Classification) Err(op, endpoint string, cause error) error {
+//
+// op and endpoint are typed labels: pass an Op* and an Endpoint* constant. Any
+// other value renders as "unknown".
+func (c Classification) Err(op Op, endpoint Endpoint, cause error) error {
 	if c.Outcome == OutcomeSuccess {
 		return nil
 	}
@@ -73,7 +87,7 @@ func (c Classification) Err(op, endpoint string, cause error) error {
 
 // ClassifyJSONLogin classifies a response from the mobile/iOS or portal JSON
 // login and MFA verify APIs. Source: the shared handling in _do_mobile_login,
-// _do_portal_web_login and _complete_mfa.
+// _do_portal_web_login and _complete_mfa (client.py, 0.3.10).
 func ClassifyJSONLogin(r Response) Classification {
 	c := Classification{Status: r.Status, RetryAfter: r.retryAfter()}
 
@@ -92,7 +106,7 @@ func ClassifyJSONLogin(r Response) Classification {
 	}
 
 	if c.Outcome == OutcomeUnknown {
-		if outcome, ok := statusOutcome(r.Status); ok {
+		if outcome, ok := statusOutcomeFor(contextLoginPOST, r.Status); ok {
 			c.Outcome = outcome
 		}
 	}
@@ -168,49 +182,67 @@ func embeddedStatusCode(raw json.RawMessage) string {
 	return body.StatusCode
 }
 
-// outcomeForStatusType maps a responseStatus.type token. Upstream recognizes
-// SUCCESSFUL, MFA_REQUIRED, INVALID_USERNAME_PASSWORD and CAPTCHA_REQUIRED; the
-// keyword checks additionally absorb the credential and lockout variants Garmin
-// may add, instead of failing open.
-func outcomeForStatusType(statusType string) Outcome {
+// knownStatusType maps the responseStatus.type values upstream acts on. Source:
+// the resp_type comparisons in _do_mobile_login, _do_portal_web_login and
+// _complete_mfa (client.py, 0.3.10): SUCCESSFUL, MFA_REQUIRED,
+// INVALID_USERNAME_PASSWORD and CAPTCHA_REQUIRED. ACCOUNT_LOCKED is added because
+// the widget flow treats a lockout as definitive.
+func knownStatusType(statusType string) (Outcome, bool) {
 	switch statusType {
-	case "":
-		return OutcomeUnknown
 	case "SUCCESSFUL":
-		return OutcomeSuccess
+		return OutcomeSuccess, true
 	case "MFA_REQUIRED":
-		return OutcomeMFARequired
+		return OutcomeMFARequired, true
+	case "INVALID_USERNAME_PASSWORD":
+		return OutcomeInvalidCredentials, true
 	case "CAPTCHA_REQUIRED":
-		return OutcomeBotChallenge
+		return OutcomeBotChallenge, true
+	case "ACCOUNT_LOCKED":
+		return OutcomeAccountLocked, true
+	default:
+		return OutcomeUnknown, false
+	}
+}
+
+// statusTypeCredentialQualifiers name the subject of an INVALID_* token that
+// makes it a credential rejection rather than, say, INVALID_TOKEN.
+var statusTypeCredentialQualifiers = [...]string{"CREDENTIAL", "CREDENTIALS", "USERNAME", "PASSWORD", "EMAIL"}
+
+// outcomeForStatusType maps a responseStatus.type token. Known values are matched
+// exactly. Unknown values fall back to a token-aware scan of the underscore
+// separated parts, so Garmin can add a variant without this classifier failing
+// open — but substring matching is deliberately avoided: it read UNLOCKED as
+// LOCKED and stopped the strategy chain on a healthy account. Anything still
+// unrecognized stays OutcomeUnknown.
+func outcomeForStatusType(statusType string) Outcome {
+	if statusType == "" {
+		return OutcomeUnknown
+	}
+	if outcome, ok := knownStatusType(statusType); ok {
+		return outcome
 	}
 
-	if strings.Contains(statusType, "LOCKED") {
+	parts := make(map[string]bool)
+	for part := range strings.SplitSeq(statusType, "_") {
+		parts[part] = true
+	}
+
+	if parts["LOCKED"] {
 		return OutcomeAccountLocked
 	}
-	if strings.Contains(statusType, "INVALID") && containsAny(statusType, "CREDENTIAL", "USERNAME", "PASSWORD") {
+	if parts["INVALID"] && hasAnyPart(parts, statusTypeCredentialQualifiers[:]...) {
 		return OutcomeInvalidCredentials
 	}
 	return OutcomeUnknown
 }
 
-// statusOutcome maps an HTTP status to an outcome when the body said nothing
-// usable. 401 is treated as a definitive rejection, matching the 401/403 check
-// in Client._verify_token.
-func statusOutcome(status int) (Outcome, bool) {
-	switch {
-	case status == http.StatusTooManyRequests:
-		return OutcomeRateLimited, true
-	case status == http.StatusForbidden:
-		return OutcomeBotChallenge, true
-	case status == http.StatusUnauthorized:
-		return OutcomeInvalidCredentials, true
-	case status == http.StatusRequestTimeout, status == http.StatusTooEarly:
-		return OutcomeTemporaryFailure, true
-	case status >= http.StatusInternalServerError:
-		return OutcomeTemporaryFailure, true
-	default:
-		return OutcomeUnknown, false
+func hasAnyPart(parts map[string]bool, candidates ...string) bool {
+	for _, candidate := range candidates {
+		if parts[candidate] {
+			return true
+		}
 	}
+	return false
 }
 
 func (r Response) contentType() string {
@@ -240,13 +272,4 @@ func (r Response) now() time.Time {
 
 func isJSONContentType(value string) bool {
 	return strings.Contains(strings.ToLower(value), "json")
-}
-
-func containsAny(haystack string, needles ...string) bool {
-	for _, needle := range needles {
-		if strings.Contains(haystack, needle) {
-			return true
-		}
-	}
-	return false
 }

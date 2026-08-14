@@ -14,6 +14,12 @@ const (
 	MaxServiceTicketLen = 512
 	// MaxMFAMethodLen bounds the reported MFA delivery method.
 	MaxMFAMethodLen = 32
+	// MaxQueryKeyLen bounds a query parameter name kept in a redacted URL.
+	MaxQueryKeyLen = 64
+	// MaxURLOpLen bounds the HTTP verb carried by a *url.Error.
+	MaxURLOpLen = 16
+	// MaxMediaTypeLen bounds a rendered Content-Type media type.
+	MaxMediaTypeLen = 64
 )
 
 // sanitizeToken keeps only characters valid in a Garmin identifier token and
@@ -46,6 +52,24 @@ func isTokenRune(r rune) bool {
 	}
 }
 
+// sanitizeMediaType keeps the media type of a Content-Type header, dropping any
+// parameters and anything outside the token charset plus "/".
+func sanitizeMediaType(value string) string {
+	mediaType, _, _ := strings.Cut(value, ";")
+
+	var b strings.Builder
+	for _, r := range strings.TrimSpace(mediaType) {
+		if !isTokenRune(r) && r != '/' && r != '+' {
+			break
+		}
+		if b.Len() >= MaxMediaTypeLen {
+			break
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
 // sanitizeTitle drops control characters, collapses runs of whitespace to a
 // single space and bounds the length to MaxPageTitleLen runes.
 func sanitizeTitle(value string) string {
@@ -76,6 +100,49 @@ func sanitizeTitle(value string) string {
 	return b.String()
 }
 
+// MFA delivery methods this package names in a rendered form. Source: the
+// mfaMethod values Garmin's widget emits, which _widget_request_mfa_code acts on
+// for "email" and "sms", plus the customerMfaInfo.mfaLastMethodUsed values seen
+// on the JSON login APIs.
+const (
+	mfaMethodSMS           = "sms"
+	mfaMethodTOTP          = "totp"
+	mfaMethodAuthenticator = "authenticator"
+	mfaMethodVoice         = "voice"
+)
+
+var knownMFAMethods = [...]string{
+	MFAMethodEmail, mfaMethodSMS, mfaMethodTOTP, mfaMethodAuthenticator, mfaMethodVoice,
+}
+
+// knownMFAMethod folds an MFA method to a recognized value, or "other". An
+// unrecognized value is server-controlled, so it is never echoed.
+func knownMFAMethod(value string) string {
+	if value == "" {
+		return ""
+	}
+	folded := strings.ToLower(sanitizeToken(value, MaxMFAMethodLen))
+	for _, known := range knownMFAMethods {
+		if folded == known {
+			return known
+		}
+	}
+	return labelOther
+}
+
+// knownResponseStatusType folds a responseStatus.type to a recognized value, or
+// "other". Diagnostics keep the raw token in Classification.ResponseStatusType;
+// only recognized values reach a rendered form.
+func knownResponseStatusType(value string) string {
+	if value == "" {
+		return ""
+	}
+	if _, ok := knownStatusType(value); ok {
+		return value
+	}
+	return labelOther
+}
+
 // mfaMethodOrDefault sanitizes the reported MFA delivery method, falling back to
 // MFAMethodEmail. Source: the "email" default for mfaLastMethodUsed.
 func mfaMethodOrDefault(value string) string {
@@ -83,4 +150,47 @@ func mfaMethodOrDefault(value string) string {
 		return method
 	}
 	return MFAMethodEmail
+}
+
+// containsWordPhrase reports whether phrase occurs in text delimited by
+// non-alphanumeric runes on both sides. Substring matching would read "unlocked"
+// as "locked" and "invalidated" as "invalid", which then stops the login
+// strategy chain on a healthy account.
+//
+// Both arguments must already be lowercased.
+func containsWordPhrase(text, phrase string) bool {
+	if phrase == "" {
+		return false
+	}
+
+	runes := []rune(text)
+	target := []rune(phrase)
+	for offset := 0; offset+len(target) <= len(runes); offset++ {
+		if string(runes[offset:offset+len(target)]) != phrase {
+			continue
+		}
+		if isWordBoundary(runes, offset-1) && isWordBoundary(runes, offset+len(target)) {
+			return true
+		}
+	}
+	return false
+}
+
+// isWordBoundary reports whether the rune at index is absent or not alphanumeric.
+func isWordBoundary(runes []rune, index int) bool {
+	if index < 0 || index >= len(runes) {
+		return true
+	}
+	r := runes[index]
+	return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+}
+
+// containsAnyWordPhrase reports whether any phrase occurs as a delimited word.
+func containsAnyWordPhrase(text string, phrases ...string) bool {
+	for _, phrase := range phrases {
+		if containsWordPhrase(text, phrase) {
+			return true
+		}
+	}
+	return false
 }

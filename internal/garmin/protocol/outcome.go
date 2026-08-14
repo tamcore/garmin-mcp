@@ -47,12 +47,21 @@ const (
 	// OutcomeTemporaryFailure is a transport or server-side error worth retrying.
 	// Source: 5xx responses and the "bad gateway"/"service unavailable" hints.
 	OutcomeTemporaryFailure
+
+	// OutcomeSessionRejected means the API tier refused a candidate session: the
+	// DI token or JWT_WEB cookie is not accepted, which is account and region
+	// dependent. It says nothing about the password, so the caller must discard
+	// the token and let the next login strategy try. Source: the 401/403 check in
+	// Client._verify_token (upstream issue #369).
+	OutcomeSessionRejected
 )
 
-// Stable labels reused by Outcome.String and the error renderer.
+// Stable labels reused by Outcome.String, the error renderer and the redacted
+// formatters.
 const (
 	labelUnknown     = "unknown"
 	labelRateLimited = "rate_limited"
+	labelOther       = "other"
 )
 
 // String returns a stable snake_case label safe for logs and metrics.
@@ -76,6 +85,8 @@ func (o Outcome) String() string {
 		return labelRateLimited
 	case OutcomeTemporaryFailure:
 		return "temporary_failure"
+	case OutcomeSessionRejected:
+		return "session_rejected"
 	default:
 		return "invalid_outcome(" + strconv.Itoa(int(o)) + ")"
 	}
