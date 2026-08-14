@@ -24,6 +24,8 @@ type redactedConfig struct {
 	TLSCertFile            string   `json:"tlsCertFile,omitempty"`
 	TLSKeyFile             string   `json:"tlsKeyFile,omitempty"`
 	DatabasePath           string   `json:"databasePath,omitempty"`
+	StateDir               string   `json:"stateDir,omitempty"`
+	PrincipalID            string   `json:"principalID,omitempty"`
 	MasterKeyFile          string   `json:"masterKeyFile,omitempty"`
 	MasterKey              string   `json:"masterKey"`
 	GarminTokensFile       string   `json:"garminTokensFile,omitempty"`
@@ -59,6 +61,8 @@ func (c Config) redacted() redactedConfig {
 		TLSCertFile:            c.TLSCertFile,
 		TLSKeyFile:             c.TLSKeyFile,
 		DatabasePath:           c.DatabasePath,
+		StateDir:               c.StateDir,
+		PrincipalID:            c.PrincipalID,
 		MasterKeyFile:          c.MasterKeyPath,
 		MasterKey:              c.MasterKey.String(),
 		GarminTokensFile:       c.GarminTokensPath,
@@ -96,6 +100,8 @@ func (r redactedConfig) pairs() []string {
 		"tlsCertFile:" + quoteValue(r.TLSCertFile),
 		"tlsKeyFile:" + quoteValue(r.TLSKeyFile),
 		"databasePath:" + quoteValue(r.DatabasePath),
+		"stateDir:" + quoteValue(r.StateDir),
+		"principalID:" + quoteValue(r.PrincipalID),
 		"masterKeyFile:" + quoteValue(r.MasterKeyFile),
 		"masterKey:" + r.MasterKey,
 		"garminTokensFile:" + quoteValue(r.GarminTokensFile),
@@ -138,6 +144,8 @@ func (c Config) LogValue() slog.Value {
 		slog.Int("trustedProxyCIDRs", len(red.TrustedProxyCIDRs)),
 		slog.Bool("allowInsecureHTTP", red.AllowInsecureHTTP),
 		slog.String("databasePath", red.DatabasePath),
+		slog.String("stateDir", red.StateDir),
+		slog.String("principalID", red.PrincipalID),
 		slog.String("masterKeyFile", red.MasterKeyFile),
 		slog.String("masterKey", red.MasterKey),
 		slog.String("garminTokensFile", red.GarminTokensFile),

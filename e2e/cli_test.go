@@ -5,6 +5,7 @@ package e2e
 import (
 	"bytes"
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -36,7 +37,16 @@ func buildBinary(t *testing.T) string {
 func run(t *testing.T, bin string, args ...string) (stdout, stderr string, code int) {
 	t.Helper()
 
+	return runWithEnv(t, bin, nil, args...)
+}
+
+// runWithEnv is run with extra environment entries, so a test can point the binary
+// at a private state directory instead of the developer's own.
+func runWithEnv(t *testing.T, bin string, env []string, args ...string) (stdout, stderr string, code int) {
+	t.Helper()
+
 	cmd := exec.Command(bin, args...)
+	cmd.Env = append(os.Environ(), env...)
 
 	var out, errOut bytes.Buffer
 	cmd.Stdout = &out
@@ -73,21 +83,44 @@ func TestVersionReportsTheInjectedBuildInfo(t *testing.T) {
 
 // TestStdioTransportKeepsStdoutClean guards the invariant that matters most for a
 // stdio MCP server: stdout carries protocol frames and nothing else, so a
-// diagnostic or an error must never appear there. serve is unimplemented in this
-// milestone, which is exactly why the failure path is worth asserting now.
+// diagnostic or a log record must never appear there.
+//
+// The binary runs with a closed standard input, which is a peer that disconnects
+// immediately: the server starts, sees end of input, and shuts down. No request was
+// sent, so no frame is due, and stdout must therefore be byte-empty while the
+// lifecycle records went to stderr.
 func TestStdioTransportKeepsStdoutClean(t *testing.T) {
 	bin := buildBinary(t)
 
-	stdout, stderr, code := run(t, bin, "serve", "--transport=stdio")
-	if code == 0 {
-		t.Fatal("exit code = 0, want non-zero while serve is unimplemented")
+	stdout, stderr, code := runWithEnv(t, bin,
+		[]string{"GARMIN_MCP_STATE_DIR=" + stateDir(t)},
+		"serve", "--transport=stdio")
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0 for a peer that disconnected (stderr %q)", code, stderr)
 	}
 	if stdout != "" {
-		t.Errorf("stdout = %q, want empty", stdout)
+		t.Errorf("stdout = %q, want empty: it is reserved for MCP frames", stdout)
 	}
 	if stderr == "" {
-		t.Error("stderr is empty; the reason for the failure must be reported")
+		t.Error("stderr is empty; the lifecycle records must be reported there")
 	}
+	if strings.Contains(stderr, "jsonrpc") {
+		t.Errorf("stderr = %q, want no MCP frame on the log stream", stderr)
+	}
+}
+
+// stateDir returns a private, symlink-free state directory. Every path component
+// must be real, because the secure file layer refuses a symlinked ancestor, and on
+// macOS the temporary directory sits under /var, which is a symlink.
+func stateDir(t *testing.T) string {
+	t.Helper()
+
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolve the temporary directory: %v", err)
+	}
+	return dir
 }
 
 func TestUnknownCommandFailsWithoutTouchingStdout(t *testing.T) {

@@ -69,11 +69,6 @@ func TestServeParsesAndValidatesBeforeReportingTheGap(t *testing.T) {
 		sentinel error
 	}{
 		{
-			name:     "stdio validates and reports the missing server",
-			args:     []string{cmdServe, flagStdio},
-			sentinel: cmd.ErrNotImplemented,
-		},
-		{
 			name: "streamable http validates and reports the missing server",
 			args: []string{
 				cmdServe, "--transport=streamable-http",
@@ -122,11 +117,14 @@ func TestServeParsesAndValidatesBeforeReportingTheGap(t *testing.T) {
 	}
 }
 
-// TestServeStdioWritesNothingToStdout is the frame-stream guarantee: in stdio
-// mode standard output carries MCP protocol output and nothing else, so a
-// diagnostic or an error must never appear there.
-func TestServeStdioWritesNothingToStdout(t *testing.T) {
+// TestServeStdioFailureWritesNothingToStdout is the frame-stream guarantee: in
+// stdio mode standard output carries MCP protocol output and nothing else, so a
+// diagnostic or an error must never appear there — not even when the server never
+// starts. The failure used here is unusable key material, because it is refused
+// after configuration validation and before anything opens.
+func TestServeStdioFailureWritesNothingToStdout(t *testing.T) {
 	clearGarminEnv(t)
+	t.Setenv("GARMIN_MCP_MASTER_KEY", "c2VjcmV0LW1hdGVyaWFs")
 
 	var stdout, stderr bytes.Buffer
 	code := cmd.Execute(context.Background(), cmd.Options{
@@ -137,13 +135,16 @@ func TestServeStdioWritesNothingToStdout(t *testing.T) {
 	})
 
 	if code == 0 {
-		t.Error("exit code = 0, but no MCP server was started")
+		t.Error("exit code = 0, but the key material was refused")
 	}
 	if stdout.Len() != 0 {
 		t.Errorf("stdout = %q, want empty: it is reserved for MCP frames", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "not implemented in this milestone") {
-		t.Errorf("stderr = %q, want the not-implemented diagnostic", stderr.String())
+	if !strings.Contains(stderr.String(), "master key") {
+		t.Errorf("stderr = %q, want it to name the refused setting", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "c2VjcmV0LW1hdGVyaWFs") {
+		t.Error("stderr echoes the supplied key material")
 	}
 }
 

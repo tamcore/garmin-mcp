@@ -27,6 +27,8 @@ const (
 	keyTLSCertFile            = "tls-cert-file"
 	keyTLSKeyFile             = "tls-key-file"
 	keyDatabasePath           = "database-path"
+	keyStateDir               = "state-dir"
+	keyPrincipalID            = "principal-id"
 	keyMasterKey              = "master-key"
 	keyMasterKeyFile          = keyMasterKey + fileSuffix
 	keyGarminTokens           = "garmin-tokens"
@@ -118,6 +120,14 @@ var settingTable = [...]setting{
 	{
 		key: keyDatabasePath, flag: keyDatabasePath, kind: kindString, def: "",
 		usage: "SQLite database path, required for streamable-http",
+	},
+	{
+		key: keyStateDir, flag: keyStateDir, kind: kindString, def: "",
+		usage: "directory holding the encrypted token store and key material; empty selects the per-user config directory",
+	},
+	{
+		key: keyPrincipalID, flag: keyPrincipalID, kind: kindString, def: DefaultPrincipalID,
+		usage: "opaque identifier of the single local account this process is bound to; never an email address",
 	},
 	{
 		key: keyMasterKey, kind: kindString, def: "", secret: true,

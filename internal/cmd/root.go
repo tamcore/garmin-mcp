@@ -62,11 +62,31 @@ type Options struct {
 	// Args are the command-line arguments after the program name. A nil value
 	// selects os.Args[1:].
 	Args []string
-	// Stdout receives command results. A nil value selects os.Stdout.
+	// Stdin is the MCP frame source in stdio mode. A nil value selects os.Stdin.
+	// No command reads a credential from it: Garmin credentials arrive only
+	// through the browser form or the explicit TTY prompt.
+	Stdin io.Reader
+	// Stdout receives command results, and in stdio mode the MCP frames. A nil
+	// value selects os.Stdout.
 	Stdout io.Writer
 	// Stderr receives diagnostics, logs, and errors. A nil value selects
 	// os.Stderr.
 	Stderr io.Writer
+	// Tools contributes the Garmin MCP tools. A nil factory registers none, which
+	// leaves the server with its built-in tool only.
+	//
+	// This is the registration seam: the composition root depends on the
+	// [ToolFactory] signature and the mcpserver.ToolRegistrar interface, never on
+	// a tool package, so a test can hand it a fake registry and the binary can
+	// hand it the real one.
+	Tools ToolFactory
+}
+
+func (o Options) stdin() io.Reader {
+	if o.Stdin == nil {
+		return os.Stdin
+	}
+	return o.Stdin
 }
 
 func (o Options) stdout() io.Writer {

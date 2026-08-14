@@ -1,7 +1,9 @@
 package mcpserver
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -56,11 +58,58 @@ func recordFromContext(ctx context.Context) *callRecord {
 //     Last, so it is the final word before the handler runs.
 func (s *Server) installMiddleware() {
 	s.mcpServer.AddReceivingMiddleware(
+		argumentsMiddleware(),
 		s.principalMiddleware(),
 		s.loggingMiddleware(),
 		ratelimit.Middleware(s.deps.Limiter, s.classifyTool, rateLimitObserver{}),
 		s.policyMiddleware(),
 	)
+}
+
+// argumentsMiddleware makes a tool call's arguments safe to validate.
+//
+// The SDK allocates an empty argument map and then unmarshals the request's raw
+// arguments over it. A request carrying literal JSON null therefore replaces that
+// allocated map with a nil map, and the value is still typed map[string]any, so
+// the SDK proceeds to apply the schema's defaults and jsonschema-go v0.4.3 panics
+// writing into a map it does not own (validate.go, applyDefaults). A caller can
+// crash the server with one field.
+//
+// Absent arguments are safe by contrast: the SDK keeps its allocated empty map.
+// This middleware therefore refuses null with an ordinary invalid-arguments
+// result rather than rewriting it to {}, because the published schema says the
+// arguments are an object and null is not one. Rewriting it would accept a
+// malformed request and silently apply defaults the caller never asked for.
+//
+// It runs first, because the panic happens during argument validation, which is
+// downstream of every other middleware. Remove it once the dependency stops
+// writing into a nil map; the upstream report is linked in
+// docs/implementation-status.md.
+func argumentsMiddleware() mcp.Middleware {
+	return func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method != methodCallTool {
+				return next(ctx, method, req)
+			}
+
+			call, ok := req.(*mcp.CallToolRequest)
+			if !ok || call == nil || call.Params == nil {
+				return next(ctx, method, req)
+			}
+			if isJSONNull(call.Params.Arguments) {
+				return errorResult("The arguments field was null. Send an object, " +
+					"or omit the field entirely."), nil
+			}
+
+			return next(ctx, method, req)
+		}
+	}
+}
+
+// isJSONNull reports whether raw is the JSON null literal, ignoring surrounding
+// whitespace, which is what a typed nil map marshals to.
+func isJSONNull(raw json.RawMessage) bool {
+	return string(bytes.TrimSpace(raw)) == "null"
 }
 
 // principalMiddleware resolves the principal once and puts it on the context.

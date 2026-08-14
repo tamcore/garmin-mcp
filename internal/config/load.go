@@ -153,6 +153,8 @@ func withNetwork(cfg Config, store *viper.Viper) Config {
 func withState(cfg Config, store *viper.Viper) Config {
 	out := cfg
 	out.DatabasePath = strings.TrimSpace(store.GetString(keyDatabasePath))
+	out.StateDir = strings.TrimSpace(store.GetString(keyStateDir))
+	out.PrincipalID = strings.TrimSpace(store.GetString(keyPrincipalID))
 	out.MasterKeyPath = strings.TrimSpace(store.GetString(keyMasterKeyFile))
 	out.MasterKey = NewSecret(store.GetString(keyMasterKey))
 	out.GarminTokensPath = strings.TrimSpace(store.GetString(keyGarminTokensFile))

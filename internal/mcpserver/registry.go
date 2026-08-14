@@ -71,6 +71,20 @@ type ToolSpec struct {
 
 	// Annotations are the four MCP hints.
 	Annotations Annotations
+
+	// InputSchema is the JSON Schema published for this tool's arguments. It is
+	// optional, and a nil value lets the SDK infer a schema from the handler's
+	// input type.
+	//
+	// Inference is not sufficient for this project. It produces types and
+	// descriptions but no ranges, formats, defaults or anyOf, so a declared bound
+	// such as "limit is 1 to 100, default 20" would be enforced in the handler and
+	// invisible to the client. The brief requires the strict schema on the wire,
+	// so a tool that declares one passes it here and the two cannot drift: the
+	// contract test compares the published schema against compat/tools.json.
+	//
+	// It must marshal to a JSON Schema object.
+	InputSchema any
 }
 
 // validate checks the spec on its own terms and against its tier.
@@ -178,12 +192,17 @@ func AddTool[In, Out any](registry *Registry, spec ToolSpec, handler mcp.ToolHan
 		return fmt.Errorf("tool %q is already registered: %w", spec.Name, ErrDuplicateTool)
 	}
 
-	mcp.AddTool(registry.server, &mcp.Tool{
+	tool := &mcp.Tool{
 		Name:        spec.Name,
 		Title:       spec.Title,
 		Description: spec.Description,
 		Annotations: spec.Annotations.toSDK(spec.Title),
-	}, handler)
+	}
+	if spec.InputSchema != nil {
+		tool.InputSchema = spec.InputSchema
+	}
+
+	mcp.AddTool(registry.server, tool, handler)
 	registry.specs[spec.Name] = spec
 	return nil
 }

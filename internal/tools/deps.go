@@ -1,0 +1,228 @@
+// Package tools registers the Garmin MCP tools.
+//
+// One file per tool, each exposing a register<Name> function, and one register.go
+// that wires them in explicit tier order. A tool file owns four things and nothing
+// else: the tool's wire name, its strict input schema, its bounded result model, and
+// the handler that maps arguments onto a domain client in internal/garmin/api.
+//
+// What a tool file deliberately does not own:
+//
+//   - Policy, rate limiting, logging and destructive confirmation. Those are applied
+//     centrally by the middleware chain in internal/mcpserver, so a handler that
+//     forgets to check something cannot exist.
+//   - The principal. It is resolved from the request context through
+//     identity.FromContext, never from an argument. No tool accepts a user id, an
+//     email address, an account selector, a display name or a filesystem path.
+//   - Caching. No Garmin result is cached here. Health, location, nutrition and
+//     women's-health payloads must not be persisted or shared, so every call reads
+//     through to Garmin.
+//
+// Every result model implements slog.LogValuer and reports its shape rather than its
+// content, so a result that reaches a log sink by accident leaks nothing. Every
+// failure is returned as a *ToolError, whose message is an authored remediation and
+// never a raw payload, token, cookie, coordinate or stack trace.
+package tools
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/tamcore/garmin-mcp/internal/garmin/api"
+	"github.com/tamcore/garmin-mcp/internal/garmin/client"
+	"github.com/tamcore/garmin-mcp/internal/identity"
+)
+
+// Result bounds. Each one is the point at which a result stops being useful to a
+// model and starts being a denial of service.
+const (
+	// DefaultMaxWindowActivities bounds how many activities one date window may
+	// yield before the tool refuses and asks for a narrower window.
+	DefaultMaxWindowActivities = 2000
+
+	// DefaultMaxActivityPageSize bounds one requested page of activities. It
+	// matches the maximum upstream documents for get_activities.
+	DefaultMaxActivityPageSize = 100
+
+	// DefaultMaxWindowPageSize bounds one requested page of a date window. It
+	// matches the maximum upstream documents for get_activities_by_date.
+	DefaultMaxWindowPageSize = 200
+
+	// DefaultMaxDevices bounds the returned device list.
+	DefaultMaxDevices = 64
+
+	// DefaultMaxSplits bounds the returned split list.
+	DefaultMaxSplits = 500
+
+	// DefaultMaxExerciseSets bounds the returned strength-set list.
+	DefaultMaxExerciseSets = 500
+
+	// DefaultMaxWindowPage bounds the page index of a date window, so a caller
+	// cannot ask for page one billion.
+	DefaultMaxWindowPage = 10_000
+)
+
+// Bounds are the per-tool result bounds. It is plain immutable data: a zero field
+// means "use the default", so Bounds{} is the safe configuration rather than an
+// unbounded one.
+type Bounds struct {
+	// MaxWindowActivities bounds the activities one date window may yield.
+	MaxWindowActivities int
+	// MaxDevices bounds the returned device list.
+	MaxDevices int
+	// MaxSplits bounds the returned split list.
+	MaxSplits int
+	// MaxExerciseSets bounds the returned strength-set list.
+	MaxExerciseSets int
+}
+
+// resolved returns a copy of b with every zero field replaced by its default. The
+// receiver is not modified.
+func (b Bounds) resolved() Bounds {
+	out := Bounds{
+		MaxWindowActivities: DefaultMaxWindowActivities,
+		MaxDevices:          DefaultMaxDevices,
+		MaxSplits:           DefaultMaxSplits,
+		MaxExerciseSets:     DefaultMaxExerciseSets,
+	}
+	pick(&out.MaxWindowActivities, b.MaxWindowActivities)
+	pick(&out.MaxDevices, b.MaxDevices)
+	pick(&out.MaxSplits, b.MaxSplits)
+	pick(&out.MaxExerciseSets, b.MaxExerciseSets)
+	return out
+}
+
+func pick(target *int, candidate int) {
+	if candidate > 0 {
+		*target = candidate
+	}
+}
+
+// Deps is the injected dependency set. Both clients are required: a tool that could
+// not name whose tokens it uses would be reaching Garmin as somebody.
+type Deps struct {
+	// Client is the authenticated request layer every domain client is built on.
+	Client *client.Client
+
+	// Caller performs one authenticated request for one principal. In production
+	// this is *auth.Refresher, which owns the token lifecycle.
+	Caller client.Caller
+
+	// Bounds are the per-tool result bounds. The zero value means the defaults.
+	Bounds Bounds
+}
+
+func (d Deps) validate() error {
+	if d.Client == nil {
+		return fmt.Errorf("no request layer: %w", ErrMissingDependency)
+	}
+	if d.Caller == nil {
+		return fmt.Errorf("no authenticated caller: %w", ErrMissingDependency)
+	}
+	return nil
+}
+
+// service is the resolved dependency set every handler closes over. It is immutable
+// after construction and safe for concurrent use: it holds no per-request state, and
+// the per-principal session is built fresh from the request context on every call.
+type service struct {
+	caller     client.Caller
+	bounds     Bounds
+	limits     client.Limits
+	profile    *api.Profile
+	activities *api.Activities
+	wellness   *api.Wellness
+	devices    *api.Devices
+	details    *api.ActivityDetails
+}
+
+func newService(deps Deps) (*service, error) {
+	if err := deps.validate(); err != nil {
+		return nil, err
+	}
+
+	built := &service{
+		caller: deps.Caller,
+		bounds: deps.Bounds.resolved(),
+		limits: deps.Client.Limits(),
+	}
+	if err := built.buildClients(deps.Client); err != nil {
+		return nil, err
+	}
+	return built, nil
+}
+
+// buildClients constructs the five domain clients this slice reads through.
+func (s *service) buildClients(rc *client.Client) error {
+	var err error
+	if s.profile, err = api.NewProfile(rc); err != nil {
+		return fmt.Errorf("building the profile client: %w", err)
+	}
+	if s.activities, err = api.NewActivities(rc); err != nil {
+		return fmt.Errorf("building the activity client: %w", err)
+	}
+	if s.wellness, err = api.NewWellness(rc); err != nil {
+		return fmt.Errorf("building the wellness client: %w", err)
+	}
+	if s.devices, err = api.NewDevices(rc); err != nil {
+		return fmt.Errorf("building the device client: %w", err)
+	}
+	if s.details, err = api.NewActivityDetails(rc); err != nil {
+		return fmt.Errorf("building the activity-detail client: %w", err)
+	}
+	return nil
+}
+
+// session binds the request's principal to the caller that may act for it.
+//
+// The principal comes from the context and from nowhere else. There is no argument,
+// header or default that could name a different account.
+func (s *service) session(ctx context.Context) (client.Session, error) {
+	principal, err := identity.FromContext(ctx)
+	if err != nil {
+		return client.Session{}, fail(err)
+	}
+	session, err := client.NewSession(s.caller, principal.ID())
+	if err != nil {
+		return client.Session{}, fail(err)
+	}
+	return session, nil
+}
+
+// dailyRead is everything a date-keyed wellness read needs: the validated day, the
+// session, and the display name Garmin wants in the path.
+type dailyRead struct {
+	date    client.Date
+	session client.Session
+	name    client.DisplayName
+}
+
+// resolveDailyRead validates the date argument first, so a malformed date costs no
+// Garmin call at all, and only then resolves the session and the display name.
+func (s *service) resolveDailyRead(ctx context.Context, date string) (dailyRead, error) {
+	day, err := parseCalendarDate("date", date)
+	if err != nil {
+		return dailyRead{}, err
+	}
+	session, err := s.session(ctx)
+	if err != nil {
+		return dailyRead{}, err
+	}
+	name, err := s.displayName(ctx, session)
+	if err != nil {
+		return dailyRead{}, err
+	}
+	return dailyRead{date: day, session: session, name: name}, nil
+}
+
+// displayName resolves the account's own display name, which the date-keyed wellness
+// paths take as a path segment. It is read from the profile on every call: caching it
+// would mean caching profile data.
+func (s *service) displayName(
+	ctx context.Context, session client.Session,
+) (client.DisplayName, error) {
+	name, err := s.profile.DisplayName(ctx, session)
+	if err != nil {
+		return client.DisplayName{}, fail(err)
+	}
+	return name, nil
+}

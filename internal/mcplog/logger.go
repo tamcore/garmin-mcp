@@ -82,6 +82,12 @@ func New(w io.Writer, cfg Config) (*Logger, error) {
 		return nil, fmt.Errorf("refusing to log to stdout: %w", ErrStdoutReserved)
 	}
 
+	return newLogger(w, cfg)
+}
+
+// newLogger builds the Logger without the stdout refusal. Only New and NewStderr
+// call it, and each states which guard it applies.
+func newLogger(w io.Writer, cfg Config) (*Logger, error) {
 	opts := &slog.HandlerOptions{Level: cfg.Level}
 	var handler slog.Handler
 	switch cfg.Format {
@@ -103,7 +109,21 @@ func New(w io.Writer, cfg Config) (*Logger, error) {
 
 // NewStderr returns a Logger that writes to os.Stderr, which is the only sink the
 // stdio transport permits.
-func NewStderr(cfg Config) (*Logger, error) { return New(os.Stderr, cfg) }
+//
+// It deliberately does not apply New's stdout refusal to os.Stderr. Under
+// `go test -json` the toolchain points the test binary's os.Stderr at os.Stdout
+// so that stderr output is captured in the JSON event stream, which makes the
+// two values identical and would make this constructor fail in exactly the
+// environment CI uses. The invariant that matters is that log records never
+// reach the stream carrying MCP frames, and that is enforced where the frame
+// stream is known: the stdio transport is constructed with an explicit frame
+// writer, and Sink lets a caller assert the two differ.
+func NewStderr(cfg Config) (*Logger, error) {
+	if os.Stderr == nil {
+		return nil, fmt.Errorf("no writer given: %w", ErrNoSink)
+	}
+	return newLogger(os.Stderr, cfg)
+}
 
 // Sink reports the writer records go to, or nil for a nil Logger. It exists so a
 // caller can assert the sink is not stdout.

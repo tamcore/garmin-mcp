@@ -15,29 +15,6 @@ import (
 // and configuration validation is real today, so an operator can already check a
 // deployment's settings without waiting for the subsystem.
 
-// NewAuthCommand will run the one-shot browser login and MFA flow.
-//
-// Credentials will never be accepted here as arguments: the flow will bind a
-// loopback listener on 127.0.0.1:0, or use an explicit no-echo TTY prompt, and
-// nothing will read a Garmin password from MCP stdio.
-func NewAuthCommand(opts Options) *cobra.Command {
-	return newPendingCommand(opts, pending{
-		use:       "auth",
-		short:     "Link a Garmin account through a one-shot browser login",
-		subsystem: "the Garmin login transaction state machine",
-	})
-}
-
-// NewDoctorCommand will report deployment diagnostics: key material, token store,
-// database schema, and Garmin reachability.
-func NewDoctorCommand(opts Options) *cobra.Command {
-	return newPendingCommand(opts, pending{
-		use:       "doctor",
-		short:     "Diagnose the local deployment",
-		subsystem: "the diagnostic checks for key material, storage, and Garmin reachability",
-	})
-}
-
 // NewMigrateCommand will apply the embedded, monotonic database migrations.
 func NewMigrateCommand(opts Options) *cobra.Command {
 	return newPendingCommand(opts, pending{

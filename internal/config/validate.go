@@ -22,6 +22,7 @@ func (c Config) Validate() error {
 		c.validateRegion(),
 		c.validateLimits(),
 		c.validateLogging(),
+		c.validatePrincipalID(),
 	}
 	errs = append(errs, c.validateSecrets()...)
 	errs = append(errs, c.validatePaths()...)
@@ -76,6 +77,39 @@ func (c Config) validateStdio() []error {
 	return errs
 }
 
+// validatePrincipalID keeps an unusable account binding a start-up failure.
+//
+// The rejected value is never echoed, and an email address is refused outright:
+// a principal is an opaque internal identifier, and an email is login and
+// display material that must never key isolation. The authoritative check is
+// identity.NewPrincipal; this one runs first, so nothing opens a token store for
+// a binding that is going to be refused.
+func (c Config) validatePrincipalID() error {
+	trimmed := strings.TrimSpace(c.PrincipalID)
+	switch {
+	case trimmed == "":
+		return newFieldError(keyPrincipalID, "must not be blank", ErrMissingSetting)
+	case trimmed != c.PrincipalID:
+		return newFieldError(keyPrincipalID, "must not be padded with whitespace", ErrInvalidConfig)
+	case len(trimmed) > MaxPrincipalIDLen:
+		return newFieldError(keyPrincipalID,
+			"must be at most "+strconv.Itoa(MaxPrincipalIDLen)+" bytes", ErrInvalidConfig)
+	case strings.ContainsRune(trimmed, '@'):
+		return newFieldError(keyPrincipalID,
+			"must be an opaque identifier, not an email address", ErrInvalidConfig)
+	case strings.ContainsFunc(trimmed, isControlRune):
+		return newFieldError(keyPrincipalID, "must not contain a control character", ErrInvalidConfig)
+	default:
+		return nil
+	}
+}
+
+// isControlRune reports whether r is a C0 or C1 control character, which has no
+// place in an identifier that reaches a log line, a map key, or a file name.
+func isControlRune(r rune) bool {
+	return r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f)
+}
+
 // validateSecrets rejects an ambiguous inline-plus-file pair. Guessing which one
 // the operator meant could put a stale key into production.
 func (c Config) validateSecrets() []error {
@@ -108,6 +142,7 @@ func (c Config) validatePaths() []error {
 		value string
 	}{
 		{key: keyDatabasePath, value: c.DatabasePath},
+		{key: keyStateDir, value: c.StateDir},
 		{key: keyMasterKeyFile, value: c.MasterKeyPath},
 		{key: keyGarminTokensFile, value: c.GarminTokensPath},
 		{key: keyTLSCertFile, value: c.TLSCertFile},

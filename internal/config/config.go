@@ -99,6 +99,11 @@ const (
 	DefaultLogLevel = "info"
 	// DefaultLogFormat is the log encoding used when none is configured.
 	DefaultLogFormat = "text"
+	// DefaultPrincipalID is the identifier the local stdio deployment binds when
+	// the operator names none. Local stdio serves exactly one account, so a
+	// stable opaque label is enough. It is a storage record key, never a Garmin
+	// account selector: nothing resolves a Garmin account from it.
+	DefaultPrincipalID = "local"
 )
 
 // Validation caps. A setting an operator can raise without bound is a denial of
@@ -116,6 +121,10 @@ const (
 	MaxRateLimitPerMinute = 100_000
 	// MaxToolNameLen bounds a configured tool name.
 	MaxToolNameLen = 64
+	// MaxPrincipalIDLen bounds the configured principal identifier. The
+	// authority on a principal identifier is identity.NewPrincipal; this bound
+	// exists so an unusable value is refused before anything opens a store.
+	MaxPrincipalIDLen = 256
 )
 
 // Config is the complete runtime configuration. Every field is plain data, and
@@ -149,6 +158,15 @@ type Config struct {
 	// DatabasePath is the SQLite database holding principals, consents, and
 	// encrypted token material.
 	DatabasePath string
+	// StateDir is the directory holding the encrypted token store and the
+	// versioned key material. An empty value asks the caller to resolve the
+	// per-user configuration directory, which Load deliberately does not do:
+	// resolving it would read the environment outside the precedence rules.
+	StateDir string
+	// PrincipalID is the opaque identifier of the single account a local stdio
+	// process is bound to. It is never an email address and never a tool
+	// argument; [DefaultPrincipalID] applies when the operator names none.
+	PrincipalID string
 	// MasterKeyPath is the owner-only file holding the versioned encryption
 	// master key. This is the supported way to supply the key.
 	MasterKeyPath string
@@ -212,6 +230,7 @@ func Default() Config {
 		WriteRateLimitPerMinute: DefaultWriteRateLimitPerMinute,
 		LogLevel:                DefaultLogLevel,
 		LogFormat:               DefaultLogFormat,
+		PrincipalID:             DefaultPrincipalID,
 	}
 }
 

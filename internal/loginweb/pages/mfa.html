@@ -1,0 +1,15 @@
+{{define "title"}}Two-step verification{{end}}
+{{define "content"}}
+<p>Garmin asked for a one-time code{{if .MFAMethod}}, sent by {{.MFAMethod}}{{end}}.</p>
+{{if .DeliveryUncertain}}<p>Whether the code was sent could not be confirmed. If
+none arrives, close this page and start the login again.</p>{{end}}
+<form method="post" action="/mfa" autocomplete="on">
+<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+<p>
+<label for="code">One-time code</label>
+<input type="text" id="code" name="code" autocomplete="one-time-code"
+inputmode="numeric" pattern="[0-9]*" required maxlength="{{.MaxCodeLen}}" autofocus>
+</p>
+<p><button type="submit">Verify</button></p>
+</form>
+{{end}}

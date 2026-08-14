@@ -20,8 +20,6 @@ func TestUnimplementedCommandsFailLoudly(t *testing.T) {
 		name string
 		args []string
 	}{
-		{name: cmdAuth, args: []string{cmdAuth}},
-		{name: cmdDoctor, args: []string{cmdDoctor}},
 		{name: "tools list", args: []string{cmdTools, cmdList}},
 		{name: cmdMigrate, args: []string{cmdMigrate}},
 	}
@@ -115,7 +113,7 @@ func TestUnimplementedCommandsReportConfigurationFaultsBeforeTheGap(t *testing.T
 // pendingCommandArgs lists the invocations whose subsystem is still missing. Each
 // call returns a fresh slice, so a subtest may append to it.
 func pendingCommandArgs() [][]string {
-	return [][]string{{cmdAuth}, {cmdDoctor}, {cmdTools, cmdList}, {cmdMigrate}}
+	return [][]string{{cmdTools, cmdList}, {cmdMigrate}}
 }
 
 // TestUnimplementedCommandsStillValidateConfiguration keeps configuration a real

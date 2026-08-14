@@ -1,0 +1,21 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{template "title" .}} &middot; garmin-mcp</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+<h1>{{template "title" .}}</h1>
+{{if .Message}}<p class="message" role="alert">{{.Message}}</p>{{end}}
+{{template "content" .}}
+</main>
+<footer>
+<p class="notice">This page is served by the garmin-mcp process running on this
+computer. It is not a Garmin page, and Garmin does not operate it.</p>
+</footer>
+</body>
+</html>
+{{end}}

@@ -8,6 +8,31 @@ import "errors"
 // eventually believe an unimplemented capability is in service.
 var ErrNotImplemented = errors.New("not implemented in this milestone")
 
+// Start-up failure sentinels. Each is comparable with errors.Is, because a caller
+// acts on the distinction: unresolvable state is a mistake in the deployment
+// layout, unsupported key material is a mistake in the secret plumbing, and
+// neither is a defect in the subsystem that reported it.
+var (
+	// ErrUnresolvedState reports that no state directory could be determined:
+	// none was configured and the platform's per-user configuration directory is
+	// unavailable. Nothing is guessed, because a guessed location silently splits
+	// an operator's tokens across two directories.
+	ErrUnresolvedState = errors.New("no state directory could be resolved")
+
+	// ErrUnsupportedKeyMaterial reports key material this build cannot honor.
+	// Inline master key material is the current case: internal/cryptostore owns
+	// key installation and exposes no way to adopt caller-supplied material, so
+	// accepting the setting would mean serving under a key the operator did not
+	// supply. The error never echoes the material.
+	ErrUnsupportedKeyMaterial = errors.New("unsupported encryption key material")
+
+	// ErrUnsafeDeployment reports that a diagnostic check found something that
+	// exists and must not be used, such as key material another local account can
+	// read. The report names each finding; this sentinel is what makes the
+	// command exit non-zero so a script notices.
+	ErrUnsafeDeployment = errors.New("the deployment has a check that must be fixed before serving")
+)
+
 // NotImplementedError names the command and the missing subsystem, and points at
 // the authoritative status document instead of guessing a delivery date.
 type NotImplementedError struct {
