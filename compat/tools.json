@@ -19,6 +19,13 @@
     "matchedRegistrations": "decorators of the form @app.tool() / @app.resource(<uri>) on functions under src/garmin_mcp",
     "regenerate": "see docs/parity.md"
   },
+  "fieldDefinitions": {
+    "authRequired": "Garmin axis. true when invoking this record performs at least one Garmin-authenticated HTTP call, so a valid Garmin session or credential must exist server-side. false means no Garmin call happens at all; it does NOT mean the record is unauthenticated at the MCP layer. Derived statically from whether any garminconnect facade method or raw client call is reachable.",
+    "mcpAuthorizationRequired": "MCP axis. true when the server requires an authorized MCP caller holding every scope in `scopesRequired` before it dispatches this record. This is true for every tool and resource on the surface, including records with authRequired: false, so there is no anonymous or unscoped entry point. `authRequired: false` together with a non-empty `scopesRequired` is therefore consistent, not contradictory: the scope is enforced by this server, not by Garmin.",
+    "scope": "The single primary scope gate for the record: the functional domain that owns the object acted on, plus the action implied by the effect class.",
+    "scopesRequired": "Every scope the caller must hold, all of them and not any of them. Enforced when mcpAuthorizationRequired is true.",
+    "idempotency": "Whether replaying the call converges on the same end state. A guarantee that depends on a pre-check which fails open is not idempotency: such records are `non-idempotent` and their `idempotencyNote` states the fail-open path and the retry policy."
+  },
   "enums": {
     "status": [
       "not-implemented",
@@ -133,8 +140,15 @@
       "local:files:write": 2
     },
     "byIdempotency": {
-      "idempotent": 121,
-      "non-idempotent": 17
+      "idempotent": 118,
+      "non-idempotent": 20
+    },
+    "byAuthRequired": {
+      "false": 1,
+      "true": 137
+    },
+    "byMcpAuthorizationRequired": {
+      "true": 138
     },
     "byModule": {
       "src/garmin_mcp/activity_analysis.py": 4,
@@ -259,6 +273,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -354,6 +369,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -463,8 +479,9 @@
         "local:files:write"
       ],
       "idempotency": "idempotent",
-      "idempotencyNote": "Writes to a deterministic '{activity_id}.{ext}' path and overwrites it.",
+      "idempotencyNote": "Opens a deterministic '{activity_id}.{ext}' path with mode 'wb', which truncates, so repeating the call overwrites the same file. The path is deterministic only for a fixed directory configuration.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [
         "Writes the downloaded activity file into a local directory and creates that directory if missing."
       ],
@@ -540,6 +557,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": false,
+      "mcpAuthorizationRequired": true,
       "notes": [
         "Creates the target directory and persists it to a JSON config file (~/.garminconnect_fit_config.json, overridable via GARMIN_FIT_CONFIG). Performs no Garmin call."
       ],
@@ -644,6 +662,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -721,6 +740,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -805,6 +825,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -896,6 +917,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -994,6 +1016,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -1083,6 +1106,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -1182,6 +1206,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -1273,6 +1298,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -1364,6 +1390,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -1448,6 +1475,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -1532,6 +1560,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -1616,6 +1645,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -1703,6 +1733,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -1786,6 +1817,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -1869,6 +1901,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -1951,6 +1984,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -2034,6 +2068,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -2106,6 +2141,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -2186,6 +2222,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -2290,6 +2327,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a new activity; each call creates another activity.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -2359,6 +2397,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -2433,6 +2472,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -2507,6 +2547,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -2584,6 +2625,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -2667,6 +2709,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -2756,6 +2799,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -2845,6 +2889,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -2934,6 +2979,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -3005,6 +3051,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -3094,6 +3141,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -3164,6 +3212,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -3269,6 +3318,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a new course; repeats create duplicate courses.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [
         "Reads a GPX file from a caller-supplied local path before POSTing it to Garmin."
       ],
@@ -3349,6 +3399,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state; the second call reports a missing course.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -3483,6 +3534,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a timestamped composition record; repeats add records.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -3571,6 +3623,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a timestamped reading; timestamp defaults to now, so repeats add readings.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -3654,6 +3707,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "PUTs a hydration delta; repeats accumulate the volume.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -3723,6 +3777,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -3792,6 +3847,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -3879,6 +3935,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -3948,6 +4005,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -4030,6 +4088,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -4105,6 +4164,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -4205,6 +4265,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -4289,6 +4350,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -4373,6 +4435,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -4448,6 +4511,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -4523,6 +4587,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -4602,6 +4667,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -4677,6 +4743,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -4752,6 +4819,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -4831,6 +4899,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -4906,6 +4975,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -4985,6 +5055,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -5060,6 +5131,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -5139,6 +5211,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -5214,6 +5287,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -5289,6 +5363,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -5364,6 +5439,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -5439,6 +5515,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -5514,6 +5591,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -5589,6 +5667,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -5664,6 +5743,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -5739,6 +5819,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -5814,6 +5895,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -5889,6 +5971,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -5964,6 +6047,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -6039,6 +6123,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -6114,6 +6199,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -6189,6 +6275,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -6264,6 +6351,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -6348,6 +6436,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -6432,6 +6521,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -6516,6 +6606,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -6591,6 +6682,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -6669,6 +6761,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -6747,6 +6840,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -6825,6 +6919,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -6934,6 +7029,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -7024,6 +7120,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -7109,6 +7206,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -7180,6 +7278,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -7337,6 +7436,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "Creates a new custom food; repeats create duplicates.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -7510,8 +7610,9 @@
         "garmin:nutrition:write"
       ],
       "idempotency": "idempotent",
-      "idempotencyNote": "Writes an explicit absolute value; repeating the call converges on the same state.",
+      "idempotencyNote": "PUTs an absolute record for a fixed food_id, so repeats create no duplicates and converge on the same values whenever the same arguments are supplied. One caveat: fields the caller omits are preserved by a best-effort pre-fetch (a customFood search by food_name) that is wrapped in `except Exception: pass` and also silently misses when food_name no longer matches the stored record. When that pre-fetch fails open, the omitted nutrient fields are left out of the payload instead of carried forward, so a replay whose pre-fetch fails can clear values the first call preserved. Retry policy: safe to retry only when the caller passes the complete field set; otherwise re-read with get_custom_foods first.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -7590,6 +7691,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state; the second call reports a missing food.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -7693,6 +7795,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "Adds a food-log entry; repeats add duplicate entries.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -7802,6 +7905,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "Adds a quick-add food-log entry; repeats add duplicate entries.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -7884,6 +7988,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -8011,6 +8116,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "Creates or reuses a custom food and then adds a log entry; repeats add duplicate log entries.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -8094,6 +8200,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -8173,6 +8280,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -8260,6 +8368,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -8335,6 +8444,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -8414,6 +8524,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -8493,6 +8604,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -8568,6 +8680,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -8637,6 +8750,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -8717,6 +8831,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -8792,6 +8907,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Re-triggers the same server-side recompute for the date; no new user data is created.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -8876,6 +8992,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -8953,6 +9070,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -9038,6 +9156,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -9123,6 +9242,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -9208,6 +9328,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -9275,6 +9396,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -9342,6 +9464,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -9411,6 +9534,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -9480,6 +9604,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -9559,6 +9684,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -9634,6 +9760,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -9720,6 +9847,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Deletes every weigh-in for the date (delete_all gate); repeating leaves the same end state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -9804,6 +9932,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a new weigh-in record.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -9898,6 +10027,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a new weigh-in record at the given timestamps.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -9969,6 +10099,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -10046,6 +10177,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -10129,6 +10261,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -10232,6 +10365,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "Uploads a newly built workout; repeats create duplicates.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -10338,6 +10472,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "Uploads a newly built workout; repeats create duplicates.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -10428,6 +10563,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "Uploads a newly built workout; repeats create duplicates.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -10510,6 +10646,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "Uploads a newly built workout; repeats create duplicates.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -10584,11 +10721,13 @@
         "garmin:health:write",
         "garmin:workouts:write"
       ],
-      "idempotency": "idempotent",
-      "idempotencyNote": "Applies the same _is_already_scheduled() pre-check per item and reports 'already_scheduled' instead of POSTing, so repeating the call converges on the same calendar entries.",
+      "idempotency": "non-idempotent",
+      "idempotencyNote": "The upstream pre-check _is_already_scheduled(workout_id, calendar_date) runs a workoutScheduleSummariesScalar GraphQL query bounded to that single date and returns True only when an entry matches both workoutId and scheduleDate exactly; on a match the POST is skipped and success is reported. That helper ends in a bare `except Exception: return False`, so any failure of the check itself \u2014 transport or auth error, a rejected calendar_date, or an undocumented change to the GraphQL payload shape \u2014 is reported as \"not scheduled\", and upstream deliberately falls through to the bare workout-service/schedule/{workout_id} POST, which does create a second calendar entry for the same workout and date. The pre-check is therefore best-effort de-duplication that fails open, not an idempotency guarantee, and a retry can create a duplicate calendar entry. The same pre-check is applied per week item and reports \"already_scheduled\" instead of POSTing, so the fail-open path is per item and one replay can duplicate several days at once. Retry policy: never retry this tool automatically, and never treat it as safe to replay. On a failed, partial, or ambiguous result, re-read the calendar with get_scheduled_workouts and let the caller decide, then remove any duplicate with unschedule_workout.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [
-        "Idempotency is enforced by the upstream MCP layer, not by the endpoint: _is_already_scheduled() runs a workoutScheduleSummariesScalar GraphQL query for the date and the POST is skipped on a match. A bare workout-service/schedule POST does create a second calendar entry, and upstream deliberately falls through to that POST when the pre-check itself raises. A Go port must keep the pre-check to preserve this behavior."
+        "The _is_already_scheduled() pre-check lives in the upstream MCP layer, not in the endpoint, and it fails open. A Go port must keep the pre-check to preserve upstream's duplicate-avoidance behavior, and must additionally not advertise the tool as retry-safe: only a server-side idempotency key, or a pre-check whose own failure aborts instead of falling through, would make scheduling actually idempotent.",
+        "Upstream's docstring for this tool \u2014 which is the description MCP clients actually receive \u2014 advertises \"Idempotent\". That claim is wrong for the reason recorded in idempotencyNote, and `description` in this manifest is a verbatim copy of it, so description and classification deliberately disagree here. A Go port must not carry that sentence into its own tool description."
       ],
       "go": {
         "package": "",
@@ -10661,6 +10800,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -10755,6 +10895,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -10836,6 +10977,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -10925,6 +11067,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs a new workout; repeats create duplicates.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -11022,6 +11165,7 @@
       "idempotency": "non-idempotent",
       "idempotencyNote": "POSTs each workout in the batch; repeats create duplicates.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -11102,6 +11246,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -11186,6 +11331,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -11272,6 +11418,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -11353,6 +11500,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -11434,6 +11582,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Read-only; repeated calls do not change state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -11528,11 +11677,13 @@
         "garmin:health:write",
         "garmin:workouts:write"
       ],
-      "idempotency": "idempotent",
-      "idempotencyNote": "Pre-checks the calendar with _is_already_scheduled() and reports success without POSTing when the workout is already scheduled for that date, so repeating the call converges on the same single calendar entry.",
+      "idempotency": "non-idempotent",
+      "idempotencyNote": "The upstream pre-check _is_already_scheduled(workout_id, calendar_date) runs a workoutScheduleSummariesScalar GraphQL query bounded to that single date and returns True only when an entry matches both workoutId and scheduleDate exactly; on a match the POST is skipped and success is reported. That helper ends in a bare `except Exception: return False`, so any failure of the check itself \u2014 transport or auth error, a rejected calendar_date, or an undocumented change to the GraphQL payload shape \u2014 is reported as \"not scheduled\", and upstream deliberately falls through to the bare workout-service/schedule/{workout_id} POST, which does create a second calendar entry for the same workout and date. The pre-check is therefore best-effort de-duplication that fails open, not an idempotency guarantee, and a retry can create a duplicate calendar entry. Retry policy: never retry this tool automatically, and never treat it as safe to replay. On a failed, partial, or ambiguous result, re-read the calendar with get_scheduled_workouts and let the caller decide, then remove any duplicate with unschedule_workout.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [
-        "Idempotency is enforced by the upstream MCP layer, not by the endpoint: _is_already_scheduled() runs a workoutScheduleSummariesScalar GraphQL query for the date and the POST is skipped on a match. A bare workout-service/schedule POST does create a second calendar entry, and upstream deliberately falls through to that POST when the pre-check itself raises. A Go port must keep the pre-check to preserve this behavior."
+        "The _is_already_scheduled() pre-check lives in the upstream MCP layer, not in the endpoint, and it fails open. A Go port must keep the pre-check to preserve upstream's duplicate-avoidance behavior, and must additionally not advertise the tool as retry-safe: only a server-side idempotency key, or a pre-check whose own failure aborts instead of falling through, would make scheduling actually idempotent.",
+        "Upstream's docstring for this tool \u2014 which is the description MCP clients actually receive \u2014 advertises \"Idempotent\". That claim is wrong for the reason recorded in idempotencyNote, and `description` in this manifest is a verbatim copy of it, so description and classification deliberately disagree here. A Go port must not carry that sentence into its own tool description."
       ],
       "go": {
         "package": "",
@@ -11641,12 +11792,12 @@
         "garmin:health:write",
         "garmin:workouts:write"
       ],
-      "idempotency": "idempotent",
-      "idempotencyNote": "Applies the same _is_already_scheduled() pre-check per batch item and skips the POST for entries that already exist, so repeating the call converges on the same calendar entries.",
+      "idempotency": "non-idempotent",
+      "idempotencyNote": "The upstream pre-check _is_already_scheduled(workout_id, calendar_date) runs a workoutScheduleSummariesScalar GraphQL query bounded to that single date and returns True only when an entry matches both workoutId and scheduleDate exactly; on a match the POST is skipped and success is reported. That helper ends in a bare `except Exception: return False`, so any failure of the check itself \u2014 transport or auth error, a rejected calendar_date, or an undocumented change to the GraphQL payload shape \u2014 is reported as \"not scheduled\", and upstream deliberately falls through to the bare workout-service/schedule/{workout_id} POST, which does create a second calendar entry for the same workout and date. The pre-check is therefore best-effort de-duplication that fails open, not an idempotency guarantee, and a retry can create a duplicate calendar entry. The same pre-check is applied per batch item, so the fail-open path is per item. Batch items that carry inline workout_data upload a new workout template through upload_workout before the pre-check runs, and that upload is not deduplicated at all, so a retry adds another template to the workout library even when the calendar entry is correctly skipped. Items are reported individually and the loop continues past failures, so replaying the call re-attempts every item, not only the failed ones. Retry policy: never retry this tool automatically, and never treat it as safe to replay. On a failed, partial, or ambiguous result, re-read the calendar with get_scheduled_workouts and let the caller decide, then remove any duplicate with unschedule_workout.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [
-        "Idempotency is enforced by the upstream MCP layer, not by the endpoint: _is_already_scheduled() runs a workoutScheduleSummariesScalar GraphQL query for the date and the POST is skipped on a match. A bare workout-service/schedule POST does create a second calendar entry, and upstream deliberately falls through to that POST when the pre-check itself raises. A Go port must keep the pre-check to preserve this behavior.",
-        "Batch items that carry inline workout_data upload a new workout template before scheduling, and that upload is not deduplicated, so repeats can leave extra unscheduled templates in the workout library."
+        "The _is_already_scheduled() pre-check lives in the upstream MCP layer, not in the endpoint, and it fails open. A Go port must keep the pre-check to preserve upstream's duplicate-avoidance behavior, and must additionally not advertise the tool as retry-safe: only a server-side idempotency key, or a pre-check whose own failure aborts instead of falling through, would make scheduling actually idempotent."
       ],
       "go": {
         "package": "",
@@ -11727,6 +11878,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -11811,6 +11963,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Repeating the call leaves the same end state.",
       "authRequired": true,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",

@@ -93,8 +93,42 @@ payload spans two sensitivity domains.
 
 | Idempotency | Tools |
 | --- | --- |
-| idempotent | 121 |
-| non-idempotent | 17 |
+| idempotent | 118 |
+| non-idempotent | 20 |
+
+`idempotent` means replaying the call converges on the same end state. A convergence claim that
+rests on a pre-check which fails open is **not** idempotency: those tools are `non-idempotent`, and
+their `idempotencyNote` records what the pre-check does, when it fails open, and the retry policy
+that follows. See [Scheduling is not idempotent](#scheduling-is-not-idempotent).
+
+## Totals by authorization
+
+Two independent fields, one per question. Neither implies the other.
+
+| Field | Question it answers | Meaning of `true` | Meaning of `false` |
+| --- | --- | --- | --- |
+| `authRequired` | Does invoking this perform a Garmin-authenticated call? | At least one Garmin HTTP call is reachable, so a valid Garmin session or credential must exist server-side. | No Garmin call happens at all. It does **not** mean the record is unauthenticated at the MCP layer. |
+| `mcpAuthorizationRequired` | Must the MCP caller be authorized and hold `scopesRequired`? | The server refuses to dispatch without an authorized caller holding every scope in `scopesRequired`. | Would mean an anonymous, unscoped entry point. No record on this surface is `false`. |
+
+Both fields are defined in the `fieldDefinitions` block of `compat/tools.json` and
+`compat/resources.json`, alongside `scope`, `scopesRequired`, and `idempotency`.
+
+| `authRequired` | Tools | Resources |
+| --- | --- | --- |
+| `true` | 137 | 0 |
+| `false` | 1 | 5 |
+
+| `mcpAuthorizationRequired` | Tools | Resources |
+| --- | --- | --- |
+| `true` | 138 | 5 |
+| `false` | 0 | 0 |
+
+The 6 records with `authRequired: false` are `set_fit_download_dir` and the 5 static workout-template resources. Every one of them still carries
+`mcpAuthorizationRequired: true` and a required scope, which is deliberate and not a contradiction:
+`set_fit_download_dir` writes to the server filesystem and persists configuration, so it must not be
+invokable without authorization even though Garmin is never contacted, and the resources keep one
+fail-closed registration path with no "no scope required" branch. The scope on these records is
+enforced by this server, not by Garmin.
 
 ## Totals by upstream module
 
@@ -195,8 +229,10 @@ Rules that follow from the map:
   deployment that lets a caller name a server path. `set_fit_download_dir` never calls Garmin, so it
   carries no Garmin scope at all.
 - Allowlists and denylists are intersected with the granted scopes; they never widen them.
-- The five resources carry no user data, but they are still gated on `garmin:workouts:read` so
-  registration keeps one fail-closed path with no "no scope required" branch.
+- The five resources carry no user data and make no Garmin call (`authRequired: false`), but they are
+  still gated on `garmin:workouts:read` with `mcpAuthorizationRequired: true` so registration keeps one
+  fail-closed path with no "no scope required" branch. See
+  [Totals by authorization](#totals-by-authorization) for why those two values are consistent.
 
 ## Tools
 
@@ -323,9 +359,9 @@ one scope are listed under [Tools requiring more than one scope](#tools-requirin
 | `log_food` | not-implemented | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:637 |
 | `remove_gear_from_activity` | not-implemented | write | device | `garmin:devices:write` | idempotent | gear_management.py:182 |
 | `request_reload` | not-implemented | write | health | `garmin:health:write` | idempotent | training.py:778 |
-| `schedule_week` | not-implemented | write | health | `garmin:workouts:write` | idempotent | workout_builders.py:522 |
-| `schedule_workout` | not-implemented | write | health | `garmin:workouts:write` | idempotent | workouts.py:1154 |
-| `schedule_workouts` | not-implemented | write | health | `garmin:workouts:write` | idempotent | workouts.py:1212 |
+| `schedule_week` | not-implemented | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:522 |
+| `schedule_workout` | not-implemented | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:1154 |
+| `schedule_workouts` | not-implemented | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:1212 |
 | `search_foods` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:144 |
 | `set_activity_description` | not-implemented | write | ordinary | `garmin:activities:write` | idempotent | activity_management.py:386 |
 | `set_activity_event_type` | not-implemented | write | ordinary | `garmin:activities:write` | idempotent | activity_management.py:416 |
@@ -443,7 +479,8 @@ not through 0.3.8.
   undocumented private API. Recorded output shapes are the statically visible envelope keys, not a
   validated schema of Garmin payloads.
 - `set_fit_download_dir` makes no Garmin call at all. It is filesystem configuration only, so it is the one
-  tool with `authRequired: false`.
+  tool with `authRequired: false`. It still carries `mcpAuthorizationRequired: true`: it must not be
+  invokable without an authorized caller holding `local:files:write`.
 - 2 tools make no direct client call and reach Garmin only through a module-level helper (`query_garmin_graphql`): `get_garmin_coach_workouts`, `get_training_plan_workouts`.
   Their methods and endpoints come from helper resolution, so `directCalls` is empty while
   `garminconnectMethods` is not.
@@ -458,12 +495,53 @@ not through 0.3.8.
 - Idempotency for a private, undocumented API is a documented judgement, not a guarantee. `DELETE`-backed
   tools are marked `idempotent` because the end state converges, even though a repeat call reports a
   missing target.
-- `schedule_workout`, `schedule_workouts`, and `schedule_week` are `idempotent` because of the upstream MCP
-  layer, not the endpoint: each pre-checks the calendar with `_is_already_scheduled()` (a
-  `workoutScheduleSummariesScalar` GraphQL query) and skips the POST on a match. The bare
-  `workout-service/schedule` POST is not idempotent, and upstream deliberately falls through to it when the
-  pre-check itself raises. A Go port must keep the pre-check. `schedule_workouts` items that carry inline
-  `workout_data` also upload a template first, and that upload is not deduplicated.
+- `update_custom_food` is `idempotent` on its PUT target (a fixed `food_id`, absolute values, no
+  duplicates) but its preservation of caller-omitted nutrient fields is a best-effort pre-fetch wrapped
+  in `except Exception: pass`, which also misses silently when `food_name` no longer matches the stored
+  record. When that pre-fetch fails open, omitted fields are dropped from the payload instead of carried
+  forward, so a replay can clear values the first call preserved. Retry it only with the complete field
+  set. This is the one other fail-open path found in the manifest; unlike scheduling it cannot create a
+  duplicate object, so the classification stays `idempotent` with the caveat recorded in
+  `idempotencyNote`.
+- Three further `except Exception: pass` sites (the activity weight lookup in `activity_analysis.py`, and
+  the per-day loops behind `get_hrv_trend` and `get_respiration_trend`) fail open on response
+  completeness only. They belong to `read-only` tools that write nothing, so they cannot affect an
+  idempotency claim.
+
+### Scheduling is not idempotent
+
+`schedule_workout`, `schedule_workouts`, and `schedule_week` are **`non-idempotent`**, and an earlier
+revision of this matrix was wrong to call them idempotent.
+
+Each calls `_is_already_scheduled(workout_id, calendar_date)` before POSTing. That helper runs a
+`workoutScheduleSummariesScalar` GraphQL query bounded to the single date and returns `True` only when
+an entry matches both `workoutId` and `scheduleDate` exactly; on a match the POST is skipped and success
+is reported. The helper ends in a bare `except Exception: return False`, so any failure of the check
+itself — transport or auth error, a rejected `calendar_date`, or an undocumented change to the GraphQL
+payload shape — is reported as "not scheduled", and upstream deliberately falls through to the bare
+`workout-service/schedule/{workout_id}` POST, which creates a second calendar entry for the same workout
+and date.
+
+De-duplication that fails open is best-effort, not a guarantee, so a retry can create a duplicate. For
+`schedule_workouts` and `schedule_week` the fail-open path is per item, so one replay can duplicate
+several days at once, and `schedule_workouts` items carrying inline `workout_data` upload a workout
+template through `upload_workout` before the pre-check runs — an upload that is not deduplicated at all,
+so a replay adds another library template even when the calendar entry is correctly skipped.
+
+**Retry policy: never retry these three automatically, and never treat them as safe to replay.** On a
+failed, partial, or ambiguous result, re-read the calendar with `get_scheduled_workouts`, let the caller
+decide, and remove any duplicate with `unschedule_workout`.
+
+A Go port must keep the pre-check to preserve upstream's duplicate-avoidance behavior, and must not
+advertise these tools as retry-safe. Only a server-side idempotency key, or a pre-check whose own
+failure aborts instead of falling through, would make scheduling actually idempotent.
+
+One consequence to carry forward: the upstream docstrings for `schedule_workout` and `schedule_week`
+open with "Idempotent:", and those docstrings are the tool descriptions MCP clients receive. The
+`description` field in `compat/tools.json` is a verbatim copy, so for these two records `description`
+and `idempotency` deliberately disagree. The classification is correct and the upstream description is
+not. A Go port must not carry that sentence into its own tool description, because it is the text an
+agent reads when deciding whether a retry is safe.
 
 ### Regenerating
 

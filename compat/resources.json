@@ -19,6 +19,13 @@
     "matchedRegistrations": "decorators of the form @app.tool() / @app.resource(<uri>) on functions under src/garmin_mcp",
     "regenerate": "see docs/parity.md"
   },
+  "fieldDefinitions": {
+    "authRequired": "Garmin axis. true when invoking this record performs at least one Garmin-authenticated HTTP call, so a valid Garmin session or credential must exist server-side. false means no Garmin call happens at all; it does NOT mean the record is unauthenticated at the MCP layer. Derived statically from whether any garminconnect facade method or raw client call is reachable.",
+    "mcpAuthorizationRequired": "MCP axis. true when the server requires an authorized MCP caller holding every scope in `scopesRequired` before it dispatches this record. This is true for every tool and resource on the surface, including records with authRequired: false, so there is no anonymous or unscoped entry point. `authRequired: false` together with a non-empty `scopesRequired` is therefore consistent, not contradictory: the scope is enforced by this server, not by Garmin.",
+    "scope": "The single primary scope gate for the record: the functional domain that owns the object acted on, plus the action implied by the effect class.",
+    "scopesRequired": "Every scope the caller must hold, all of them and not any of them. Enforced when mcpAuthorizationRequired is true.",
+    "idempotency": "Whether replaying the call converges on the same end state. A guarantee that depends on a pre-check which fails open is not idempotency: such records are `non-idempotent` and their `idempotencyNote` states the fail-open path and the retry policy."
+  },
   "enums": {
     "status": [
       "not-implemented",
@@ -87,6 +94,15 @@
     },
     "byScopeRequired": {
       "garmin:workouts:read": 5
+    },
+    "byIdempotency": {
+      "idempotent": 5
+    },
+    "byAuthRequired": {
+      "false": 5
+    },
+    "byMcpAuthorizationRequired": {
+      "true": 5
     }
   },
   "resources": [
@@ -120,6 +136,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Returns a constant document; no state is touched.",
       "authRequired": false,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -163,6 +180,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Returns a constant document; no state is touched.",
       "authRequired": false,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -206,6 +224,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Returns a constant document; no state is touched.",
       "authRequired": false,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -249,6 +268,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Returns a constant document; no state is touched.",
       "authRequired": false,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
@@ -292,6 +312,7 @@
       "idempotency": "idempotent",
       "idempotencyNote": "Returns a constant document; no state is touched.",
       "authRequired": false,
+      "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
         "package": "",
