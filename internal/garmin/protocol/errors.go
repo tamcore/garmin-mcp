@@ -1,0 +1,148 @@
+package protocol
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// Sentinel errors for errors.Is checks. They carry no request detail.
+var (
+	ErrMFARequired        = errors.New("garmin: multi-factor authentication required")
+	ErrInvalidCredentials = errors.New("garmin: invalid credentials")
+	ErrAccountLocked      = errors.New("garmin: account locked")
+	ErrAccountRestricted  = errors.New("garmin: account not permitted to use this login flow")
+	ErrBotChallenge       = errors.New("garmin: bot challenge or forbidden")
+	ErrRateLimited        = errors.New("garmin: rate limited")
+	ErrTemporary          = errors.New("garmin: temporary failure")
+	ErrUnknownResponse    = errors.New("garmin: unrecognized response")
+)
+
+// Error is the structured protocol failure. It deliberately holds no body,
+// header, cookie, token or credential material: only an operation name, a
+// sanitized endpoint label, the HTTP status, the classified outcome, any parsed
+// Retry-After hint, and a wrapped cause.
+type Error struct {
+	// Op names the logical operation, for example "ios_login".
+	Op string
+	// Endpoint is one of the Endpoint* labels: never a URL with a query string.
+	Endpoint string
+	// Status is the HTTP status code, or 0 when no response was received.
+	Status int
+	// Outcome is the classified meaning of the response.
+	Outcome Outcome
+	// RetryAfter is the parsed Retry-After hint, or 0 when absent.
+	RetryAfter time.Duration
+	// Err is the wrapped cause, if any.
+	Err error
+}
+
+// Error renders a sanitized, single-line message.
+func (e *Error) Error() string {
+	if e == nil {
+		return "protocol: <nil>"
+	}
+
+	var b strings.Builder
+	b.WriteString("garmin ")
+	b.WriteString(orUnknown(e.Op))
+	b.WriteString(" [")
+	b.WriteString(orUnknown(e.Endpoint))
+	b.WriteString("]: ")
+	b.WriteString(e.Outcome.String())
+	if e.Status != 0 {
+		b.WriteString(" (status ")
+		b.WriteString(strconv.Itoa(e.Status))
+		b.WriteString(")")
+	}
+	if e.RetryAfter > 0 {
+		b.WriteString(" retry after ")
+		b.WriteString(e.RetryAfter.String())
+	}
+	if e.Err != nil {
+		b.WriteString(": ")
+		b.WriteString(e.Err.Error())
+	}
+	return b.String()
+}
+
+// Unwrap exposes the wrapped cause.
+func (e *Error) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+// Is matches the sentinel that corresponds to the classified outcome.
+func (e *Error) Is(target error) bool {
+	if e == nil {
+		return false
+	}
+	return target == sentinelFor(e.Outcome)
+}
+
+// Retryable reports whether the failed request may be retried.
+func (e *Error) Retryable() bool {
+	if e == nil {
+		return false
+	}
+	return e.Outcome.Retryable()
+}
+
+func sentinelFor(o Outcome) error {
+	switch o {
+	case OutcomeMFARequired:
+		return ErrMFARequired
+	case OutcomeInvalidCredentials:
+		return ErrInvalidCredentials
+	case OutcomeAccountLocked:
+		return ErrAccountLocked
+	case OutcomeAccountRestricted:
+		return ErrAccountRestricted
+	case OutcomeBotChallenge:
+		return ErrBotChallenge
+	case OutcomeRateLimited:
+		return ErrRateLimited
+	case OutcomeTemporaryFailure:
+		return ErrTemporary
+	default:
+		return ErrUnknownResponse
+	}
+}
+
+func orUnknown(s string) string {
+	if s == "" {
+		return labelUnknown
+	}
+	return s
+}
+
+// ParseRetryAfter interprets a Retry-After header value relative to now. It
+// accepts both RFC 7231 forms, delta-seconds and an HTTP-date, and clamps past
+// or negative values to zero. The second result reports whether the value was
+// understood.
+func ParseRetryAfter(value string, now time.Time) (time.Duration, bool) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0, false
+	}
+
+	if secs, err := strconv.Atoi(trimmed); err == nil {
+		if secs <= 0 {
+			return 0, true
+		}
+		return time.Duration(secs) * time.Second, true
+	}
+
+	deadline, err := http.ParseTime(trimmed)
+	if err != nil {
+		return 0, false
+	}
+	if delay := deadline.Sub(now); delay > 0 {
+		return delay, true
+	}
+	return 0, true
+}
