@@ -8,9 +8,19 @@ repos:
         types: [go]
         pass_filenames: false
 
+      # Reports a diff instead of applying one. `go fix ./...` rewrites files
+      # under the hook, which fights pre-commit's stash of unstaged changes on a
+      # partial commit, and it exits non-zero when two analyzers propose
+      # overlapping edits to one file even after the tree has reached a fixed
+      # point. Failing on a real diff is deterministic and leaves the worktree
+      # alone; run `go fix ./...` yourself to apply what it reports.
       - id: go-fix
-        name: go fix
-        entry: go fix ./...
+        name: go fix (report only)
+        entry: >-
+          bash -c 'diff=$(go fix -diff ./... 2>/dev/null);
+          if [ -n "$diff" ]; then echo "$diff";
+          echo "go fix reports pending changes. Apply them with go fix ./...";
+          exit 1; fi'
         language: system
         types: [go]
         pass_filenames: false
