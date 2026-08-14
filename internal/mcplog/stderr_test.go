@@ -34,16 +34,44 @@ func TestNewStderrSucceedsWhenStderrIsStdout(t *testing.T) {
 	}
 }
 
-// TestNewStillRefusesAnExplicitStdout keeps the guard that matters: a caller that
-// hands stdout to New is making a mistake, and the constructor must say so.
-func TestNewStillRefusesAnExplicitStdout(t *testing.T) {
+// TestNewRefusesStdoutWhenTheStreamsDiffer keeps the guard that matters: where the
+// process can tell its streams apart, a caller handing stdout to New is making a
+// mistake and the constructor must say so.
+func TestNewRefusesStdoutWhenTheStreamsDiffer(t *testing.T) {
+	originalStdout, originalStderr := os.Stdout, os.Stderr
+	t.Cleanup(func() { os.Stdout, os.Stderr = originalStdout, originalStderr })
+
+	out, err := os.CreateTemp(t.TempDir(), "stdout")
+	if err != nil {
+		t.Fatalf("create the stand-in stdout: %v", err)
+	}
+	errOut, err := os.CreateTemp(t.TempDir(), "stderr")
+	if err != nil {
+		t.Fatalf("create the stand-in stderr: %v", err)
+	}
+	t.Cleanup(func() { _ = out.Close(); _ = errOut.Close() })
+
+	os.Stdout, os.Stderr = out, errOut
+
+	if _, err := mcplog.New(os.Stdout, mcplog.Config{}); !errors.Is(err, mcplog.ErrStdoutReserved) {
+		t.Fatalf("New(os.Stdout) error = %v, want ErrStdoutReserved", err)
+	}
+	if _, err := mcplog.New(os.Stderr, mcplog.Config{}); err != nil {
+		t.Fatalf("New(os.Stderr) error = %v, want success", err)
+	}
+}
+
+// TestNewAcceptsStderrWhenItIsStdout covers the ambiguous case: with one file
+// behind both names, no choice of writer can satisfy a stdout refusal, so the
+// constructor must not pretend otherwise.
+func TestNewAcceptsStderrWhenItIsStdout(t *testing.T) {
 	originalStdout, originalStderr := os.Stdout, os.Stderr
 	t.Cleanup(func() { os.Stdout, os.Stderr = originalStdout, originalStderr })
 
 	shared := originalStdout
 	os.Stdout, os.Stderr = shared, shared
 
-	if _, err := mcplog.New(os.Stdout, mcplog.Config{}); !errors.Is(err, mcplog.ErrStdoutReserved) {
-		t.Fatalf("New(os.Stdout) error = %v, want ErrStdoutReserved", err)
+	if _, err := mcplog.New(os.Stderr, mcplog.Config{}); err != nil {
+		t.Fatalf("New(os.Stderr) error = %v, want success when the streams are one file", err)
 	}
 }

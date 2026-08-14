@@ -78,11 +78,29 @@ func New(w io.Writer, cfg Config) (*Logger, error) {
 	if w == nil {
 		return nil, fmt.Errorf("no writer given: %w", ErrNoSink)
 	}
-	if w == io.Writer(os.Stdout) {
+	if isReservedStdout(w) {
 		return nil, fmt.Errorf("refusing to log to stdout: %w", ErrStdoutReserved)
 	}
 
 	return newLogger(w, cfg)
+}
+
+// isReservedStdout reports whether w is the stdout that carries MCP frames.
+//
+// The comparison is meaningful only when the process can tell its two output
+// streams apart. Under `go test -json` the toolchain points os.Stderr at
+// os.Stdout so stderr output reaches the JSON event stream, and then every
+// correct sink also equals os.Stdout: refusing there would fail the exact
+// environment CI runs in while preventing nothing. Where the streams are
+// genuinely the same file, the invariant this guard protects cannot be expressed
+// by choosing a writer, so it is enforced where the frame stream is known — the
+// transport is built with an explicit frame writer and checks the sink against
+// it.
+func isReservedStdout(w io.Writer) bool {
+	if os.Stdout == os.Stderr {
+		return false
+	}
+	return w == io.Writer(os.Stdout)
 }
 
 // newLogger builds the Logger without the stdout refusal. Only New and NewStderr

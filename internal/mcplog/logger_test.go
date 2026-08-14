@@ -20,14 +20,10 @@ const (
 	transportStdio     = "stdio"
 )
 
-func TestNewRefusesStdout(t *testing.T) {
-	t.Parallel()
-
-	_, err := mcplog.New(os.Stdout, mcplog.Config{})
-	if !errors.Is(err, mcplog.ErrStdoutReserved) {
-		t.Fatalf("New(os.Stdout) error = %v, want ErrStdoutReserved", err)
-	}
-}
+// TestNewRefusesStdout is covered in stderr_test.go, where the process streams are
+// made distinguishable first. It cannot be asserted here: under `go test -json`
+// the toolchain points os.Stderr at os.Stdout, so os.Stdout is also the correct
+// sink and the refusal would fire on every logger the suite builds.
 
 func TestNewRefusesANilWriter(t *testing.T) {
 	t.Parallel()
