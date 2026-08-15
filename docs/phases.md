@@ -27,11 +27,11 @@ explicit environment acknowledgement and a dedicated non-primary account.
 Nothing else.
 
 Outcome: **closed, GO**, recorded in
-`docs/adr/0001-garmin-login-feasibility.md`. The gate **must become**
-re-runnable as an opt-in `garminlive` check for drift detection. No `garminlive`
-command and no tagged test exists yet, so the gate is a one-time result and not a
-repeatable check; ADR 0001 records that as required work. When the check exists
-and later fails, re-enter the decision in ADR 0001.
+`docs/adr/0001-garmin-login-feasibility.md`. The gate is now re-runnable: the
+opt-in `garminlive` suite in `live/` re-performs the login, the DI exchange and
+session validation against the real service. It landed as a tagged test suite
+rather than as a command. When it later fails, re-enter the decision in
+ADR 0001.
 
 ## Phase 1 — inventory, docs skeleton, and CI
 

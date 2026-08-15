@@ -296,8 +296,9 @@ that drops under the floor fails the build unless it is named there.
       the device surface beyond `get_devices`, and the gear reads are all still
       unported. See `docs/parity.md` for the per-tool status.
 
-Live Garmin validation: `not run — credentials unavailable` for anything beyond
-the phase-0 gate already recorded in ADR 0001.
+Live Garmin validation: the opt-in `garminlive` layer exists and was run for
+real. See [The live layer](#the-live-layer) for what passed, what could not run,
+and why.
 
 ## Invariants (true at every tag, no exceptions)
 
@@ -413,8 +414,60 @@ goreleaser check
 goreleaser release --snapshot --clean
 ```
 
-Both tagged suites hold real tests, so report their results, not just their exit
-status. There is no conformance command to add; see the next section.
+All three tagged suites hold real tests, so report their results, not just their
+exit status. There is no conformance command to add; see the next section.
+
+The live layer is **not** a milestone command: it contacts the real Garmin
+service and it is opt-in. Run it deliberately, and record its outcome:
+
+```sh
+GARMIN_USERNAME=... GARMIN_PASSWORD=... \
+GARMIN_LIVE_ACK=i-accept-live-garmin-traffic \
+go test -race -count=1 -tags=garminlive ./live/...
+```
+
+## The live layer
+
+`live/` carries the `garminlive` tag and ten tests. It is read-only by
+construction — every domain client and every tool reaches Garmin through a
+caller that refuses anything but a `GET`, a `HEAD`, or the single `POST` the
+GraphQL calendar gateway needs — and it is gated three ways: the build tag,
+`GARMIN_USERNAME`/`GARMIN_PASSWORD`, and `GARMIN_LIVE_ACK` set to the exact
+value `i-accept-live-garmin-traffic`. A missing gate is a skip, never a failure.
+No workflow builds the tag and none may. `AGENTS.md` holds the full how-to.
+
+It asserts cross-source consistency and never a golden value. Nothing in the
+package is pinned to the account under test, and a failure names the field and
+the relative delta rather than the reading, so a failing run cannot print health
+data into a terminal.
+
+**Run on 2026-08-15 against the dedicated test account.** What passed:
+
+- Login through the `mobile_ios` strategy, the DI exchange, session validation
+  against the API tier, and a second read on the same stored token set.
+- The read-only caller refusing `POST`, `PUT`, `PATCH` and `DELETE` on a write
+  path while still passing the GraphQL calendar read.
+- All nineteen account-scoped read-only tools: every one answered, obeyed its
+  declared bounds and truncation flags, and carried no coordinate, credential or
+  raw payload.
+- `get_full_name` and `get_devices` agreeing with the profile and device domain
+  clients.
+- The accounting test that fails when a registered read-only tool is neither
+  exercised nor excused with a reason.
+
+**What could not run, and why.** The dedicated test account holds **zero**
+activities and an empty workout library, so everything that needs one skipped:
+the FIT-against-summary cross-check, its session-coverage invariant, the nine
+activity-scoped tools, `get_activity` and `get_activity_fit_data` agreement, and
+`get_workout_by_id`/`download_workout`. The skip states the account's own
+activity count, so an empty account is never mistaken for a listing this server
+can no longer read.
+
+That gap matters: the FIT cross-check is the whole reason this layer exists, and
+it is the only check that would have caught the two defects ADR 0007 records. It
+stays **unproven against the real service** until the test account holds at
+least one recorded activity with a device file. Until then, record the FIT rows
+as `not run — the test account holds no activity`.
 
 ## MCP conformance is blocked
 

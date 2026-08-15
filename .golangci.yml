@@ -4,6 +4,7 @@ run:
   allow-parallel-runners: true
   build-tags:
     - fakegarmin
+    - garminlive
 
 linters:
   default: none

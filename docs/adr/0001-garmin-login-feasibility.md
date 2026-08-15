@@ -23,11 +23,12 @@ probe issued the mobile-iOS, widget, and portal request shapes taken from the
 pinned source, and it was discarded afterwards. It was not committed, and it is
 not the implementation.
 
-Of the pieces this ADR names, only the failure classifier exists today, in
-`internal/garmin/protocol`, and it is still incomplete. The `LoginTransport`
-interface and the opt-in `garminlive` check do **not** exist. They describe the
-required shape of the future implementation, decided here so that the transport
-choice cannot be re-litigated silently.
+Of the pieces this ADR names, the failure classifier exists in
+`internal/garmin/protocol`, and the opt-in `garminlive` check exists as the
+test suite in `live/`. The `LoginTransport` interface does **not** exist: the
+auth package uses a one-method `Doer` transport interface instead. What remains
+unbuilt describes the required shape of the future implementation, decided here
+so that the transport choice cannot be re-litigated silently.
 
 ### Evidence
 
@@ -113,8 +114,10 @@ dependency and security review recorded here as an amendment.
 - The `LoginTransport` interface is required work in the auth slice. Once it
   exists it must keep any future transport out of every other package, and every
   transport must pass the same fake-service test suite.
-- The `garminlive` opt-in command and tagged test are required work. Until they
-  exist, drift against the live service is undetected.
+- The `garminlive` opt-in check landed as the tagged suite in `live/` rather
+  than as a command. It re-runs the login, the DI exchange and session
+  validation against the real service, so drift there is detected. See
+  `docs/implementation-status.md` for the outcome of the run it was landed with.
 - MFA continuation correctness rests entirely on fake-service tests until a live
   MFA-enabled account is available.
 - CI and datacenter egress behavior is an accepted open risk. A failure there

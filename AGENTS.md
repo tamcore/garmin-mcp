@@ -56,6 +56,7 @@ date.
 | `internal/ratelimit` | The per-principal limiter and its handler middleware | 95.7% |
 | `internal/testkit` | Scripted fake Garmin service, fake clock, fixtures, synthetic FIT builder, transport guard | 91.5% |
 | `e2e` | Build tag `e2e`. `cli_test.go` builds the binary and drives it as a subprocess: version output, clean stdout on the stdio path, unknown command | n/a |
+| `live` | Build tag `garminlive`. The opt-in suite against the real Garmin service: three gates, one shared login, a read-only caller, cross-source FIT-against-summary agreement, tool-against-domain-client agreement, and the read-only surface sweep. Never in CI | n/a |
 
 Everything else in the repository is documentation, contract manifests
 (`compat/`), and CI, lint, pre-commit, GoReleaser, and container configuration.
@@ -84,7 +85,8 @@ database path is set rather than guessing a location. The
 There is still **no** MCP resource of any kind (the five upstream
 workout-template resources are unimplemented), no `LoginTransport` type (the
 auth package uses a one-method `Doer` transport interface instead), no
-`garminlive` command, no fuzz target, no MCP conformance job, and no
+`garminlive` command — the tag carries a test suite in `live/`, not a
+subcommand — no fuzz target, no MCP conformance job, and no
 `docs/operations.md`.
 
 `internal/cmd` is the composition root and assembles the packages. It builds the
@@ -192,6 +194,7 @@ internal/
   observability/         redacted logging, metrics, tracing hooks              planned (logging lives in mcplog; no metrics, no tracing)
   testkit/               fake Garmin, fake clock, fixtures, test keys          exists
 e2e/                     end-to-end tests (build tag: e2e)                     exists (CLI-level only)
+live/                    opt-in live tests (build tag: garminlive)            exists (read-only, three gates)
 web/                     embedded HTML/CSS; no remote JS dependency            planned (pages are embedded under internal/loginweb/pages)
 migrations/              embedded, monotonic database migrations               exists (0001, 0002)
 compat/                  pinned tool and resource contract manifests           exists
@@ -262,8 +265,63 @@ Four layers. The first three have a CI job each.
 | Unit | `go test -race -count=1 ./...` | *(none)* | Logic, handlers, tools, policy, OAuth, store, crypto, state machines with fakes | **[NOW]** real tests in every `internal/` package and in `migrations` |
 | Fake-service integration | `go test -race -count=1 -tags=fakegarmin ./...` | `fakegarmin` | Login strategies, MFA, DI refresh, the host guard, retries, API decoding, and the remote login command against the scripted fake Garmin | **[NOW]** real tests in `internal/garmin/auth`, `internal/garmin/api`, `internal/garmin/client`, `internal/tools` and `internal/cmd`. The job no longer passes vacuously |
 | E2E | `go test -race -count=1 -tags=e2e -timeout=10m ./e2e/...` | `e2e` | stdio and Streamable HTTP MCP, OAuth flow, browser login form, tenant isolation | **[NOW]** seven tests over the real binary. `cli_test.go` covers version output, a clean stdout on the stdio path, and an unknown command. `remote_test.go` stands up a synthetic TLS deployment and covers protected resource metadata read unauthenticated with `bearer_methods_supported` exactly `["header"]`, an untokened MCP request refused with a challenge carrying `resource_metadata` and no error code, a token in a query parameter that never authenticates, and a bad header token reported as `invalid_token`. The OAuth-flow, browser-login and isolation rows are still **[TARGET]** at this layer: they are covered by package tests |
-| Live (opt-in) | `go test -tags=garminlive -count=1 ./...` | `garminlive` | Real Garmin login drift detection. Never in CI | **[TARGET]** nothing carries the tag |
+| Live (opt-in) | `go test -race -count=1 -tags=garminlive ./live/...` | `garminlive` | The real service: login strategy fallback, DI exchange and session validation; the decoded device file against Garmin's own activity summary; tool results against the domain clients; the read-only tool surface for shape, bounds, truncation flags and leaks. Never in CI | **[NOW]** ten tests in `live/`. Read-only by construction and gated three ways; see **Running the live suite** below |
 | Conformance | *(no command)* | — | The official MCP server conformance suite | **BLOCKED**, not merely unwired. The suite was run for real against a live deployment and cannot pass a domain server; see `docs/implementation-status.md` and ADR 0002 |
+
+### Running the live suite
+
+The live layer contacts the real Garmin Connect service, so three gates must all
+be open and a missing one is a **skip**, never a failure:
+
+```sh
+export GARMIN_USERNAME=...        # a dedicated non-primary account
+export GARMIN_PASSWORD=...
+export GARMIN_LIVE_ACK=i-accept-live-garmin-traffic
+go test -race -count=1 -tags=garminlive ./live/...
+```
+
+The acknowledgement value is exact: a truthy `1` does not open the gate.
+`GARMIN_LIVE_MFA_CODE` is optional and only needed for an account that
+challenges the login; without it an MFA challenge skips the suite rather than
+hanging on a prompt no test can answer.
+
+What it asserts, in priority order:
+
+1. The decoded device file of one recent activity against Garmin's own summary
+   of that same activity — distance to 0.5%, elapsed time to 2 s, ascent to 2 m,
+   calories to 1 kcal, average and maximum heart rate exactly — plus the
+   invariant that a single-session file's session window covers at least 90% of
+   its record stream. This is the check a fixture structurally cannot make, and
+   it is the one that would have caught both defects ADR 0007 records.
+2. Tool results against an independent read through the domain client that backs
+   them, so a dropped or transposed field on the way out is visible.
+3. The whole registered read-only surface: every tool answers, its result obeys
+   the declared bounds and truncation flags, and it carries no coordinate,
+   credential or raw payload. A read-only tool that is neither exercised nor
+   listed with a reason fails the suite, so the sweep cannot decay.
+4. The login itself: which strategy of the fallback chain succeeded, that the DI
+   exchange produced a reusable token set, and that the API tier accepted it.
+
+Rules the suite enforces on itself:
+
+- **Read-only by construction.** Every domain client and every tool reaches
+  Garmin through a caller that refuses anything but a `GET`, a `HEAD`, or the
+  one `POST` the GraphQL calendar gateway needs. There is no mutation path in
+  the package, and the guard has its own test.
+- **No golden values.** Nothing is pinned to the account under test: no
+  distance, heart rate, name, date or identifier appears in the package. Every
+  check compares two sources Garmin itself provides, or asserts an invariant.
+- **No readings in failures.** A failure names the field and the relative delta.
+  A failing live run cannot print the account's health data into a terminal.
+- **No state outside a temporary directory.** The key and the token store are
+  created under `os.MkdirTemp` and removed when the suite ends, so the
+  maintainer's own token store and configuration are never touched. No response
+  body, fixture or `.fit` file is written anywhere.
+- **Never in CI.** No workflow builds this tag, and none may.
+
+An account with no activity history skips the activity-scoped checks with a
+reason that states what the account holds. That is honest reporting, not a pass:
+the account-wide checks still run and still fail on a real defect.
 
 A vacuous pass is a defect, not a green light. Both tagged jobs run real tests,
 and each one **fails when its suite did not actually run**. Counting files was the
