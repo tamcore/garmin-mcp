@@ -362,6 +362,11 @@ jobs:
           go build -trimpath -ldflags '-s -w' \
             -o image-context/linux/amd64/garmin-mcp ./cmd/garmin-mcp
 
+          # The image carries its licence and notices, so the build context has to
+          # hold them too. GoReleaser declares them as extra files for the same
+          # reason; this job builds its own context and needs its own copy.
+          cp LICENSE THIRD_PARTY_NOTICES.md image-context/
+
       - name: Build image
         run: |
           docker build \
@@ -369,6 +374,29 @@ jobs:
             -f Dockerfile \
             -t garmin-mcp:ci \
             image-context
+
+      - name: Assert the licence and notices ship in the image
+        run: |
+          # The runtime image is distroless and has no shell, so the files are
+          # read by exporting the filesystem rather than by running anything.
+          container="$(docker create garmin-mcp:ci)"
+          trap 'docker rm -f "${container}" >/dev/null' EXIT
+          docker export "${container}" >image.tar
+
+          for file in LICENSE THIRD_PARTY_NOTICES.md; do
+            # Extracted and measured rather than read off `tar -tv`, whose column
+            # layout differs between GNU and BSD tar.
+            if ! tar -xOf image.tar "licenses/garmin-mcp/${file}" >extracted; then
+              echo "::error::${file} is missing from the runtime image"
+              exit 1
+            fi
+            size="$(wc -c <extracted)"
+            echo "${file}: ${size} bytes"
+            if [ "${size}" -lt 100 ]; then
+              echo "::error::${file} is truncated in the runtime image"
+              exit 1
+            fi
+          done
 
       - name: Assert numeric nonroot user
         run: |
