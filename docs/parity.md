@@ -14,16 +14,19 @@ Machine-readable source of truth: [`compat/tools.json`](../compat/tools.json) an
 ## Implementation status
 
 Measured against the registry in `internal/tools/register.go` on 2026-08-15.
+The counts below are the same numbers as the `counts.byStatus` block of
+`compat/tools.json`, and `internal/tools/manifest_status_test.go` fails the build
+when the manifest status and the registered surface disagree either way.
 
 | | Count |
 | --- | --- |
-| Manifest tools implemented | **42** of 138 |
-| Manifest tools not implemented | 96 |
+| Manifest tools implemented | **45** of 138 |
+| Manifest tools not implemented | 93 |
 | Manifest resources implemented | **0** of 5 |
 | Tools registered beyond the manifest | 5 |
-| Tools registered in total | 47, plus the server's own `server_info` |
+| Tools registered in total | 50, plus the server's own `server_info` |
 
-The 47 registered tools are 21 read-only, 21 write and 5 destructive. Read-only
+The 50 registered tools are 23 read-only, 22 write and 5 destructive. Read-only
 tools always register. Write and destructive tools register too, so the policy
 has a tool to refuse and the start-up tier validation covers them, and they are
 gated at call time on the intersection of operator enablement and a granted
@@ -363,7 +366,7 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_respiration_summary` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:607 |
 | `get_respiration_trend` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:1227 |
 | `get_rhr_day` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:342 |
-| `get_scheduled_workouts` | not-implemented | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1059 |
+| `get_scheduled_workouts` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1059 |
 | `get_sleep_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:431 |
 | `get_sleep_summary` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:450 |
 | `get_spo2_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:636 |
@@ -375,7 +378,7 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_training_effect` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:388 |
 | `get_training_load_balance` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:899 |
 | `get_training_load_trend` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:791 |
-| `get_training_plan_workouts` | not-implemented | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1132 |
+| `get_training_plan_workouts` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1132 |
 | `get_training_readiness` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:189 |
 | `get_training_status` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:566 |
 | `get_unit_system` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:31 |
@@ -393,7 +396,7 @@ See [Deliberate deviations](#deliberate-deviations).
 | `log_food` | not-implemented | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:637 |
 | `remove_gear_from_activity` | **implemented** | write | device | `garmin:devices:write` | idempotent | gear_management.py:182 |
 | `request_reload` | not-implemented | write | health | `garmin:health:write` | idempotent | training.py:778 |
-| `schedule_week` | not-implemented | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:522 |
+| `schedule_week` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:522 |
 | `schedule_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:1154 |
 | `schedule_workouts` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:1212 |
 | `search_foods` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:144 |
@@ -469,7 +472,7 @@ See [Deliberate deviations](#deliberate-deviations).
 Every row is registered by `internal/tools/register.go` in tier order. Paths are
 relative to the repository root.
 
-### Read-only tier — 21 tools
+### Read-only tier — 23 tools
 
 | Tool | Go registrar | File |
 | --- | --- | --- |
@@ -493,9 +496,11 @@ relative to the repository root.
 | `get_workouts` | `registerGetWorkouts` | `internal/tools/workoutreads.go` |
 | `get_workout_by_id` | `registerGetWorkoutByID` | `internal/tools/workoutreads.go` |
 | `download_workout` | `registerDownloadWorkout` | `internal/tools/workoutreads.go` |
+| `get_scheduled_workouts` | `registerGetScheduledWorkouts` | `internal/tools/calendarreads.go` |
+| `get_training_plan_workouts` | `registerGetTrainingPlanWorkouts` | `internal/tools/calendarreads.go` |
 | `get_exercise_types` † | `registerGetExerciseTypes` | `internal/tools/builders_strength.go` |
 
-### Write tier — 21 tools
+### Write tier — 22 tools
 
 | Tool | Go registrar | File |
 | --- | --- | --- |
@@ -512,6 +517,7 @@ relative to the repository root.
 | `upload_workouts` | `registerUploadWorkouts` | `internal/tools/workoutwrites.go` |
 | `schedule_workout` | `registerScheduleWorkout` | `internal/tools/workoutschedule.go` |
 | `schedule_workouts` | `registerScheduleWorkouts` | `internal/tools/workoutschedule.go` |
+| `schedule_week` | `registerScheduleWeek` | `internal/tools/scheduleweek.go` |
 | `create_walk_run_workout` | `registerCreateWalkRunWorkout` | `internal/tools/builders_run.go` |
 | `create_run_workout` | `registerCreateRunWorkout` | `internal/tools/builders_run.go` |
 | `create_z2_walk_workout` | `registerCreateZ2WalkWorkout` | `internal/tools/builders_run.go` |
@@ -539,19 +545,28 @@ relative to the repository root.
 
 ### Tools beyond the pinned manifest
 
-Five registered tools have no record in `compat/tools.json`, because they come
-from open upstream pull requests rather than the pinned commit. They are
-additions, not parity, and they are also entered in the ADR 0006 register. A
-contract snapshot test cannot compare them with the manifest, so each is covered
-by a documented-exclusion entry in `internal/tools/contract_test.go` instead.
+Five registered tools have **no record in `compat/tools.json` and must not get
+one**: they are beyond the pinned upstream commit, so adding them to the manifest
+would misreport the pinned surface. Four come from two open upstream pull
+requests and the fifth from the `python-garminconnect` facade, which carries an
+activity delete the pinned surface never exposes. They are additions, not parity,
+and they are also entered in the ADR 0006 register. A contract snapshot test
+cannot compare them with the manifest, so each is covered by a
+documented-exclusion entry in `internal/tools/contract_test.go` instead.
 
-| Tool | Tier | What it does |
-| --- | --- | --- |
-| `update_workout` | write | Updates a workout in place. The body's `workoutId` is forced to the path id, so existing calendar schedules stay valid. |
-| `get_exercise_types` | read-only | Serves the compiled-in strength exercise catalog. |
-| `set_activity_strength_exercise_sets` | write | Replaces the exercise sets of a strength activity, then re-reads and compares them position by position. |
-| `create_strength_training_activity` | write | Creates a completed strength activity, replaces its sets, then re-reads the summary and checks the stored activity identifier. |
-| `delete_activity` | destructive | Deletes an activity. |
+| Tool | Tier | Beyond the pinned commit, from | What it does |
+| --- | --- | --- | --- |
+| `update_workout` | write | [Taxuspt/garmin_mcp#214](https://github.com/Taxuspt/garmin_mcp/pull/214) | Updates a workout in place. The body's `workoutId` is forced to the path id, so existing calendar schedules stay valid. |
+| `get_exercise_types` | read-only | [Taxuspt/garmin_mcp#214](https://github.com/Taxuspt/garmin_mcp/pull/214) | Serves the compiled-in strength exercise catalog. |
+| `set_activity_strength_exercise_sets` | write | [Taxuspt/garmin_mcp#208](https://github.com/Taxuspt/garmin_mcp/pull/208) | Replaces the exercise sets of a strength activity, then re-reads and compares them position by position. |
+| `create_strength_training_activity` | write | [Taxuspt/garmin_mcp#208](https://github.com/Taxuspt/garmin_mcp/pull/208) | Creates a completed strength activity, replaces its sets, then re-reads the summary and checks the stored activity identifier. |
+| `delete_activity` | destructive | `python-garminconnect` `delete_activity`; no upstream pull request | Deletes an activity. |
+
+Both pull requests were open against `Taxuspt/garmin_mcp` when this matrix was
+written: #214 "bump garminconnect to 0.3.7 and expose `update_workout` +
+`get_exercise_types`", and #208 "add structured strength activity creation and
+set updates". If either merges into a later pin, the tool moves from this section
+into the manifest and its status becomes a normal `implemented` record.
 
 ## Deliberate deviations
 
@@ -595,9 +610,11 @@ refused by design rather than stubbed, so a client discovers its absence at
 
 Upstream calls `_is_already_scheduled(workout_id, calendar_date)` before it
 POSTs. That helper is a `workoutScheduleSummariesScalar` GraphQL calendar read.
-This server builds no GraphQL request, so the pre-check is **not ported** and
-`schedule_workout` and `schedule_workouts` are honestly non-idempotent: calling
-one twice creates two calendar entries.
+This server now builds that request (`internal/garmin/api/calendar.go` over
+`internal/garmin/client/graphql.go`), but only `schedule_week` runs the
+pre-check. It is **not ported** into `schedule_workout` and `schedule_workouts`,
+which are therefore honestly non-idempotent: calling one twice creates two
+calendar entries.
 
 Because upstream's own pre-check ends in a bare `except Exception: return False`,
 it already fails open, so what is lost is best-effort de-duplication and not a
@@ -611,11 +628,13 @@ the opposite instead — that repeating the call creates duplicate calendar
 entries — because this is the text an agent reads when it decides whether a retry
 is safe. The `idempotent` annotation hint is `false` for both tools.
 
-### `schedule_week` is not registered
+### `schedule_week` reports its fail-open pre-check per item
 
-It needs the same GraphQL calendar read, and its per-item fail-open path can
-duplicate several days at once. It is left unregistered rather than shipped
-without the pre-check.
+It is registered, and it is the one scheduling tool that runs the calendar
+pre-check. The check fails open exactly as upstream's does, so each item reports
+`duplicate_check`: `checked` means the calendar answered, `failed` means nobody
+could tell and the entry was sent anyway. The tool stays `non-idempotent`, and
+its description says that repeating the call can create duplicates.
 
 ### `set_activity_description` cannot clear a description
 
@@ -642,17 +661,25 @@ passed through rather than rejected.
 The UUID form that adaptive Garmin Coach plans use is not served. The input
 schema accepts the numeric identifier, and the description says so.
 
-### Three calendar reads and one FIT read are not registered
+### What stays unregistered, and why
 
-| Tool | Why |
-| --- | --- |
-| `get_scheduled_workouts` | Needs the GraphQL calendar read the API layer does not build. |
-| `get_training_plan_workouts` | Same GraphQL calendar read. |
-| `get_activity_fit_data` | Needs FIT parsing this server does not do. |
+The two calendar reads that once sat here — `get_scheduled_workouts` and
+`get_training_plan_workouts` — are registered now that the API layer builds the
+GraphQL calendar request. What is left is short, and it is the whole gap between
+the implemented rows of [Tools](#tools) and the deviations above:
 
-Leaving them unregistered is deliberate: a stub that returns an error would
-occupy the upstream name while proving nothing, and
+| Tool | Status | Why |
+| --- | --- | --- |
+| `get_activity_fit_data` | not-implemented | Needs FIT parsing this server does not do. |
+| `set_fit_download_dir` | not-implemented | Would persist a caller-supplied server filesystem path. Refused by design, not merely unbuilt. |
+| `get_workout_by_id`, UUID form | **implemented**, numeric identifier only | The UUID form adaptive Garmin Coach plans use needs the Garmin Coach surface this server does not implement. The tool itself is registered. |
+
+Leaving the first two unregistered is deliberate: a stub that returns an error
+would occupy the upstream name while proving nothing, and
 `docs/implementation-status.md` forbids counting a placeholder as parity.
+`internal/tools/contract_test.go` asserts that neither name is registered, and
+`internal/tools/manifest_status_test.go` asserts that both keep the
+`not-implemented` status in `compat/tools.json`.
 
 ## Resources
 
@@ -759,9 +786,10 @@ decide, and remove any duplicate with `unschedule_workout`.
 Only a server-side idempotency key, or a pre-check whose own failure aborts instead of falling
 through, would make scheduling actually idempotent.
 
-**What this server does.** It does not port the pre-check, because it builds no GraphQL request at
-all, so `schedule_workout` and `schedule_workouts` carry no duplicate avoidance whatsoever and say so
-in their descriptions and in their `idempotent: false` annotation. `schedule_week` is not registered.
+**What this server does.** `schedule_workout` and `schedule_workouts` do not port the pre-check, so
+they carry no duplicate avoidance whatsoever and say so in their descriptions and in their
+`idempotent: false` annotation. `schedule_week` is registered and does run the pre-check, and it
+reports per item whether the check answered or failed open. All three stay `non-idempotent`.
 This is a deliberate deviation and it is recorded in
 [Deliberate deviations](#deliberate-deviations) and in the ADR 0006 register.
 
