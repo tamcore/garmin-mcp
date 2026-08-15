@@ -19,7 +19,7 @@ Last updated: 2026-08-15.
 | 2 — core auth and storage (M1) | **CLOSED** |
 | 3 — MCP foundation (M1) | **CLOSED** |
 | 4 — remote multi-user (M2) | **CLOSED.** The MCP conformance requirement is **blocked upstream**, with evidence below, not outstanding work |
-| 5 — compatibility breadth (M3) | **IN PROGRESS** — 45 of the 138 upstream tools are implemented, plus 5 tools the pinned manifest does not carry. No resource is implemented |
+| 5 — compatibility breadth (M3) | **IN PROGRESS** — 53 of the 138 upstream tools are implemented, plus 5 tools the pinned manifest does not carry. No resource is implemented |
 | 6 — hardening and release | not started |
 
 Phase definitions are in `docs/phases.md`.
@@ -35,9 +35,9 @@ the tag changes nothing.
 | `internal/cmd` | 74.3% | 77.4% |
 | `internal/config` | 90.8% | |
 | `internal/cryptostore` | 89.9% | |
-| `internal/garmin/api` | 86.9% | |
+| `internal/garmin/api` | 89.3% | 89.3% |
 | `internal/garmin/auth` | 67.3% | 88.2% |
-| `internal/garmin/client` | 93.0% | 93.3% |
+| `internal/garmin/client` | 94.3% | 94.6% |
 | `internal/garmin/protocol` | 96.7% | |
 | `internal/identity` | 97.7% | |
 | `internal/loginweb` | 82.6% | |
@@ -50,14 +50,15 @@ the tag changes nothing.
 | `internal/ratelimit` | 95.7% | |
 | `internal/securefile` | 84.5% | |
 | `internal/store` | 83.8% | |
-| `internal/testkit` | 96.8% | |
+| `internal/testkit` | 95.6% | |
 | `internal/tokenlink` | 80.0% | |
-| `internal/tools` | 77.0% | 77.1% |
+| `internal/tools` | 83.5% | 83.6% |
 | `migrations` | 100.0% | |
 
-Two packages sit under the 80% review rule: `internal/tools` at 77.0% and
-`internal/cmd` at 74.3%. No CI job enforces a threshold, so this is a review
-duty. Raise both with the next slice that touches them.
+One package sits under the 80% review rule: `internal/cmd` at 74.3%.
+`internal/tools` left the list with this slice, rising from 77.0% to 83.5%.
+CI enforces a per-package floor with an explicit exception list, so a package
+that drops under the floor fails the build unless it is named there.
 
 ### Phase 1 detail
 
@@ -375,10 +376,10 @@ evidence, and the operations documentation, which is real remaining work.
 ## M3 — full Taxuspt parity
 
 - [ ] The generated parity matrix accounts for every tool and resource at the
-      pinned Taxuspt commit. `docs/parity.md` carries per-tool status, and 93 of
+      pinned Taxuspt commit. `docs/parity.md` carries per-tool status, and 85 of
       the 138 tools and all 5 resources are still `not-implemented`.
 - [ ] Every required contract has passing name/schema/behavior tests, or a
-      documented exclusion with evidence. The implemented 45 do; the rest have no
+      documented exclusion with evidence. The implemented 53 do; the rest have no
       handler yet. The documented exclusions are in `docs/parity.md` and in the
       ADR 0006 register.
 - [ ] 0.3.2 to 0.3.10 behavior differences affecting those contracts are

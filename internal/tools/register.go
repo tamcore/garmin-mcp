@@ -89,6 +89,11 @@ func readOnlyRegistrations() []registration {
 		{getUnitSystemContract, registerGetUnitSystem},
 		{getActivitiesContract, registerGetActivities},
 		{getActivitiesByDateContract, registerGetActivitiesByDate},
+		{getActivitiesForDateContract, registerGetActivitiesForDate},
+		{countActivitiesContract, registerCountActivities},
+		{getActivityContract, registerGetActivity},
+		{getActivityGearContract, registerGetActivityGear},
+		{getActivityTypesContract, registerGetActivityTypes},
 		{getSleepDataContract, registerGetSleepData},
 		{getUserSummaryContract, registerGetUserSummary},
 		{getDevicesContract, registerGetDevices},
@@ -101,12 +106,15 @@ func readOnlyRegistrations() []registration {
 		{getActivityHRInZonesContract, registerGetActivityHRInZones},
 		{getActivityPowerInZonesContract, registerGetActivityPowerInZones},
 		{getActivityWeatherContract, registerGetActivityWeather},
+		{getActivityFITDataContract, registerGetActivityFITData},
+		{getPowerDurationCurveContract, registerGetPowerDurationCurve},
 		{getExerciseTypesContract, registerGetExerciseTypes},
 		{getWorkoutsContract, registerGetWorkouts},
 		{getWorkoutByIDContract, registerGetWorkoutByID},
 		{downloadWorkoutContract, registerDownloadWorkout},
 		{getScheduledWorkoutsContract, registerGetScheduledWorkouts},
 		{getTrainingPlanWorkoutsContract, registerGetTrainingPlanWorkouts},
+		{getGarminCoachWorkoutsContract, registerGetGarminCoachWorkouts},
 	}
 }
 

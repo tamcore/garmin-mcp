@@ -36,6 +36,14 @@ var wantReadOnlyToolNames = []string{
 	"download_workout",
 	tools.ToolGetScheduledWorkouts,
 	tools.ToolGetTrainingPlanWorkouts,
+	tools.ToolGetGarminCoachWorkouts,
+	tools.ToolGetActivitiesForDate,
+	tools.ToolCountActivities,
+	tools.ToolGetActivity,
+	tools.ToolGetActivityGear,
+	tools.ToolGetActivityTypes,
+	tools.ToolGetActivityFITData,
+	tools.ToolGetPowerDurationCurve,
 }
 
 // wantWriteToolNames is the write tier. Every one of them needs the operator's

@@ -240,6 +240,7 @@ func (a *ActivityDetails) readZones(
 type CatalogEntry struct {
 	TypeID       client.Number `json:"typeId"`
 	TypeKey      client.Text   `json:"typeKey"`
+	DisplayName  client.Text   `json:"displayName"`
 	ParentTypeID client.Number `json:"parentTypeId"`
 	IsHidden     *bool         `json:"isHidden"`
 	SortOrder    client.Number `json:"sortOrder"`

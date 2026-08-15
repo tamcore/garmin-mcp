@@ -81,8 +81,8 @@
   "counts": {
     "tools": 138,
     "byStatus": {
-      "implemented": 45,
-      "not-implemented": 93
+      "implemented": 53,
+      "not-implemented": 85
     },
     "byEffect": {
       "destructive": 8,
@@ -172,7 +172,7 @@
   "tools": [
     {
       "name": "get_activity_fit_data",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/activity_analysis.py",
         "line": 1053,
@@ -277,10 +277,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetActivityFITData",
+        "file": "internal/tools/get_activity_fit_data.go",
+        "registeredName": "get_activity_fit_data"
       },
       "tests": {
         "unit": [],
@@ -290,7 +290,7 @@
     },
     {
       "name": "get_power_duration_curve",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/activity_analysis.py",
         "line": 1150,
@@ -373,10 +373,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetPowerDurationCurve",
+        "file": "internal/tools/get_power_duration_curve.go",
+        "registeredName": "get_power_duration_curve"
       },
       "tests": {
         "unit": [],
@@ -679,7 +679,7 @@
     },
     {
       "name": "get_activities_fordate",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/activity_management.py",
         "line": 161,
@@ -744,10 +744,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetActivitiesForDate",
+        "file": "internal/tools/get_activities_fordate.go",
+        "registeredName": "get_activities_fordate"
       },
       "tests": {
         "unit": [],
@@ -757,7 +757,7 @@
     },
     {
       "name": "get_activity",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/activity_management.py",
         "line": 210,
@@ -829,10 +829,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetActivity",
+        "file": "internal/tools/get_activity.go",
+        "registeredName": "get_activity"
       },
       "tests": {
         "unit": [],
@@ -1918,7 +1918,7 @@
     },
     {
       "name": "get_activity_gear",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/activity_management.py",
         "line": 778,
@@ -1988,10 +1988,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetActivityGear",
+        "file": "internal/tools/get_activity_gear.go",
+        "registeredName": "get_activity_gear"
       },
       "tests": {
         "unit": [],
@@ -2085,7 +2085,7 @@
     },
     {
       "name": "count_activities",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/activity_management.py",
         "line": 812,
@@ -2145,10 +2145,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerCountActivities",
+        "file": "internal/tools/count_activities.go",
+        "registeredName": "count_activities"
       },
       "tests": {
         "unit": [],
@@ -2344,7 +2344,7 @@
     },
     {
       "name": "get_activity_types",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/activity_management.py",
         "line": 942,
@@ -2401,10 +2401,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetActivityTypes",
+        "file": "internal/tools/get_activity_types.go",
+        "registeredName": "get_activity_types"
       },
       "tests": {
         "unit": [],
@@ -11435,7 +11435,7 @@
     },
     {
       "name": "get_garmin_coach_workouts",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/workouts.py",
         "line": 1098,
@@ -11504,10 +11504,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetGarminCoachWorkouts",
+        "file": "internal/tools/garmincoach.go",
+        "registeredName": "get_garmin_coach_workouts"
       },
       "tests": {
         "unit": [],

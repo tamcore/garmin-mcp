@@ -20,8 +20,8 @@ when the manifest status and the registered surface disagree either way.
 
 | | Count |
 | --- | --- |
-| Manifest tools implemented | **45** of 138 |
-| Manifest tools not implemented | 93 |
+| Manifest tools implemented | **53** of 138 |
+| Manifest tools not implemented | 85 |
 | Manifest resources implemented | **0** of 5 |
 | Tools registered beyond the manifest | 5 |
 | Tools registered in total | 50, plus the server's own `server_info` |
@@ -283,7 +283,7 @@ See [Deliberate deviations](#deliberate-deviations).
 | `add_hydration_data` | not-implemented | write | health | `garmin:health:write` | non-idempotent | data_management.py:98 |
 | `add_weigh_in` | not-implemented | write | health | `garmin:health:write` | non-idempotent | weight_management.py:156 |
 | `add_weigh_in_with_timestamps` | not-implemented | write | health | `garmin:health:write` | non-idempotent | weight_management.py:176 |
-| `count_activities` | not-implemented | read-only | ordinary | `garmin:activities:read` | idempotent | activity_management.py:812 |
+| `count_activities` | **implemented** | read-only | ordinary | `garmin:activities:read` | idempotent | activity_management.py:812 |
 | `create_custom_food` | not-implemented | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:269 |
 | `create_manual_activity` | **implemented** | write | health | `garmin:activities:write` | non-idempotent | activity_management.py:892 |
 | `create_run_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:392 |
@@ -300,17 +300,17 @@ See [Deliberate deviations](#deliberate-deviations).
 | `download_workout` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:768 |
 | `get_activities` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:830 |
 | `get_activities_by_date` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:50 |
-| `get_activities_fordate` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:161 |
-| `get_activity` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:210 |
+| `get_activities_fordate` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:161 |
+| `get_activity` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:210 |
 | `get_activity_exercise_sets` | **implemented** | read-only | health | `garmin:activities:read` | idempotent | activity_management.py:795 |
-| `get_activity_fit_data` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_analysis.py:1053 |
-| `get_activity_gear` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | activity_management.py:778 |
+| `get_activity_fit_data` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_analysis.py:1053 |
+| `get_activity_gear` | **implemented** | read-only | device | `garmin:devices:read` | idempotent | activity_management.py:778 |
 | `get_activity_hr_in_timezones` | **implemented** | read-only | health | `garmin:activities:read` | idempotent | activity_management.py:741 |
 | `get_activity_power_in_timezones` | **implemented** | read-only | health | `garmin:activities:read` | idempotent | activity_management.py:758 |
 | `get_activity_split_summaries` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:638 |
 | `get_activity_splits` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:539 |
 | `get_activity_typed_splits` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:621 |
-| `get_activity_types` | not-implemented | read-only | ordinary | `garmin:activities:read` | idempotent | activity_management.py:942 |
+| `get_activity_types` | **implemented** | read-only | ordinary | `garmin:activities:read` | idempotent | activity_management.py:942 |
 | `get_activity_weather` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:655 |
 | `get_adhoc_challenges` | not-implemented | read-only | ordinary | `garmin:challenges:read` | idempotent | challenges.py:363 |
 | `get_all_day_events` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:687 |
@@ -337,7 +337,7 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_fitnessage_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:487 |
 | `get_floors` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:326 |
 | `get_full_name` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:22 |
-| `get_garmin_coach_workouts` | not-implemented | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1098 |
+| `get_garmin_coach_workouts` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1098 |
 | `get_gear` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | gear_management.py:42 |
 | `get_goals` | not-implemented | read-only | health | `garmin:health:read` | idempotent | challenges.py:237 |
 | `get_heart_rates` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:358 |
@@ -357,7 +357,7 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_nutrition_daily_meals` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:51 |
 | `get_nutrition_daily_settings` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:71 |
 | `get_personal_record` | **implemented** | read-only | health | `garmin:health:read` | idempotent | challenges.py:252 |
-| `get_power_duration_curve` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_analysis.py:1150 |
+| `get_power_duration_curve` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_analysis.py:1150 |
 | `get_pregnancy_summary` | not-implemented | read-only | womens-health | `garmin:womens-health:read` | idempotent | womens_health.py:49 |
 | `get_primary_training_device` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:177 |
 | `get_progress_summary_between_dates` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:161 |
@@ -665,20 +665,22 @@ schema accepts the numeric identifier, and the description says so.
 
 The two calendar reads that once sat here — `get_scheduled_workouts` and
 `get_training_plan_workouts` — are registered now that the API layer builds the
-GraphQL calendar request. What is left is short, and it is the whole gap between
-the implemented rows of [Tools](#tools) and the deviations above:
+GraphQL calendar request, and `get_activity_fit_data` followed once the FIT
+container decoder landed in `internal/garmin/api`. What is left is short, and it
+is the whole gap between the implemented rows of [Tools](#tools) and the
+deviations above:
 
 | Tool | Status | Why |
 | --- | --- | --- |
-| `get_activity_fit_data` | not-implemented | Needs FIT parsing this server does not do. |
 | `set_fit_download_dir` | not-implemented | Would persist a caller-supplied server filesystem path. Refused by design, not merely unbuilt. |
 | `get_workout_by_id`, UUID form | **implemented**, numeric identifier only | The UUID form adaptive Garmin Coach plans use needs the Garmin Coach surface this server does not implement. The tool itself is registered. |
 
-Leaving the first two unregistered is deliberate: a stub that returns an error
-would occupy the upstream name while proving nothing, and
-`docs/implementation-status.md` forbids counting a placeholder as parity.
-`internal/tools/contract_test.go` asserts that neither name is registered, and
-`internal/tools/manifest_status_test.go` asserts that both keep the
+Leaving `set_fit_download_dir` unregistered is deliberate, and it is a refusal
+rather than a gap: its only purpose is to persist a caller-supplied server
+filesystem path. A stub that returned an error would occupy the upstream name
+while proving nothing, and `docs/implementation-status.md` forbids counting a
+placeholder as parity. `internal/tools/contract_test.go` asserts the name is not
+registered, and `internal/tools/manifest_status_test.go` asserts it keeps the
 `not-implemented` status in `compat/tools.json`.
 
 ## Resources

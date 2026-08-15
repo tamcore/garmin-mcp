@@ -285,8 +285,7 @@ func TestNoManifestToolIsRegisteredWithoutTheEndpointItNeeds(t *testing.T) {
 	t.Parallel()
 
 	unregistered := map[string]string{
-		"get_activity_fit_data": "needs FIT parsing this server does not do",
-		"set_fit_download_dir":  "would persist a caller-supplied server filesystem path",
+		"set_fit_download_dir": "would persist a caller-supplied server filesystem path",
 	}
 
 	contracts := tools.Contracts()
