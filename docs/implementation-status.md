@@ -374,10 +374,10 @@ evidence, and the operations documentation, which is real remaining work.
 ## M3 — full Taxuspt parity
 
 - [ ] The generated parity matrix accounts for every tool and resource at the
-      pinned Taxuspt commit. `docs/parity.md` carries per-tool status, and 96 of
+      pinned Taxuspt commit. `docs/parity.md` carries per-tool status, and 93 of
       the 138 tools and all 5 resources are still `not-implemented`.
 - [ ] Every required contract has passing name/schema/behavior tests, or a
-      documented exclusion with evidence. The implemented 42 do; the rest have no
+      documented exclusion with evidence. The implemented 45 do; the rest have no
       handler yet. The documented exclusions are in `docs/parity.md` and in the
       ADR 0006 register.
 - [ ] 0.3.2 to 0.3.10 behavior differences affecting those contracts are
