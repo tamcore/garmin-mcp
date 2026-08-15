@@ -99,13 +99,18 @@ func (p *Profile) FullName(ctx context.Context, session client.Session) (string,
 //
 // It is health data: a record is a measured performance, so it is never logged.
 type PersonalRecord struct {
-	ID           client.Number   `json:"id"`
-	TypeID       client.Number   `json:"typeId"`
-	ActivityID   client.Number   `json:"activityId"`
-	Value        client.Number   `json:"value"`
-	StartLocal   *string         `json:"prStartTimeLocal"`
-	StartGMT     *string         `json:"prStartTimeGmt"`
-	ActivityName *string         `json:"activityName"`
+	ID         client.Number `json:"id"`
+	TypeID     client.Number `json:"typeId"`
+	ActivityID client.Number `json:"activityId"`
+	Value      client.Number `json:"value"`
+	// StartLocal and StartGMT are client.Text rather than *string because Garmin
+	// sends them as a number — an epoch in milliseconds, not the timestamp string
+	// the field names suggest. Declared as strings, they made every real account's
+	// personal records undecodable. The live suite found that; no fixture did,
+	// because the fixtures were written to the same wrong assumption as the model.
+	StartLocal   client.Text     `json:"prStartTimeLocal"`
+	StartGMT     client.Text     `json:"prStartTimeGmt"`
+	ActivityName client.Text     `json:"activityName"`
 	ActivityType json.RawMessage `json:"activityType"`
 }
 

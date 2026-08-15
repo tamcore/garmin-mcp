@@ -159,9 +159,9 @@ func newPersonalRecordList(records []api.PersonalRecord, limit int) PersonalReco
 		out = append(out, PersonalRecord{
 			TypeID:       optionalInt64(record.TypeID),
 			ActivityID:   optionalInt64(record.ActivityID),
-			ActivityName: record.ActivityName,
+			ActivityName: optionalText(record.ActivityName),
 			Value:        optionalFloat(record.Value),
-			StartGMT:     record.StartGMT,
+			StartGMT:     optionalText(record.StartGMT),
 		})
 	}
 	return PersonalRecordList{Records: out, Count: len(out), Truncated: truncated}

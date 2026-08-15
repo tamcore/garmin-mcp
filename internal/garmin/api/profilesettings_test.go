@@ -114,6 +114,55 @@ func TestPersonalRecordsEscapeTheDisplayNameIntoOneSegment(t *testing.T) {
 	}
 }
 
+// realPersonalRecordsBody is the shape Garmin actually serves: the two
+// prStartTime fields are numbers, an epoch in milliseconds, despite names that
+// read like timestamps. The fixture above declares prStartTimeLocal as a string
+// and omits prStartTimeGmt entirely, which is exactly why the model could
+// declare both as strings and pass every test while failing on every real
+// account.
+const realPersonalRecordsBody = `[{"id":2,"typeId":7,"activityId":18446745,` +
+	`"value":63863.3,"prStartTimeLocal":1769850000000,` +
+	`"prStartTimeGmt":1769846400000,"activityName":"Long Run"},` +
+	`{"id":3,"typeId":12,"value":63591,"prStartTimeLocal":"2026-01-31T09:00:00.0",` +
+	`"prStartTimeGmt":null}]`
+
+// TestPersonalRecordsDecodeTheNumericStartTimes is the regression test for a
+// defect the live suite found and no fixture could: a personal-record read
+// against any real account returned ErrMalformedPayload, because
+// prStartTimeGmt arrives as a number and the model demanded a string.
+//
+// It also pins the tolerance that fix rests on. Garmin is free to send either
+// form, so both must decode: the first record carries numbers, the second a
+// string and a null.
+func TestPersonalRecordsDecodeTheNumericStartTimes(t *testing.T) {
+	t.Parallel()
+
+	script := testkit.NewScript().With(personalRecordsPath(),
+		testkit.JSON(http.StatusOK, realPersonalRecordsBody))
+	h := newHarness(t, script, client.Limits{})
+
+	records, err := newProfile(t, h).PersonalRecords(t.Context(), h.session, mustDisplayName(t))
+	if err != nil {
+		t.Fatalf("PersonalRecords() = %v, want the numeric start times to decode", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("%d records, want 2", len(records))
+	}
+
+	if got, ok := records[0].StartGMT.Value(); !ok || got != "1769846400000" {
+		t.Errorf("numeric StartGMT = %q/%v, want the epoch carried through", got, ok)
+	}
+	if got, ok := records[0].ActivityName.Value(); !ok || got != "Long Run" {
+		t.Errorf("ActivityName = %q/%v, want the fixture name", got, ok)
+	}
+	if got, ok := records[1].StartLocal.Value(); !ok || got != "2026-01-31T09:00:00.0" {
+		t.Errorf("string StartLocal = %q/%v, want the string form to still decode", got, ok)
+	}
+	if _, ok := records[1].StartGMT.Value(); ok {
+		t.Error("a null StartGMT reported a value, want it absent")
+	}
+}
+
 // TestPersonalRecordsRefuseAnUnsetDisplayName reproduces upstream's
 // _require_display_name: interpolating an unset name into the path yields a 403,
 // so it is refused before dispatch.

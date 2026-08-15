@@ -455,19 +455,30 @@ data into a terminal.
 - The accounting test that fails when a registered read-only tool is neither
   exercised nor excused with a reason.
 
-**What could not run, and why.** The dedicated test account holds **zero**
-activities and an empty workout library, so everything that needs one skipped:
-the FIT-against-summary cross-check, its session-coverage invariant, the nine
-activity-scoped tools, `get_activity` and `get_activity_fit_data` agreement, and
-`get_workout_by_id`/`download_workout`. The skip states the account's own
-activity count, so an empty account is never mistaken for a listing this server
-can no longer read.
+On the first run the account held **zero** activities and an empty workout
+library, so everything needing one skipped — including the FIT cross-check, the
+whole reason this layer exists. The skip stated the account's own activity
+count, so an empty account was never mistaken for a listing this server can no
+longer read.
 
-That gap matters: the FIT cross-check is the whole reason this layer exists, and
-it is the only check that would have caught the two defects ADR 0007 records. It
-stays **unproven against the real service** until the test account holds at
-least one recorded activity with a device file. Until then, record the FIT rows
-as `not run — the test account holds no activity`.
+**Second run, after one activity with a device file and one workout were added
+to that account: the whole suite passes.** Every previously skipped check ran:
+the FIT-against-summary cross-check, the session-coverage invariant, the nine
+activity-scoped tools, `get_activity` and `get_activity_fit_data` agreement, and
+`get_workout_by_id`/`download_workout`. The decoded device file reproduced
+Garmin's own distance, elapsed time, heart rate, ascent and calories inside the
+stated tolerances, so ADR 0007's replacement is now confirmed against the real
+service and not only against three files decoded by hand.
+
+**The layer earned its keep on that run.** `get_personal_record` — registered,
+shipped and green in every fixture test — failed against the live account with
+`malformed_payload`. Garmin sends `prStartTimeGmt` as a number, an epoch in
+milliseconds, and the model demanded a string, so the tool was broken for every
+real account. The fixture had declared `prStartTimeLocal` as a string and
+omitted `prStartTimeGmt` entirely: it was written to the same wrong assumption
+as the model, which is exactly the blind spot this layer exists to remove. The
+fields are `client.Text` now, and a regression test pins both the numeric and
+the string form.
 
 ## MCP conformance is blocked
 
