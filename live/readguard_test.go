@@ -3,6 +3,7 @@
 package live
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -17,7 +18,7 @@ import (
 // before deciding. The request layer bounds the rendered document at
 // client.MaxGraphQLDocumentBytes, so anything materially larger is not a document
 // this server produced and is refused rather than parsed.
-const maxGraphQLProbeBytes = 4 * client.MaxGraphQLDocumentBytes
+const maxGraphQLProbeBytes int64 = 4 * client.MaxGraphQLDocumentBytes
 
 // graphQLQueryField is the only key a GraphQL body this server sends may carry.
 // client.graphQLBody marshals exactly one field, so a body of any other shape did not
@@ -73,25 +74,49 @@ func isReadRequest(req *http.Request) bool {
 
 // isKnownGraphQLQuery reports whether one POST is a GraphQL query this server renders.
 //
-// The body is replayed through GetBody, which internal/garmin/client sets on every
-// request precisely so a body can be read again without consuming the one that will be
-// sent. A request that cannot be replayed is refused rather than trusted: the guard
-// cannot judge what it cannot read.
+// It judges the bytes that will actually be sent. A request that cannot be read is
+// refused rather than trusted: the guard cannot judge what it cannot read.
 func isKnownGraphQLQuery(req *http.Request) bool {
-	if req.URL == nil || req.URL.Path != client.PathGraphQL || req.GetBody == nil {
+	if req.URL == nil || req.URL.Path != client.PathGraphQL {
 		return false
 	}
-	body, err := req.GetBody()
-	if err != nil {
-		return false
-	}
-	defer func() { _ = body.Close() }()
-
-	raw, err := io.ReadAll(io.LimitReader(body, maxGraphQLProbeBytes+1))
-	if err != nil || len(raw) > maxGraphQLProbeBytes {
+	raw, read := takeBody(req, maxGraphQLProbeBytes)
+	if !read {
 		return false
 	}
 	return isKnownQueryDocument(documentOf(raw))
+}
+
+// takeBody reads the body one request will dispatch and puts exactly those bytes back,
+// or reports that it could not.
+//
+// Reading GetBody instead would be judging the wrong thing. An *http.Request carries
+// two representations of its body — Body, which the transport writes, and GetBody,
+// which only replays it — and nothing in net/http keeps the two equal. A guard that
+// read GetBody would therefore be inspecting one document while a different one left
+// the process, which is a hole in exactly the direction that matters: the benign
+// document goes in the copy and the mutation goes in the body. Body is consumed here,
+// judged, and reinstalled from the bytes that were read; GetBody is replaced with a
+// replay of those same bytes so a post-refresh retry cannot resurrect anything else.
+//
+// A body over the bound is refused rather than truncated: a truncated body handed on
+// would be a corrupt request, and one this guard has not seen all of.
+func takeBody(req *http.Request, limit int64) ([]byte, bool) {
+	if req.Body == nil {
+		return nil, false
+	}
+	raw, err := io.ReadAll(io.LimitReader(req.Body, limit+1))
+	_ = req.Body.Close()
+	if err != nil || int64(len(raw)) > limit {
+		return nil, false
+	}
+
+	req.Body = io.NopCloser(bytes.NewReader(raw))
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(raw)), nil
+	}
+	req.ContentLength = int64(len(raw))
+	return raw, true
 }
 
 // documentOf reads the query document out of a GraphQL request body, or "" when the

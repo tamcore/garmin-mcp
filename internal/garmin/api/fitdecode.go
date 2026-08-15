@@ -96,11 +96,11 @@ func (c *fitCollector) OnMesg(mesg proto.Message) {
 	case typedef.MesgNumRecord:
 		c.addRecord(&mesg)
 	case typedef.MesgNumSession:
-		if c.spanRoom(len(c.sessions)) {
+		if c.spanRoom(len(c.sessions), c.limits.MaxSessions) {
 			c.sessions = append(c.sessions, readSession(mesgdef.NewSession(&mesg)))
 		}
 	case typedef.MesgNumLap:
-		if c.spanRoom(len(c.laps)) {
+		if c.spanRoom(len(c.laps), c.limits.MaxLaps) {
 			c.laps = append(c.laps, readLap(mesgdef.NewLap(&mesg)))
 		}
 	case typedef.MesgNumEvent:
@@ -113,11 +113,11 @@ func (c *fitCollector) OnMesg(mesg proto.Message) {
 //
 // The bound is applied here, during collection, rather than on the rendered result.
 // Every span is analysed against the whole record stream, so the cost of the analysis
-// is the product of the two counts: a file carrying hundreds of thousands of
-// overlapping spans over a full sample stream would be quadratic work performed
-// before any result bound could apply.
-func (c *fitCollector) spanRoom(collected int) bool {
-	if collected >= c.limits.MaxSpans {
+// is the product of the two counts: a file carrying overlapping spans over a full
+// sample stream would be quadratic work performed before any result bound could apply.
+// The two classes carry their own bound because they are rendered at different counts.
+func (c *fitCollector) spanRoom(collected, limit int) bool {
+	if collected >= limit {
 		c.spansCut = true
 		return false
 	}
@@ -127,12 +127,12 @@ func (c *fitCollector) spanRoom(collected int) bool {
 // addRecord collects one sample, up to the record bound.
 //
 // The SDK has already decoded every field of the message, position included, into the
-// reused profile struct. readRecord reads no position out of it, and the two position
-// fields are put back to their invalid value before the struct is handed to the next
-// message, so no coordinate outlives this call even inside the collector.
+// reused profile struct. readRecord reads no position out of it, and the struct is
+// scrubbed before it is handed to the next message, so no coordinate outlives this
+// call even inside the collector.
 func (c *fitCollector) addRecord(mesg *proto.Message) {
 	c.record.Reset(mesg)
-	defer c.dropPosition()
+	defer c.scrubRecord()
 
 	if c.record.Timestamp.IsZero() {
 		return
@@ -144,11 +144,21 @@ func (c *fitCollector) addRecord(mesg *proto.Message) {
 	c.records = append(c.records, readRecord(&c.record))
 }
 
-// dropPosition puts the reused record's coordinates back to the profile's invalid
-// value, which is what an absent reading is on the wire.
-func (c *fitCollector) dropPosition() {
+// scrubRecord empties the reused record of everything a position could hide in.
+//
+// The two profile position fields go back to the invalid value, which is what an
+// absent reading is on the wire. The other two are the reason this is a scrub rather
+// than a two-line reset: mesgdef.Record also carries UnknownFields — every field
+// number the profile does not define — and DeveloperFields, which an application
+// names and describes itself. Either can carry a latitude, both are aliases of the
+// decoder's own message, and no method on the struct suppresses them. Clearing them
+// here is what makes "no coordinate outlives this call" a statement about every field
+// of the record rather than about the two the profile happens to name.
+func (c *fitCollector) scrubRecord() {
 	c.record.PositionLat = basetype.Sint32Invalid
 	c.record.PositionLong = basetype.Sint32Invalid
+	c.record.UnknownFields = nil
+	c.record.DeveloperFields = nil
 }
 
 // addShift collects one electronic gear change, up to the shift bound.

@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/api"
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
@@ -19,14 +18,14 @@ import (
 // enough.
 const sweepPageSize = client.DefaultMaxPageSize
 
-// runStart is the instant this run began. It is the sweeper's cut-off: only a name
-// stamped strictly before it can be a leftover of an earlier run, so nothing this run
-// creates can ever be swept as though a previous run had left it.
-var runStart = time.Now().UTC()
-
 // sweep removes what a killed run left behind, and nothing else.
 //
-// Only an object whose own name is one suiteName rendered on an *earlier* run is
+// The cut-off is writeEnv.startedAt, the one instant this run is stamped with: only a
+// name stamped strictly before it can be a leftover of an earlier run, and because that
+// instant is also what every generated name of this run carries, nothing this run
+// creates can be swept as though a previous run had left it.
+//
+// Only an object whose own name is one this suite rendered on an *earlier* run is
 // touched. The name is read from Garmin and parsed field by field — prefix, label, run
 // stamp, counter — and the run stamp must fall between nameStampFloor and the instant
 // this run began; see isPreviousRunObject, which also states the residual risk. A name
@@ -83,7 +82,7 @@ func (w *writeEnv) sweepWorkouts(ctx context.Context, page client.Page) (int, er
 		if err != nil {
 			continue
 		}
-		if !w.owned.ownSwept(kindWorkout, summary.WorkoutName, value, runStart) {
+		if !w.owned.ownSwept(kindWorkout, summary.WorkoutName, value, w.startedAt) {
 			continue
 		}
 
@@ -117,7 +116,7 @@ func (w *writeEnv) sweepActivities(ctx context.Context, page client.Page) (int, 
 		if err != nil {
 			continue
 		}
-		if !w.owned.ownSwept(kindActivity, activity.ActivityName, *activity.ActivityID, runStart) {
+		if !w.owned.ownSwept(kindActivity, activity.ActivityName, *activity.ActivityID, w.startedAt) {
 			continue
 		}
 		if _, err := w.writes.Delete(ctx, w.session, id); err != nil {

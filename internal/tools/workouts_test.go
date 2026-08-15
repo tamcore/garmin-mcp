@@ -21,7 +21,14 @@ const (
 	workoutDetailBody = `{"workoutId":550001,"workoutName":"Easy run",` +
 		`"sportType":{"sportTypeKey":"running"},"workoutSegments":[{"segmentOrder":1}]}`
 	savedWorkoutBody = `{"workoutId":550009,"workoutName":"Saved by Garmin"}`
-	workoutFITBody   = "FITBYTES"
+
+	// updatedWorkoutBody is what an in-place update answers with. It names the
+	// workout the request addressed, which an upload answer does not: an update that
+	// came back naming another workout is a failure the api layer refuses, so a
+	// fixture reusing the upload body would be scripting drift rather than success.
+	updatedWorkoutBody = `{"workoutId":` + testWorkoutID + `,"workoutName":"Saved by Garmin"}`
+
+	workoutFITBody = "FITBYTES"
 )
 
 func workoutReadScript() testkit.Script {
@@ -115,7 +122,7 @@ func workoutWriteScript() testkit.Script {
 	return testkit.NewScript().
 		With(client.PathSocialProfile, repeat(okJSON(profileBody), 6)...).
 		With(client.PathWorkoutPrefix, repeat(okJSON(savedWorkoutBody), 4)...).
-		With(workoutPath(testWorkoutID), repeat(okJSON(savedWorkoutBody), 2)...).
+		With(workoutPath(testWorkoutID), repeat(okJSON(updatedWorkoutBody), 2)...).
 		With(client.PathWorkoutSchedule+"/"+testWorkoutID, repeat(okJSON(`{}`), 3)...)
 }
 

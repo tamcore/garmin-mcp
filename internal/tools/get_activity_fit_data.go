@@ -45,11 +45,19 @@ const (
 )
 
 // fitLimits are the decode bounds these tools apply.
+//
+// The span bounds are the *render* bounds, deliberately. Every session and lap the
+// decode retains is summarized against the whole retained sample stream, so a span
+// this tool would never show still costs a pass over sixty thousand records. Decoding
+// exactly what can be rendered is the only span count worth paying for, and tying the
+// two together here is what stops them drifting apart.
 func fitLimits() api.FITLimits {
 	return api.FITLimits{
 		MaxBytes:    maxFITFileBytes,
 		MaxMessages: maxFITMessages,
 		MaxRecords:  maxFITSamples,
+		MaxSessions: maxFITSessions,
+		MaxLaps:     maxFITLaps,
 	}
 }
 
@@ -82,16 +90,22 @@ type FITData struct {
 
 // LogValue reports the shape of the analysis, never a reading.
 //
-// Every figure in this result is derived from health and location data, so none of it
-// is loggable — a shift *count* included: how often a rider changed gear is activity
-// telemetry, not shape. What is logged is the length of each retained list and
-// whether anything was cut, which describes the result rather than the ride.
+// Not one reading of the analysis is logged. What is logged is how much of the result
+// was assembled and whether anything was cut, which is what a truncation or a bound
+// has to be diagnosed from.
+//
+// The shift count is not among them, and the reason is worth stating because it was
+// once logged: the returned shift list is bounded at two hundred entries and a real
+// ride stays under that, so its length *is* the number of times the rider changed
+// gear, exactly. A count of what a person did is a reading. It is therefore logged as
+// presence, which says whether the file carried electronic shifting at all and nothing
+// about the ride.
 func (d FITData) LogValue() slog.Value {
 	return shape("fitData",
 		slog.Int("sessions", len(d.Sessions)),
 		slog.Int("laps", len(d.Laps)),
 		slog.Int("climbs", len(d.Climbs)),
-		slog.Int("shiftEvents", len(d.Shifts.Events)),
+		slog.Bool("shifts", len(d.Shifts.Events) > 0),
 		slog.Int("records", len(d.Records)),
 		slog.Bool("truncated", d.RecordsTruncated || d.LapsTruncated ||
 			d.SamplesTruncated || d.Shifts.Truncated),

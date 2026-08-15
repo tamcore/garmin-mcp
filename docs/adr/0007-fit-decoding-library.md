@@ -104,14 +104,26 @@ none of the following moves into it:
   the two fields would leave them decoded as *unknown* fields rather than not decoded —
   so there is nothing to buy at any cost. What this package guarantees is therefore
   narrower, and it is what the code enforces: the two fields are **never read** into
-  `FITRecord`; `fitCollector.dropPosition` puts them back to their invalid sentinel in
-  the reused `mesgdef.Record` after every sample, so no coordinate outlives one
-  `OnMesg` call even inside the collector; and no returned structure, log line or error
-  can carry a position. A per-second position series is the most sensitive thing in the
-  file and no summary here needs it.
-  `TestParseFITRetainsAndReturnsNoCoordinates` decodes a file that carries a synthetic
-  track and asserts that neither the semicircle value nor the degrees it renders as
-  appear anywhere in the decoded model or in its analysis.
+  `FITRecord`; `fitCollector.scrubRecord` empties the reused `mesgdef.Record` after
+  every sample, so no coordinate outlives one `OnMesg` call even inside the collector;
+  and no returned structure, log line or error can carry a position. A per-second
+  position series is the most sensitive thing in the file and no summary here needs it.
+
+  The scrub covers four fields, not two, and the two extra ones are the reason a
+  second review had to find this twice. `mesgdef.Record` also carries `UnknownFields`
+  — every field number the profile does not define — and `DeveloperFields`, which an
+  application names and describes itself. Either can carry a latitude, both alias the
+  decoder's own message, and no method on the struct suppresses them, so clearing only
+  `PositionLat` and `PositionLong` left a coordinate-bearing custom field sitting in
+  the collector after the sample was read.
+
+  The claim is split across two tests because it has two halves.
+  `TestParseFITReturnsNoCoordinates` decodes a file carrying a synthetic track and
+  asserts that neither the semicircle value nor the degrees it renders as appear
+  anywhere in the decoded model or in its analysis.
+  `TestCollectorScrubsEveryFieldAPositionCouldHideIn` builds a record carrying a
+  position in all four places and asserts the retained struct holds none of them —
+  which a test reading the returned model cannot see.
 - **Error sanitization.** The library's errors carry a byte position and would grow
   to carry more. None of that text is reproduced. `fitCollector.fail` classifies
   the failure as `client.ErrMalformedPayload` or `client.ErrResponseTooLarge` and

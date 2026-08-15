@@ -37,10 +37,16 @@ const (
 	keyFormat           = "format"
 	keyBytes            = "bytes"
 	keyWorkoutID        = "workoutId"
+	keyID               = "id"
+	keyStatus           = "status"
 )
 
-// checkedDuplicate is the value schedule_week reports when its pre-check answered.
-const checkedDuplicate = "checked"
+// checkedDuplicate is the value schedule_week reports when its pre-check answered, and
+// statusAlreadyScheduled is what it reports for an item the calendar already carries.
+const (
+	checkedDuplicate       = "checked"
+	statusAlreadyScheduled = "already_scheduled"
+)
 
 // TestLiveWorkoutBatchToolsApplyEachItemSeparately drives the four batch tools and
 // the week schedule.
@@ -55,13 +61,13 @@ func TestLiveWorkoutBatchToolsApplyEachItemSeparately(t *testing.T) {
 	names := make([]string, 0, batchWorkouts)
 	documents := make([]map[string]any, 0, batchWorkouts)
 	for range batchWorkouts {
-		name := suiteName("batch")
+		name := w.names.name(labelNameBatch)
 		names = append(names, name)
 		documents = append(documents, merged(template, keyWorkoutName, name))
 	}
 
 	uploaded := w.call(t, tools.ToolUploadWorkouts, map[string]any{keyWorkouts: documents})
-	ids := w.savedWorkoutIDs(t, uploaded, len(documents))
+	ids := w.savedWorkoutIDs(t, uploaded, names)
 
 	dates := w.scheduleBatch(t, ids)
 	entries := w.adoptScheduledBatch(t, ids, dates)
@@ -83,30 +89,40 @@ func TestLiveWorkoutBatchToolsApplyEachItemSeparately(t *testing.T) {
 func (w *writeEnv) batchDocument(t *testing.T) map[string]any {
 	t.Helper()
 
-	created := w.call(t, tools.ToolCreateRunWorkout, runWorkoutArgs(suiteName("template")))
+	created := w.call(t, tools.ToolCreateRunWorkout, runWorkoutArgs(w.names.name(labelNameTemplate)))
 	id := identifier(t, created, tools.ToolCreateRunWorkout, argWorkoutID)
 	w.keepClean(t, kindWorkout, id)
 
 	document := w.workoutDocument(t, id)
 	delete(document, keyWorkoutID)
-	w.deleteViaTool(t, tools.ToolDeleteWorkout, argWorkoutID, kindWorkout, id)
+	w.deleteViaTool(t, tools.ToolDeleteWorkout, argWorkoutID, kindWorkout, id,
+		w.workoutGone(t, id))
 	return document
 }
 
-// savedWorkoutIDs reads the identifiers out of a batch upload and puts each one
-// under cleanup.
-func (w *writeEnv) savedWorkoutIDs(t *testing.T, result map[string]any, want int) []int64 {
+// savedWorkoutIDs reads the identifiers out of a batch upload and puts each one under
+// cleanup.
+//
+// The saved list is required to be one item per requested document, in request order,
+// with distinct identifiers. Only the name makes that checkable: the identifiers are
+// Garmin's and are not known in advance, while the names are this suite's own and were
+// sent in a known order, so a list that reported one document twice — the shape a
+// partial failure takes — is caught here rather than passing on its length.
+func (w *writeEnv) savedWorkoutIDs(t *testing.T, result map[string]any, names []string) []int64 {
 	t.Helper()
 
 	if failures, _ := result[keyFailures].([]any); len(failures) != 0 {
-		t.Fatalf("%s refused %d of %d documents", tools.ToolUploadWorkouts, len(failures), want)
+		t.Fatalf("%s refused %d of %d documents",
+			tools.ToolUploadWorkouts, len(failures), len(names))
 	}
 	saved, _ := result[keySaved].([]any)
-	if len(saved) != want {
-		t.Fatalf("%s saved %d of %d documents", tools.ToolUploadWorkouts, len(saved), want)
+	if len(saved) != len(names) {
+		t.Fatalf("%s saved %d of %d documents",
+			tools.ToolUploadWorkouts, len(saved), len(names))
 	}
 
-	ids := make([]int64, 0, want)
+	ids := make([]int64, 0, len(names))
+	seen := make(map[int64]struct{}, len(names))
 	for index, entry := range saved {
 		object, ok := entry.(map[string]any)
 		if !ok {
@@ -115,6 +131,13 @@ func (w *writeEnv) savedWorkoutIDs(t *testing.T, result map[string]any, want int
 		}
 		id := identifier(t, object, tools.ToolUploadWorkouts, argWorkoutID)
 		w.keepClean(t, kindWorkout, id)
+
+		if _, repeated := seen[id]; repeated {
+			t.Errorf("%s reported the same workout twice, at position %d",
+				tools.ToolUploadWorkouts, index)
+		}
+		seen[id] = struct{}{}
+		assertSuiteValue(t, tools.ToolUploadWorkouts, keyName, names[index], object)
 		ids = append(ids, id)
 	}
 	return ids
@@ -133,10 +156,7 @@ func (w *writeEnv) scheduleBatch(t *testing.T, ids []int64) []string {
 	}
 
 	result := w.call(t, tools.ToolScheduleWorkouts, map[string]any{keySchedules: schedules})
-	if applied, _ := result[keyApplied].(float64); int(applied) != len(ids) {
-		t.Fatalf("%s applied %v of %d entries", tools.ToolScheduleWorkouts,
-			result[keyApplied], len(ids))
-	}
+	assertBatchApplied(t, tools.ToolScheduleWorkouts, result, ids)
 	return dates
 }
 
@@ -174,7 +194,7 @@ func (w *writeEnv) assertWeekScheduleSkipsWhatIsAlreadyThere(
 		t.Fatalf("%s reported %v requested items and %d were sent",
 			tools.ToolScheduleWeek, result[keyRequested], len(ids))
 	}
-	assertEveryOutcomeChecked(t, result, len(ids))
+	assertEveryOutcomeChecked(t, result, ids, dates)
 
 	if applied, _ := result[keyApplied].(float64); applied != 0 {
 		t.Errorf("%s created %v duplicate calendar entries for entries that already existed",
@@ -188,26 +208,50 @@ func (w *writeEnv) assertWeekScheduleSkipsWhatIsAlreadyThere(
 }
 
 // assertEveryOutcomeChecked requires the duplicate pre-check to have answered for
-// every item. The check fails open, so an item reporting that it failed would make
-// the skip count meaningless rather than wrong.
+// every item, on the item it was asked about.
 //
-// The count is asserted first, and that is the point of this helper: iterating an
-// outcome list without requiring one entry per requested item lets an empty list —
-// a tool that reported aggregate counters and no per-item result at all — pass while
-// asserting nothing. A vacuous pass is a defect here, not a green light.
-func assertEveryOutcomeChecked(t *testing.T, result map[string]any, want int) {
+// Counting outcomes is not enough and neither is checking one field of each. An
+// outcome list holding the first item twice with the rest omitted has the right length
+// and the right field values, and it would mean a tool that reported per-item results
+// for items nobody asked about. Every outcome is therefore matched against the workout
+// and the date sent at that position, and the workouts must be distinct.
+//
+// The pre-check itself fails open, so an item reporting that it could not read the
+// calendar makes the skip count meaningless rather than wrong, and is a failure here.
+func assertEveryOutcomeChecked(t *testing.T, result map[string]any, ids []int64, dates []string) {
 	t.Helper()
 
 	outcomes, _ := result[keyScheduledOutcome].([]any)
-	if len(outcomes) != want {
+	if len(outcomes) != len(ids) {
 		t.Fatalf("%s reported %d outcomes for %d requested items, so no per-item result was "+
-			"proven", tools.ToolScheduleWeek, len(outcomes), want)
+			"proven", tools.ToolScheduleWeek, len(outcomes), len(ids))
 	}
+
+	seen := make(map[int64]struct{}, len(ids))
 	for index, entry := range outcomes {
 		object, ok := entry.(map[string]any)
 		if !ok {
 			t.Fatalf("%s returned an outcome at position %d that is not an object",
 				tools.ToolScheduleWeek, index)
+		}
+		id := int64(numberField(t, tools.ToolScheduleWeek, object, argWorkoutID, index))
+		if id != ids[index] {
+			t.Errorf("%s reported the outcome at position %d for a different workout than the "+
+				"one sent there", tools.ToolScheduleWeek, index)
+		}
+		if _, repeated := seen[id]; repeated {
+			t.Errorf("%s reported the same workout twice, at position %d",
+				tools.ToolScheduleWeek, index)
+		}
+		seen[id] = struct{}{}
+
+		if date, _ := object[argCalendar].(string); date != dates[index] {
+			t.Errorf("%s reported the outcome at position %d for a different date than the one "+
+				"sent there", tools.ToolScheduleWeek, index)
+		}
+		if status, _ := object[keyStatus].(string); status != statusAlreadyScheduled {
+			t.Errorf("%s reported the item at position %d as %q, want it recognised as already "+
+				"scheduled", tools.ToolScheduleWeek, index, status)
 		}
 		if check, _ := object[keyDuplicateCheck].(string); check != checkedDuplicate {
 			t.Errorf("%s could not read the calendar for the item at position %d, so its "+
@@ -229,13 +273,13 @@ func (w *writeEnv) unscheduleBatch(t *testing.T, ids, entries []int64, dates []s
 	asked := w.confirmations.Load()
 	result := w.call(t, tools.ToolUnscheduleWorkouts,
 		map[string]any{"scheduled_workout_ids": entries})
-	assertBatchApplied(t, tools.ToolUnscheduleWorkouts, result, len(entries))
+	assertBatchApplied(t, tools.ToolUnscheduleWorkouts, result, entries)
 
 	if w.confirmations.Load() == asked {
 		t.Errorf("%s ran without asking for confirmation", tools.ToolUnscheduleWorkouts)
 	}
 	for index, entry := range entries {
-		if !w.awaitAbsentEntry(t, ids[index], dates[index]) {
+		if !awaitAbsent(w.entryGone(t, ids[index], dates[index])) {
 			t.Errorf("%s reported success and the calendar still holds one of the entries",
 				tools.ToolUnscheduleWorkouts)
 			continue
@@ -254,13 +298,13 @@ func (w *writeEnv) deleteWorkoutBatch(t *testing.T, ids []int64) {
 
 	asked := w.confirmations.Load()
 	result := w.call(t, tools.ToolDeleteWorkouts, map[string]any{"workout_ids": ids})
-	assertBatchApplied(t, tools.ToolDeleteWorkouts, result, len(ids))
+	assertBatchApplied(t, tools.ToolDeleteWorkouts, result, ids)
 
 	if w.confirmations.Load() == asked {
 		t.Errorf("%s ran without asking for confirmation", tools.ToolDeleteWorkouts)
 	}
 	for _, id := range ids {
-		if !w.rawCall(t, tools.ToolGetWorkoutByID, map[string]any{argWorkoutID: id}).IsError {
+		if !awaitAbsent(w.workoutGone(t, id)) {
 			t.Errorf("%s reported success and %s still answers for one of the workouts",
 				tools.ToolDeleteWorkouts, tools.ToolGetWorkoutByID)
 			continue
@@ -269,17 +313,60 @@ func (w *writeEnv) deleteWorkoutBatch(t *testing.T, ids []int64) {
 	}
 }
 
-// assertBatchApplied requires every item of a batch removal to have been applied and
-// reported on its own.
-func assertBatchApplied(t *testing.T, tool string, result map[string]any, want int) {
+// assertBatchApplied requires every requested item of a batch removal to have been
+// applied and reported on its own.
+//
+// The counters are not the contract. A batch tool promises one outcome per requested
+// item, in request order, and a run that only counted them would pass on a tool that
+// reported the first item twice and omitted the second — which is the shape a partial
+// failure actually takes. Every outcome is therefore matched against the identifier
+// that was sent at that position, and the identifiers are required to be distinct.
+func assertBatchApplied(t *testing.T, tool string, result map[string]any, want []int64) {
 	t.Helper()
 
-	if applied, _ := result[keyApplied].(float64); int(applied) != want {
-		t.Fatalf("%s applied %v of %d items", tool, result[keyApplied], want)
+	if applied, _ := result[keyApplied].(float64); int(applied) != len(want) {
+		t.Fatalf("%s applied %v of %d items", tool, result[keyApplied], len(want))
 	}
+	if requested, _ := result[keyRequested].(float64); int(requested) != len(want) {
+		t.Errorf("%s reported %v requested items and %d were sent",
+			tool, result[keyRequested], len(want))
+	}
+
 	outcomes, _ := result[keyOutcomes].([]any)
-	if len(outcomes) != want {
-		t.Errorf("%s reported %d outcomes for %d items, so items are not reported separately",
-			tool, len(outcomes), want)
+	if len(outcomes) != len(want) {
+		t.Fatalf("%s reported %d outcomes for %d items, so items are not reported separately",
+			tool, len(outcomes), len(want))
 	}
+	seen := make(map[int64]struct{}, len(want))
+	for index, entry := range outcomes {
+		object, ok := entry.(map[string]any)
+		if !ok {
+			t.Fatalf("%s returned an outcome at position %d that is not an object", tool, index)
+		}
+		id := int64(numberField(t, tool, object, keyID, index))
+		if id != want[index] {
+			t.Errorf("%s reported the outcome at position %d for a different item than the one "+
+				"sent there", tool, index)
+		}
+		if _, repeated := seen[id]; repeated {
+			t.Errorf("%s reported the same item twice, at position %d", tool, index)
+		}
+		seen[id] = struct{}{}
+		if applied, _ := object[keyApplied].(bool); !applied {
+			t.Errorf("%s did not apply the item at position %d", tool, index)
+		}
+	}
+}
+
+// numberField reads one numeric field out of one outcome, failing when it is absent.
+func numberField(
+	t *testing.T, tool string, object map[string]any, field string, index int,
+) float64 {
+	t.Helper()
+
+	value, ok := object[field].(float64)
+	if !ok {
+		t.Fatalf("%s returned an outcome at position %d carrying no %s", tool, index, field)
+	}
+	return value
 }

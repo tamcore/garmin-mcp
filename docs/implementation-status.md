@@ -298,15 +298,43 @@ that drops under the floor fails the build unless it is named there.
       stated as what the code enforces — never read into this server's model,
       scrubbed out of the reused decode buffer after each sample, never returned
       and never logged — and the test is named for it. **Session and lap spans
-      are now bounded during collection** (`FITLimits.MaxSpans`, default 1000):
-      every span is summarized against the whole record stream, so a file
-      carrying hundreds of thousands of overlapping spans over a full sample
-      stream was quadratic work performed before any result bound could apply.
-      **The caller's context reaches the decode**, so an MCP deadline can stop
-      it, and a cancelled decode is reported as cancellation rather than as a
-      malformed file. **`FITData.LogValue` no longer logs the ride's shift
-      total**, which is activity telemetry; it logs retained list lengths and
-      truncation state only.
+      are now bounded during collection**: every span is summarized against the
+      whole record stream, so a file carrying overlapping spans over a full
+      sample stream was quadratic work performed before any result bound could
+      apply. **The caller's context reaches the decode**, so an MCP deadline can
+      stop it, and a cancelled decode is reported as cancellation rather than as
+      a malformed file. **`FITData.LogValue` no longer logs the ride's shift
+      total**, which is activity telemetry.
+
+      A **second** adversarial review of those fixes found five more defects in
+      this package and its tool, and all five are fixed:
+
+      - The **coordinate claim was still wrong**, for the third time. Scrubbing
+        `PositionLat` and `PositionLong` leaves `mesgdef.Record.UnknownFields` —
+        every field number the profile does not define — and `DeveloperFields`,
+        which an application names itself, both of which can carry a latitude and
+        neither of which any method suppresses. The collector now clears all four
+        after every sample, and `TestCollectorScrubsEveryFieldAPositionCouldHideIn`
+        inspects the retained struct rather than the returned model, which is the
+        only place the difference is visible.
+      - The **span bound was not a bound**. Sessions and laps each got 1000, so
+        2000 spans over 60 000 retained records is 120 million record visits per
+        analysis pass, several passes deep, with a power series allocated per
+        span. The two classes now carry their own bound at the count the result
+        renders — `DefaultMaxFITSessions` 20 and `DefaultMaxFITLaps` 200 — and
+        `get_activity_fit_data` sets them from its own render bounds.
+        `TestTheSpanBoundsKeepTheAnalysisAffordable` asserts the arithmetic
+        rather than the mechanism, so a later widening fails there.
+      - The **context reached the decoder but not the archive**: an
+        already-cancelled caller with a malformed zip was told its file was
+        malformed, and expansion ran to the byte bound regardless. It is now
+        checked before extraction and between expansion chunks.
+      - **`FITData.LogValue` still logged the exact shift count** as a list
+        length, under a comment saying it did not. It logs presence.
+      - **`update_workout` believed any identifier it was answered with**, and
+        the 204 read-back copied whatever the GET returned. Both now require the
+        identifier to be the one the request addressed and fail loudly otherwise:
+        the result of an update is what a caller schedules or deletes next.
 - [ ] The remaining upstream breadth. 53 of the 138 manifest tools are
       implemented and **no resource is**. Health and wellness, nutrition, weight
       management, training, challenges, courses, women's health, data management,
@@ -555,10 +583,53 @@ What makes it safe is structural, not conventional:
   hidden. The read half skips anything merely carrying the prefix, which is the
   safe direction for a reader.
 
-**Re-run on 2026-08-15 against the dedicated test account after the adversarial
-review fixes, all four gates open: the whole suite passes**, with one skip. It
-was run twice: the second run's sweeper reported nothing, which is what proves
-the first left nothing behind.
+A second adversarial review found six defects in the suite's own safety
+machinery, and all six are fixed:
+
+- **A create response's identifier was taken as ownership.** It is a number the
+  service chose: deduplication, a cache or drift could name an object the suite
+  never created, after which the guard would permit mutating and deleting it —
+  inside one call, for the three tools that create and then write to their own
+  creation. The guard now reads the created object back and admits it only when
+  it carries the name the create sent, and `ownCreated` takes that binding rather
+  than a response body.
+- **The read-only guard judged `GetBody` and dispatched `Body`.** Those are
+  independent fields, so a benign query in the replay copy admitted a mutation in
+  the body. It now reads the bytes that will be sent, judges those, and puts
+  exactly them back.
+- **The sweeper's licence was too wide.** Its floor predated the suite's own
+  first run, and the name parser accepted empty labels, unknown labels and
+  non-positive counters — none of which a generated name has. The floor is now
+  the month the write half was written, labels are a declared closed set, and the
+  counter must be positive. Name matching still cannot prove creation ownership,
+  and the code says so.
+- **Deletes released the ledger entry on the tool's own report.** A stale success
+  or a no-op removal left a real object untracked, invisible to the leak report
+  and beyond any retry. An entry is now released only after the object is proven
+  absent, and an object that cannot be proven absent stays in the ledger so the
+  cleanup retries it.
+- **The absence proofs failed open.** The calendar accepted the first omitted
+  result from a gateway the code itself documents as lagging in both directions,
+  and the workout path read *any* tool error — a rate limit, an expired session,
+  a decode failure — as proof of deletion. Absence now needs two consecutive
+  agreeing reads, and for a record it needs the tool layer's own not-found
+  advice, never "an error occurred, therefore it is gone".
+- **"Exactly one outcome per requested item" was not tested.** Aggregate counts
+  and slice lengths pass on a batch that reported the first item twice and
+  omitted the rest. Every outcome is now matched against the identifier, date and
+  status sent at that position, and the identifiers must be distinct.
+
+Two of the suite's package-level mutables are gone with it: the name counter and
+the run stamp are per-run state on the environment, fed by one injected clock, so
+the stamp every name carries and the cut-off the sweeper compares against are the
+same instant. One package-level handle remains, because `go test` gives a suite
+exactly one non-test entry point and hands a test nothing but its own `*testing.T`;
+everything a run accumulates lives inside the environment it holds.
+
+**Re-run on 2026-08-15 against the dedicated test account after both rounds of
+adversarial review fixes, all four gates open: the whole suite passes**, with one
+skip. It was run twice: the second run's sweeper reported nothing, which is what
+proves the first left nothing behind.
 
 - `TestLiveWorkoutLifecycle` — create through `create_run_workout`, read back,
   schedule, `update_workout` in place, the calendar entry still points at the

@@ -33,7 +33,7 @@ func TestLiveRemainingWorkoutBuildersUpload(t *testing.T) {
 
 	for _, builder := range remainingBuilders() {
 		t.Run(builder.tool, func(t *testing.T) {
-			name := suiteName(builder.label)
+			name := w.names.name(builder.label)
 			created := w.call(t, builder.tool, merged(builder.args, keyName, name))
 			id := identifier(t, created, builder.tool, argWorkoutID)
 			w.keepClean(t, kindWorkout, id)
@@ -44,7 +44,8 @@ func TestLiveRemainingWorkoutBuildersUpload(t *testing.T) {
 				t.Errorf("%s uploaded a workout Garmin stored without segments", builder.tool)
 			}
 
-			w.deleteViaTool(t, tools.ToolDeleteWorkout, argWorkoutID, kindWorkout, id)
+			w.deleteViaTool(t, tools.ToolDeleteWorkout, argWorkoutID, kindWorkout, id,
+				w.workoutGone(t, id))
 		})
 	}
 }
@@ -52,26 +53,26 @@ func TestLiveRemainingWorkoutBuildersUpload(t *testing.T) {
 // builderCall is one builder tool and the arguments it needs beside its name.
 type builderCall struct {
 	tool  string
-	label string
+	label nameLabel
 	args  map[string]any
 }
 
 // remainingBuilders are the builders TestLiveWorkoutLifecycle does not drive.
 func remainingBuilders() []builderCall {
 	return []builderCall{
-		{tools.ToolCreateWalkRunWorkout, "walkrun", map[string]any{
+		{tools.ToolCreateWalkRunWorkout, labelNameWalkRun, map[string]any{
 			keyRunSeconds:  workoutRunSeconds,
 			"walk_seconds": builderWalkSeconds,
 			"repeats":      builderRepeats,
 			keyWarmupMin:   workoutWarmupMin,
 			keyCooldownMin: workoutCooldownMin,
 		}},
-		{tools.ToolCreateZ2WalkWorkout, "z2walk", map[string]any{
+		{tools.ToolCreateZ2WalkWorkout, labelNameZ2Walk, map[string]any{
 			"duration_min": builderDurationMin,
 			"hr_min":       builderHRMin,
 			"hr_max":       builderHRMax,
 		}},
-		{tools.ToolCreateStrengthWorkout, "strengthworkout", map[string]any{
+		{tools.ToolCreateStrengthWorkout, labelNameStrengthWorkout, map[string]any{
 			"exercises": []map[string]any{{
 				keyName:        "BACK_SQUAT",
 				"category":     "SQUAT",
@@ -100,7 +101,7 @@ func TestLiveGearLinkAndUnlinkOnACreatedActivity(t *testing.T) {
 			"gear identifier can be derived")
 	}
 
-	id := w.createPlainActivity(t, keyGear)
+	id := w.createPlainActivity(t, labelNameGear)
 	arguments := map[string]any{argActivityID: id, keyGearUUID: gear}
 
 	w.call(t, tools.ToolAddGearToActivity, arguments)
@@ -115,7 +116,8 @@ func TestLiveGearLinkAndUnlinkOnACreatedActivity(t *testing.T) {
 			tools.ToolRemoveGearFromActivity)
 	}
 
-	w.deleteViaTool(t, tools.ToolDeleteActivity, argActivityID, kindActivity, id)
+	w.deleteViaTool(t, tools.ToolDeleteActivity, argActivityID, kindActivity, id,
+		w.activityGone(t, id))
 }
 
 // someGearUUID reads a gear identifier the account already uses, or "" when it uses
@@ -190,7 +192,7 @@ func TestLiveDownloadActivityFileAnswersForEveryFormat(t *testing.T) {
 }
 
 // createPlainActivity creates one manual activity and puts it under cleanup.
-func (w *writeEnv) createPlainActivity(t *testing.T, label string) int64 {
+func (w *writeEnv) createPlainActivity(t *testing.T, label nameLabel) int64 {
 	t.Helper()
 
 	date := time.Now().UTC().AddDate(0, 0, -1).Format(time.DateOnly)
@@ -198,7 +200,7 @@ func (w *writeEnv) createPlainActivity(t *testing.T, label string) int64 {
 		keyTypeKey:         manualTypeKey,
 		argDate:            date,
 		"duration_minutes": manualDuration,
-		keyActivityName:    suiteName(label),
+		keyActivityName:    w.names.name(label),
 		keyTimeZone:        manualTimeZone,
 	})
 	id := identifier(t, created, tools.ToolCreateManualActivity, argActivityID)

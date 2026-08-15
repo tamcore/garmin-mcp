@@ -368,6 +368,60 @@ func TestFITDataLogsItsShapeOnly(t *testing.T) {
 	}
 }
 
+// shiftLogProbe is a shift count no other figure in the log line can be. It is
+// deliberately not round, so finding it in the rendered line can only mean the shift
+// list's own length was logged.
+const shiftLogProbe = 137
+
+// TestFITDataLogsShiftsAsPresenceRatherThanACount covers the one figure of this
+// result that a list length gives away exactly.
+//
+// The returned shift list is bounded at two hundred entries and a real ride stays
+// under that, so logging its length logs how many times the rider changed gear — a
+// count of what a person did, which is a reading however coarse the surrounding
+// fields are. This asserts the count is absent and the presence flag is there, so a
+// log line still says whether the file carried electronic shifting.
+func TestFITDataLogsShiftsAsPresenceRatherThanACount(t *testing.T) {
+	t.Parallel()
+
+	data := FITData{Shifts: FITShiftView{
+		Events: make([]FITShiftEventView, shiftLogProbe),
+	}}
+
+	rendered := data.LogValue().String()
+	if contains(rendered, strconv.Itoa(shiftLogProbe)) {
+		t.Errorf("log value %q carries the exact number of gear changes", rendered)
+	}
+	if !contains(rendered, "shifts=true") {
+		t.Errorf("log value %q does not report that the file carried shifting at all", rendered)
+	}
+
+	if empty := (FITData{}).LogValue().String(); !contains(empty, "shifts=false") {
+		t.Errorf("log value %q does not report the absence of shifting", empty)
+	}
+}
+
+// TestTheFITDecodeIsBoundedAtWhatTheResultRenders ties the two bounds together.
+//
+// Every session and lap the decode retains is summarized against the whole retained
+// sample stream, so a span this tool would never show still costs a pass over sixty
+// thousand records. Decoding more spans than can be rendered therefore buys nothing
+// and pays for exactly that, and leaving the decode bound unset — which is what it
+// was — takes whatever default the api package happens to carry.
+func TestTheFITDecodeIsBoundedAtWhatTheResultRenders(t *testing.T) {
+	t.Parallel()
+
+	limits := fitLimits()
+	if limits.MaxSessions != maxFITSessions {
+		t.Errorf("the decode retains %d sessions and the result renders %d",
+			limits.MaxSessions, maxFITSessions)
+	}
+	if limits.MaxLaps != maxFITLaps {
+		t.Errorf("the decode retains %d laps and the result renders %d",
+			limits.MaxLaps, maxFITLaps)
+	}
+}
+
 // TestFITViewsRenderTheOptionalSections covers the renderers whose sections only
 // appear when the file carries the readings behind them.
 func TestFITViewsRenderTheOptionalSections(t *testing.T) {

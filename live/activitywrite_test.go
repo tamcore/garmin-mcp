@@ -54,7 +54,7 @@ const (
 func TestLiveManualActivityLifecycle(t *testing.T) {
 	w := liveWriteEnv(t)
 
-	name := suiteName("activity")
+	name := w.names.name(labelNameActivity)
 	date := time.Now().UTC().AddDate(0, 0, -1).Format(time.DateOnly)
 	created := w.call(t, tools.ToolCreateManualActivity, map[string]any{
 		keyTypeKey:         manualTypeKey,
@@ -82,8 +82,8 @@ func TestLiveManualActivityLifecycle(t *testing.T) {
 	written := w.writeEveryMetadataField(t, id, detail)
 	w.assertMetadataReadsBack(t, id, written)
 
-	w.deleteViaTool(t, tools.ToolDeleteActivity, argActivityID, kindActivity, id)
-	w.assertActivityIsGone(t, id)
+	w.deleteViaTool(t, tools.ToolDeleteActivity, argActivityID, kindActivity, id,
+		w.activityGone(t, id))
 }
 
 // metadataWritten is what the six metadata writes sent, so the read-back compares
@@ -103,10 +103,10 @@ func (w *writeEnv) writeEveryMetadataField(
 
 	current, _ := detail[keyActivityType].(string)
 	written := metadataWritten{
-		name:        suiteName("activity-renamed"),
+		name:        w.names.name(labelNameActivityRenamed),
 		typeKey:     w.otherActivityType(t, current),
 		eventType:   firstEventType(t),
-		description: suiteName("description"),
+		description: w.names.name(labelNameDescription),
 	}
 	activity := map[string]any{argActivityID: id}
 
@@ -175,17 +175,6 @@ func (w *writeEnv) readActivity(t *testing.T, id int64) map[string]any {
 			tools.ToolGetActivity)
 	}
 	return detail
-}
-
-// assertActivityIsGone proves the activity was removed.
-func (w *writeEnv) assertActivityIsGone(t *testing.T, id int64) {
-	t.Helper()
-
-	result := w.rawCall(t, tools.ToolGetActivity, map[string]any{argActivityID: id})
-	if !result.IsError {
-		t.Errorf("%s still answers for an activity %s removed",
-			tools.ToolGetActivity, tools.ToolDeleteActivity)
-	}
 }
 
 // otherActivityType picks a reclassification target out of Garmin's own catalog.

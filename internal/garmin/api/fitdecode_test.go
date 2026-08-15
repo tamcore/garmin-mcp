@@ -215,17 +215,17 @@ func TestParseFITStopsCollectingAtTheSpanBound(t *testing.T) {
 	t.Parallel()
 
 	const (
-		seconds  = 200
-		laps     = 500
-		maxSpans = 10
+		seconds = 200
+		laps    = 500
+		maxLaps = 10
 	)
 	activity, err := api.ParseFITActivity(
-		t.Context(), spanFile(seconds, laps), api.FITLimits{MaxSpans: maxSpans})
+		t.Context(), spanFile(seconds, laps), api.FITLimits{MaxLaps: maxLaps})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}
-	if len(activity.Laps) != maxSpans {
-		t.Errorf("%d laps, want the bound of %d", len(activity.Laps), maxSpans)
+	if len(activity.Laps) != maxLaps {
+		t.Errorf("%d laps, want the bound of %d", len(activity.Laps), maxLaps)
 	}
 	if !activity.SpansTruncated {
 		t.Error("SpansTruncated = false, want the bound reported")
@@ -233,31 +233,62 @@ func TestParseFITStopsCollectingAtTheSpanBound(t *testing.T) {
 
 	// The analysis runs over the bounded collection, so it summarizes exactly the
 	// spans that survived the bound and no more.
-	if summary := api.AnalyzeFIT(activity); len(summary.Laps) != maxSpans {
+	if summary := api.AnalyzeFIT(activity); len(summary.Laps) != maxLaps {
 		t.Errorf("the analysis produced %d lap segments, want the bounded %d",
-			len(summary.Laps), maxSpans)
+			len(summary.Laps), maxLaps)
 	}
 }
 
 // TestParseFITAppliesTheDefaultSpanBound proves the bound is on by default, so a
 // caller that declares no limits is not the unbounded case.
+//
+// The figure matters as much as its existence. Every span costs another pass over the
+// whole retained record stream, so a default set at what a device might conceivably
+// write rather than at what a result carries is a bound in name only: this asserts the
+// default is the smaller one.
 func TestParseFITAppliesTheDefaultSpanBound(t *testing.T) {
 	t.Parallel()
 
-	if api.DefaultMaxFITSpans <= 0 {
-		t.Fatalf("DefaultMaxFITSpans = %d, want a positive bound", api.DefaultMaxFITSpans)
+	if api.DefaultMaxFITLaps <= 0 || api.DefaultMaxFITSessions <= 0 {
+		t.Fatalf("the default span bounds are %d sessions and %d laps, want positive bounds",
+			api.DefaultMaxFITSessions, api.DefaultMaxFITLaps)
 	}
 	activity, err := api.ParseFITActivity(
-		t.Context(), spanFile(20, api.DefaultMaxFITSpans+5), api.FITLimits{})
+		t.Context(), spanFile(20, api.DefaultMaxFITLaps+5), api.FITLimits{})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}
-	if len(activity.Laps) != api.DefaultMaxFITSpans {
+	if len(activity.Laps) != api.DefaultMaxFITLaps {
 		t.Errorf("%d laps, want the default bound of %d",
-			len(activity.Laps), api.DefaultMaxFITSpans)
+			len(activity.Laps), api.DefaultMaxFITLaps)
 	}
 	if !activity.SpansTruncated {
 		t.Error("SpansTruncated = false, want the default bound reported")
+	}
+}
+
+// TestParseFITStopsBeforeItExpandsAnArchiveForACancelledCaller proves the caller's
+// context reaches the stage before the decoder.
+//
+// Expansion is the first thing a hostile file can make expensive, and it happens
+// before a single message is decoded. A caller who has already given up must not pay
+// for it, and — the part that is easy to get wrong — must not be told its file is
+// malformed when the truth is that the call was cancelled: the archive here is
+// deliberately not a zip at all, so a check that ran in the wrong order would report
+// the malformed archive instead.
+func TestParseFITStopsBeforeItExpandsAnArchiveForACancelledCaller(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	broken := append([]byte{'P', 'K', 0x03, 0x04}, []byte("not an archive")...)
+	_, err := api.ParseFITActivity(ctx, broken, api.FITLimits{})
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("ParseFITActivity() = %v, want context.Canceled", err)
+	}
+	if errors.Is(err, client.ErrMalformedPayload) {
+		t.Error("a cancelled call was reported as a malformed archive")
 	}
 }
 

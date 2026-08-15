@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -54,10 +55,12 @@ type mutation struct {
 // rather than waved through.
 //
 // Ownership is learned from Garmin rather than declared by a test. When a create
-// succeeds the guard reads the identifier out of the response body and records it,
-// which is why a tool that creates and then immediately mutates its own creation —
-// create_strength_training_activity does exactly that — passes without any test
-// being trusted to register anything.
+// succeeds the guard reads the identifier out of the response body and then reads that
+// object back, admitting it only when the object carries the name the create sent —
+// which is why a tool that creates and then immediately mutates its own creation,
+// create_strength_training_activity does exactly that, passes without any test being
+// trusted to register anything, and why an identifier Garmin named for some other
+// object does not.
 type writeCaller struct {
 	inner client.Caller
 	owned *ownedObjects
@@ -83,20 +86,36 @@ func (c writeCaller) Do(
 				"may only ever mutate an object it created itself", req.Method, target.kind)
 	}
 
+	// The name is taken from the request before it is dispatched, because it is the
+	// half of the binding this suite controls: what comes back is only an identifier.
+	sent := ""
+	if target.creates != 0 {
+		sent = sentName(target.creates, req)
+	}
+
 	resp, err := c.inner.Do(ctx, principal, req)
 	if err != nil || target.creates == 0 {
 		return resp, err
 	}
-	return c.adopt(target.creates, resp)
+	return c.adopt(ctx, principal, target.creates, sent, req, resp)
 }
 
-// adopt records the object a successful create produced.
+// adopt records the object a successful create produced, once Garmin's own answer for
+// that object proves it is the one this suite just asked for.
 //
-// The body is read here and handed back verbatim, compressed or not, so the request
-// layer sees exactly what Garmin sent. A create whose identifier cannot be read is
-// not an error on its own — a calendar create reports none — but it does mean the
-// object is not owned, and every later mutation of it is refused.
-func (c writeCaller) adopt(kind ownedKind, resp *http.Response) (*http.Response, error) {
+// The response body is read here and handed back verbatim, compressed or not, so the
+// request layer sees exactly what Garmin sent. The identifier in it is then read back:
+// the object at that identifier must carry the name this create sent. Nothing else is
+// evidence, and an identifier alone certainly is not — see ownCreated.
+//
+// Not owning is not an error on its own. A calendar create reports no identifier at
+// all, and a read-back that fails or disagrees leaves an object this suite may not
+// touch, which is the safe direction: every later mutation of it is refused, and a
+// leftover of this suite's own is removed by the next run's sweeper.
+func (c writeCaller) adopt(
+	ctx context.Context, principal string, kind ownedKind, sent string,
+	req *http.Request, resp *http.Response,
+) (*http.Response, error) {
 	if resp == nil || resp.Body == nil || resp.StatusCode >= http.StatusMultipleChoices {
 		return resp, nil
 	}
@@ -113,7 +132,18 @@ func (c writeCaller) adopt(kind ownedKind, resp *http.Response) (*http.Response,
 	}
 	resp.Body = io.NopCloser(bytes.NewReader(raw))
 
-	c.owned.ownCreated(kind, raw, resp.Header.Get(headerContentEncoding))
+	id, found := createdID(kind, raw, resp.Header.Get(headerContentEncoding))
+	if !found || sent == "" {
+		return resp, nil
+	}
+	stored, err := c.storedName(ctx, principal, kind, id, req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "live: a created %s could not be read back, so it is not "+
+			"owned and will not be touched: %v\n", kind, err)
+		return resp, nil
+	}
+
+	c.owned.ownCreated(kind, createdObject{id: id, sent: sent, stored: stored})
 	return resp, nil
 }
 

@@ -6,9 +6,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
+	"github.com/tamcore/garmin-mcp/internal/tools"
 )
 
 // keepClean registers the removal that must happen whatever the test does.
@@ -89,14 +92,22 @@ func (w *writeEnv) remove(kind ownedKind, id int64) error {
 }
 
 // deleteViaTool drives one destructive tool over the write session and releases the
-// object from the ledger once Garmin confirmed the removal.
+// object from the ledger once the object is provably gone.
+//
+// gone is that proof, and the reported success is not. A tool reports what Garmin
+// answered, and a stale success, a no-op removal or a delete of something else all
+// answer the same way — after which releasing the identifier would leave a real object
+// on the account with nothing tracking it, invisible to the leak report and impossible
+// for any cleanup to retry. An object whose absence cannot be established therefore
+// stays in the ledger: the test fails, and the removal is attempted again by this
+// test's own cleanup and by the end of the suite.
 //
 // It also asserts that the call really was confirmed. The destructive tier fails
 // closed, so a tool that ran without asking would mean the confirmation middleware
 // stopped being reached — exactly the kind of regression a live run should catch and
 // a fixture cannot.
 func (w *writeEnv) deleteViaTool(
-	t *testing.T, tool, field string, kind ownedKind, id int64,
+	t *testing.T, tool, field string, kind ownedKind, id int64, gone func() bool,
 ) {
 	t.Helper()
 
@@ -110,5 +121,88 @@ func (w *writeEnv) deleteViaTool(
 		t.Errorf("%s ran without asking for confirmation, so the destructive gate was not reached",
 			tool)
 	}
+	if !awaitAbsent(gone) {
+		t.Errorf("%s reported the %s as deleted and it is still there; it stays in the ledger "+
+			"so the cleanup removes it", tool, kind)
+		return
+	}
 	w.owned.release(kind, id)
+}
+
+// The absence proof. absenceProofs consecutive reads must agree the object is gone,
+// within absenceReads attempts.
+//
+// One read is not enough and repetition alone is not either. Garmin serves some of
+// these objects through a gateway that lags in both directions, so a single absent
+// answer can precede a present one — a removal that never happened would then be
+// certified by the first read that had not caught up yet. Requiring consecutive
+// agreement is what turns "it did not answer this time" into "it is gone", and the
+// attempt bound is what keeps a wait from becoming a pass.
+const (
+	absenceProofs = 2
+	absenceReads  = 5
+)
+
+// awaitAbsent reports whether the object was consistently absent.
+func awaitAbsent(gone func() bool) bool {
+	proofs := 0
+	for range absenceReads {
+		if !gone() {
+			proofs = 0
+			continue
+		}
+		proofs++
+		if proofs >= absenceProofs {
+			return true
+		}
+	}
+	return false
+}
+
+// workoutGone reports whether the workout library no longer holds one template.
+//
+// The evidence is the one refusal that means "no such record", not any refusal. A rate
+// limit, an expired session, a gateway error and a response this server could not
+// decode are all failures of the read, and reading a delete into them is how a run
+// certifies a removal that never happened. Every other outcome is reported as unknown,
+// which leaves the object in the ledger.
+func (w *writeEnv) workoutGone(t *testing.T, id int64) func() bool {
+	t.Helper()
+
+	return func() bool {
+		return noSuchRecord(w.rawCall(t, tools.ToolGetWorkoutByID,
+			map[string]any{argWorkoutID: id}))
+	}
+}
+
+// activityGone reports the same for one activity record.
+func (w *writeEnv) activityGone(t *testing.T, id int64) func() bool {
+	t.Helper()
+
+	return func() bool {
+		return noSuchRecord(w.rawCall(t, tools.ToolGetActivity,
+			map[string]any{argActivityID: id}))
+	}
+}
+
+// entryGone reports whether the calendar no longer carries one created workout's entry
+// on one date.
+func (w *writeEnv) entryGone(t *testing.T, workout int64, date string) func() bool {
+	t.Helper()
+
+	return func() bool {
+		_, present := w.scheduledEntry(t, workout, date)
+		return !present
+	}
+}
+
+// noSuchRecord reports whether a tool result is the authored refusal for a record
+// Garmin does not hold.
+//
+// It compares against the tool layer's own exported constant rather than a phrase
+// spelled here, so the two cannot drift apart: every tool error is authored advice by
+// design and carries no class, status or identifier, which leaves this sentence as the
+// only signal that distinguishes a removed object from a failed read.
+func noSuchRecord(result *mcp.CallToolResult) bool {
+	return result.IsError && strings.Contains(resultText(result), tools.AdviceNoSuchRecord)
 }

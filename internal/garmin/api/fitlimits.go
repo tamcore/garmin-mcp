@@ -14,11 +14,16 @@ type FITLimits struct {
 	MaxMessages int
 	// MaxRecords bounds how many per-second records are retained.
 	MaxRecords int
-	// MaxSpans bounds how many sessions and how many laps are retained, counted
-	// separately. It bounds the analysis rather than the result: every span is
-	// summarized against the whole record stream, so an unbounded span count over a
-	// full sample stream is quadratic work.
-	MaxSpans int
+	// MaxSessions bounds how many sessions are retained.
+	MaxSessions int
+	// MaxLaps bounds how many laps are retained.
+	//
+	// The two span classes are bounded separately because they are rendered
+	// separately and at very different counts. The bound is on the analysis rather
+	// than on the result: every span is summarized against the whole record stream,
+	// so the work is the product of the two counts and a span bound applied only when
+	// the result is rendered would leave that product unbounded.
+	MaxLaps int
 }
 
 // Defaults for a FIT decode. Each is the point at which a file stops being a ride
@@ -28,10 +33,19 @@ const (
 	DefaultMaxFITMessages       = 500_000
 	DefaultMaxFITRecords        = 60_000
 
-	// DefaultMaxFITSpans is far above what a device writes — a recorder stops at a
-	// few hundred laps — and far below the count at which summarizing every span
-	// against every retained sample stops being affordable.
-	DefaultMaxFITSpans = 1000
+	// DefaultMaxFITSessions and DefaultMaxFITLaps are set at what a result actually
+	// carries rather than at what a device might conceivably write.
+	//
+	// A span is summarized against the whole retained record stream, and the stream is
+	// bounded at DefaultMaxFITRecords, so every additional span costs another pass over
+	// up to 60 000 samples. A file whose spans all overlap — which a hostile file is
+	// free to be — therefore turns a generous span bound into tens of millions of
+	// record visits per pass, several passes deep. Decoding more spans than any caller
+	// can be shown buys nothing and pays for exactly that, so the bound is the render
+	// bound: an ordinary ride is far below it, and a file above it is reported
+	// truncated rather than summarized in full.
+	DefaultMaxFITSessions = 20
+	DefaultMaxFITLaps     = 200
 )
 
 // withDefaults returns a copy of l with every zero field replaced by its default.
@@ -40,7 +54,8 @@ func (l FITLimits) withDefaults() FITLimits {
 		MaxBytes:    DefaultMaxFITBytes,
 		MaxMessages: DefaultMaxFITMessages,
 		MaxRecords:  DefaultMaxFITRecords,
-		MaxSpans:    DefaultMaxFITSpans,
+		MaxSessions: DefaultMaxFITSessions,
+		MaxLaps:     DefaultMaxFITLaps,
 	}
 	if l.MaxBytes > 0 {
 		out.MaxBytes = l.MaxBytes
@@ -51,8 +66,11 @@ func (l FITLimits) withDefaults() FITLimits {
 	if l.MaxRecords > 0 {
 		out.MaxRecords = l.MaxRecords
 	}
-	if l.MaxSpans > 0 {
-		out.MaxSpans = l.MaxSpans
+	if l.MaxSessions > 0 {
+		out.MaxSessions = l.MaxSessions
+	}
+	if l.MaxLaps > 0 {
+		out.MaxLaps = l.MaxLaps
 	}
 	return out
 }

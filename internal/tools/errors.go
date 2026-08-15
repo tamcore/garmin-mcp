@@ -34,6 +34,17 @@ var (
 	ErrIncompleteProfile = errors.New("garmin tools: the Garmin profile is incomplete")
 )
 
+// AdviceNoSuchRecord is the advice a call for something Garmin does not hold comes
+// back with.
+//
+// It is exported because it is the only signal a caller has for that one class. A tool
+// result carries authored advice and nothing else — deliberately, since a class name or
+// a status would be this server's internals — so a caller that must tell "the record is
+// gone" from "the call failed" has this sentence and no alternative. Anything reading
+// it is asserting on a constant rather than on prose, and a reworded sentence moves
+// both sides at once.
+const AdviceNoSuchRecord = "Garmin holds no such record for this account."
+
 // A ToolError is the caller-facing failure of one tool call.
 //
 // Error returns only the authored advice. That is the whole point: the SDK puts the
@@ -142,7 +153,7 @@ func adviseUpstream(err error) (string, bool) {
 		return "Garmin rate-limited this account. Wait for the retry window to pass " +
 			"before calling again.", true
 	case errors.Is(err, client.ErrNotFound):
-		return "Garmin holds no such record for this account.", true
+		return AdviceNoSuchRecord, true
 	case errors.Is(err, client.ErrServer), errors.Is(err, client.ErrTemporaryConnection):
 		return "Garmin is temporarily unavailable. Retry in a moment.", true
 	case errors.Is(err, client.ErrMalformedPayload), errors.Is(err, client.ErrUnexpectedResponse):

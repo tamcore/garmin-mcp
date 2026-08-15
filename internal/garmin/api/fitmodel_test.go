@@ -202,15 +202,18 @@ func TestParseFITDecodesGearChanges(t *testing.T) {
 	}
 }
 
-// TestParseFITRetainsAndReturnsNoCoordinates is the position suppression test.
+// TestParseFITReturnsNoCoordinates is one half of the position suppression, and it is
+// named for the half it can prove.
 //
-// It is named for what it can prove. The FIT SDK decodes every field of every record
-// message, position included, and offers no field filter that would stop it, so no
-// test can show that a coordinate was never decoded. What this test shows is the
-// guarantee this package actually makes and the one that matters: the file carries a
+// The FIT SDK decodes every field of every record message, position included, and
+// offers no field filter that would stop it, so no test can show that a coordinate was
+// never decoded. What this one shows is that none of it comes out: the file carries a
 // synthetic track in every record, and neither the semicircle value nor the degrees it
 // renders as appears anywhere in the model this package returns, rendered or encoded.
-func TestParseFITRetainsAndReturnsNoCoordinates(t *testing.T) {
+// The other half — that no position stays behind in the collector either — is
+// TestCollectorScrubsEveryFieldAPositionCouldHideIn, which has to look at the retained
+// struct because that is where the difference lives.
+func TestParseFITReturnsNoCoordinates(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -269,6 +272,29 @@ func TestParseFITUnpacksTheArchiveGarminServes(t *testing.T) {
 	}
 	if len(activity.Records) != 10 {
 		t.Errorf("%d records from the archive, want 10", len(activity.Records))
+	}
+}
+
+// localHeaderBytes is the fixed part of a zip local file header, after which the
+// entry's own bytes begin.
+const localHeaderBytes = 30
+
+// TestParseFITRefusesAnArchiveEntryItCannotExpand covers the failure between opening
+// an archive and having a file: the entry is there, and expanding it does not work.
+//
+// It is reported as a malformed payload rather than as anything about the caller. A
+// read that fails part way through an entry is the archive's fault, and the byte
+// position the library would name is not repeated.
+func TestParseFITRefusesAnArchiveEntryItCannotExpand(t *testing.T) {
+	t.Parallel()
+
+	const name = "18446744_ACTIVITY.fit"
+	archived := testkit.ZipFIT(name, rideFile(10).Bytes())
+	archived[localHeaderBytes+len(name)] ^= 0xFF
+
+	_, err := api.ParseFITActivity(t.Context(), archived, api.FITLimits{})
+	if !errors.Is(err, client.ErrMalformedPayload) {
+		t.Errorf("ParseFITActivity() on a corrupt entry = %v, want ErrMalformedPayload", err)
 	}
 }
 

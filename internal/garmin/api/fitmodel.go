@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -28,10 +29,12 @@ func fitNumber(value float64) FITNumber { return FITNumber{Value: value, OK: tru
 // Coordinates are deliberately absent. The file carries them and the FIT SDK decodes
 // every field of every record message, position included, because its decoder has no
 // field filter. What this package controls is what it reads out of the SDK's message
-// and keeps: PositionLat and PositionLong are never read into a FITRecord, the
-// collector's reused message struct is scrubbed of them after each sample, and no
-// returned structure, log line or error carries a position. A per-second track is the
-// most sensitive thing in the file and no summary here needs it.
+// and what it keeps, and that is exactly what is claimed here: no position field is
+// read into a FITRecord; the collector's reused message struct is emptied after every
+// sample of the two profile position fields *and* of the unknown and developer fields
+// a position can otherwise hide in; and no structure this package returns carries one.
+// A per-second track is the most sensitive thing in the file and no summary here needs
+// it.
 type FITRecord struct {
 	Time         time.Time
 	HeartRate    FITNumber
@@ -107,12 +110,15 @@ type FITActivity struct {
 // before anything is decoded, so a small archive that expands into a large file is
 // refused rather than decoded.
 //
-// ctx bounds the decode: cancelling it abandons the file rather than reading it to
-// its end, which is what lets a caller's deadline reach the one part of this package
-// whose cost is set by the file rather than by the request.
+// ctx bounds the whole call, not only the decode: cancelling it abandons the file
+// rather than reading it to its end, which is what lets a caller's deadline reach the
+// one part of this package whose cost is set by the file rather than by the request.
+// Archive expansion is the first stage that can be made to cost, so the context is
+// checked before it starts and again as it proceeds; a cancelled caller is reported as
+// itself and never as a malformed file.
 func ParseFITActivity(ctx context.Context, data []byte, limits FITLimits) (FITActivity, error) {
 	resolved := limits.withDefaults()
-	raw, err := extractFIT(data, resolved)
+	raw, err := extractFIT(ctx, data, resolved)
 	if err != nil {
 		return FITActivity{}, err
 	}
@@ -127,7 +133,15 @@ const fitExtension = ".fit"
 
 // extractFIT returns the FIT bytes of an archive, or the input when it already is a
 // FIT file.
-func extractFIT(data []byte, limits FITLimits) ([]byte, error) {
+//
+// The caller's context is honoured before the archive is opened. Opening and walking a
+// zip directory is work a hostile archive sets the size of, and a caller who has
+// already given up must not pay for it — nor be told its file is malformed when the
+// truth is that the call was cancelled.
+func extractFIT(ctx context.Context, data []byte, limits FITLimits) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("reading the activity file: %w", err)
+	}
 	if int64(len(data)) > limits.MaxBytes {
 		return nil, fmt.Errorf("%w: the downloaded activity file is larger than this server decodes",
 			client.ErrResponseTooLarge)
@@ -143,16 +157,23 @@ func extractFIT(data []byte, limits FITLimits) ([]byte, error) {
 	}
 	for _, entry := range archive.File {
 		if strings.HasSuffix(strings.ToLower(entry.Name), fitExtension) {
-			return readArchiveEntry(entry, limits)
+			return readArchiveEntry(ctx, entry, limits)
 		}
 	}
 	return nil, fmt.Errorf("%w: the activity archive holds no FIT file",
 		client.ErrMalformedPayload)
 }
 
-// readArchiveEntry expands one archive entry under the byte bound, so a compression
-// bomb is refused at the bound rather than at the allocator.
-func readArchiveEntry(entry *zip.File, limits FITLimits) ([]byte, error) {
+// expansionChunkBytes is how much of an archive entry is expanded between two
+// context checks. It is large enough that the checks cost nothing on an ordinary file
+// and small enough that a cancelled caller stops promptly on a hostile one.
+const expansionChunkBytes = 1 << 20
+
+// readArchiveEntry expands one archive entry under the byte bound and under the
+// caller's context, so a compression bomb is refused at the bound rather than at the
+// allocator, and a cancelled caller stops paying for the expansion at the next chunk
+// rather than at the end of the entry.
+func readArchiveEntry(ctx context.Context, entry *zip.File, limits FITLimits) ([]byte, error) {
 	reader, err := entry.Open()
 	if err != nil {
 		return nil, fmt.Errorf("%w: the activity archive entry could not be opened",
@@ -160,8 +181,11 @@ func readArchiveEntry(entry *zip.File, limits FITLimits) ([]byte, error) {
 	}
 	defer func() { _ = reader.Close() }()
 
-	raw, err := io.ReadAll(io.LimitReader(reader, limits.MaxBytes+1))
-	if err != nil {
+	raw, err := expand(ctx, reader, limits.MaxBytes)
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return nil, fmt.Errorf("expanding the activity archive entry: %w", err)
+	case err != nil:
 		return nil, fmt.Errorf("%w: the activity archive entry could not be read",
 			client.ErrMalformedPayload)
 	}
@@ -170,4 +194,23 @@ func readArchiveEntry(entry *zip.File, limits FITLimits) ([]byte, error) {
 			client.ErrResponseTooLarge)
 	}
 	return raw, nil
+}
+
+// expand reads one entry a chunk at a time, checking the context between chunks and
+// stopping one byte past the bound so the caller can tell a file at the bound from a
+// file over it.
+func expand(ctx context.Context, reader io.Reader, limit int64) ([]byte, error) {
+	var out bytes.Buffer
+	for int64(out.Len()) <= limit {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		switch _, err := io.CopyN(&out, reader, expansionChunkBytes); {
+		case errors.Is(err, io.EOF):
+			return out.Bytes(), nil
+		case err != nil:
+			return nil, err
+		}
+	}
+	return out.Bytes(), nil
 }

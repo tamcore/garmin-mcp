@@ -61,7 +61,7 @@ func TestLiveStrengthActivityLifecycle(t *testing.T) {
 	start := time.Now().UTC().AddDate(0, 0, -1).Truncate(time.Hour)
 	planned := plannedSets(start)
 	created := w.call(t, tools.ToolCreateStrengthTrainingActivity, map[string]any{
-		keyName:      suiteName("strength"),
+		keyName:      w.names.name(labelNameStrength),
 		keyStartTime: start.Format(time.RFC3339),
 		keyTimeZone:  manualTimeZone,
 		keySets:      planned,
@@ -84,8 +84,8 @@ func TestLiveStrengthActivityLifecycle(t *testing.T) {
 	reread := w.call(t, tools.ToolGetActivityExerciseSets, map[string]any{argActivityID: id})
 	assertSetsMatch(t, tools.ToolGetActivityExerciseSets, replacement, reread)
 
-	w.deleteViaTool(t, tools.ToolDeleteActivity, argActivityID, kindActivity, id)
-	w.assertActivityIsGone(t, id)
+	w.deleteViaTool(t, tools.ToolDeleteActivity, argActivityID, kindActivity, id,
+		w.activityGone(t, id))
 }
 
 // The exercises the sets name.

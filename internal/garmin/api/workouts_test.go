@@ -232,6 +232,69 @@ func TestUpdateReadsTheWorkoutBackWhenGarminAnswersWithNoContent(t *testing.T) {
 	}
 }
 
+// TestUpdateRefusesAnAnswerNamingADifferentWorkout is the identity check on the
+// answer, and it covers both shapes the answer arrives in.
+//
+// The result of an update is what a caller schedules, deletes or updates next. An
+// identifier that is not the one the request addressed therefore aims every one of
+// those at a workout the caller never named — someone else's, if Garmin ever answers a
+// write from a cache or drifts. Neither the direct answer nor the read-back that
+// stands in for a 204 may be believed on that point.
+func TestUpdateRefusesAnAnswerNamingADifferentWorkout(t *testing.T) {
+	t.Parallel()
+
+	const other = `{"workoutId":99999999,"workoutName":"someone else's workout"}`
+	cases := map[string][]testkit.Behavior{
+		"the update answers with another workout": {testkit.JSON(http.StatusOK, other)},
+		"the read-back answers with another workout": {
+			testkit.JSON(http.StatusNoContent, ""),
+			testkit.JSON(http.StatusOK, other),
+		},
+	}
+	for name, responses := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			h := newHarness(t, testkit.NewScript().With(workoutItemPath(), responses...),
+				client.Limits{})
+			document, err := api.ParseWorkoutDocument([]byte(`{"workoutName":"easy run"}`))
+			if err != nil {
+				t.Fatalf("ParseWorkoutDocument() = %v", err)
+			}
+
+			saved, err := newWorkouts(t, h).Update(t.Context(), h.session, mustID(t), document)
+			if !errors.Is(err, client.ErrMalformedPayload) {
+				t.Fatalf("Update() = %v, want ErrMalformedPayload for a foreign identifier", err)
+			}
+			if id, idErr := saved.ID(); idErr == nil {
+				t.Errorf("Update() reported workout %d as saved, want no result at all",
+					id.Int64())
+			}
+		})
+	}
+}
+
+// TestUpdateRefusesAReadBackThatNamesNoWorkout covers the other half of the 204 path:
+// an answer that names nothing cannot be reported as the workout that was updated
+// either, because the identifier would then be the caller's own echoed back.
+func TestUpdateRefusesAReadBackThatNamesNoWorkout(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t, testkit.NewScript().With(workoutItemPath(),
+		testkit.JSON(http.StatusNoContent, ""),
+		testkit.JSON(http.StatusOK, `{"workoutName":"easy run"}`)), client.Limits{})
+	document, err := api.ParseWorkoutDocument([]byte(`{"workoutName":"easy run"}`))
+	if err != nil {
+		t.Fatalf("ParseWorkoutDocument() = %v", err)
+	}
+
+	if _, err := newWorkouts(t, h).Update(
+		t.Context(), h.session, mustID(t), document); !errors.Is(
+		err, client.ErrMalformedPayload) {
+		t.Fatalf("Update() = %v, want ErrMalformedPayload for an unnamed read-back", err)
+	}
+}
+
 // TestUpdateRefusesAnArrayDocument keeps the upload validators in force for the
 // in-place update, plus the one rule only the update has: a replacement must be a
 // single complete object.

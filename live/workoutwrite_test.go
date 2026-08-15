@@ -61,7 +61,7 @@ func runWorkoutArgs(name string) map[string]any {
 func TestLiveWorkoutLifecycle(t *testing.T) {
 	w := liveWriteEnv(t)
 
-	name := suiteName("workout")
+	name := w.names.name(labelNameWorkout)
 	created := w.call(t, tools.ToolCreateRunWorkout, runWorkoutArgs(name))
 	id := identifier(t, created, tools.ToolCreateRunWorkout, argWorkoutID)
 	w.keepClean(t, kindWorkout, id)
@@ -76,11 +76,11 @@ func TestLiveWorkoutLifecycle(t *testing.T) {
 	renamed := w.updateCreatedWorkout(t, id, sport)
 	w.assertScheduleSurvivedTheUpdate(t, id, scheduled, date)
 
-	w.deleteViaTool(t, tools.ToolUnscheduleWorkout, keyScheduledID, kindSchedule, scheduled)
-	w.assertNotScheduled(t, id, date)
-
-	w.deleteViaTool(t, tools.ToolDeleteWorkout, argWorkoutID, kindWorkout, id)
-	w.assertWorkoutIsGone(t, id, renamed)
+	w.deleteViaTool(t, tools.ToolUnscheduleWorkout, keyScheduledID, kindSchedule, scheduled,
+		w.entryGone(t, id, date))
+	w.deleteViaTool(t, tools.ToolDeleteWorkout, argWorkoutID, kindWorkout, id,
+		w.workoutGone(t, id))
+	w.assertWorkoutNotListed(t, tools.ToolDeleteWorkout, renamed)
 }
 
 // assertWorkoutReadsBack compares the created workout with what was sent and returns
@@ -132,7 +132,7 @@ func (w *writeEnv) updateCreatedWorkout(t *testing.T, id int64, sport string) st
 	t.Helper()
 
 	document := w.workoutDocument(t, id)
-	renamed := suiteName("workout-updated")
+	renamed := w.names.name(labelNameWorkoutUpdated)
 	document[keyWorkoutName] = renamed
 
 	updated := w.call(t, tools.ToolUpdateWorkout, map[string]any{
@@ -169,50 +169,6 @@ func (w *writeEnv) assertScheduleSurvivedTheUpdate(
 		t.Errorf("%s replaced the calendar entry rather than keeping it, so an existing "+
 			"schedule did not stay valid", tools.ToolUpdateWorkout)
 	}
-}
-
-// assertNotScheduled proves the calendar entry is gone.
-func (w *writeEnv) assertNotScheduled(t *testing.T, id int64, date string) {
-	t.Helper()
-
-	if !w.awaitAbsentEntry(t, id, date) {
-		t.Errorf("%s reported success and the calendar still holds the entry",
-			tools.ToolUnscheduleWorkout)
-	}
-}
-
-// awaitAbsentEntry re-reads the calendar until the created workout's entry is gone,
-// and reports whether it ever went.
-//
-// The gateway lags in both directions, so the absence check waits exactly as the
-// presence check does. It is bounded: an entry still there when the reads run out
-// fails, so nothing is hidden by waiting.
-func (w *writeEnv) awaitAbsentEntry(t *testing.T, id int64, date string) bool {
-	t.Helper()
-
-	for range maxCalendarReads {
-		if _, present := w.scheduledEntry(t, id, date); !present {
-			return true
-		}
-	}
-	return false
-}
-
-// assertWorkoutIsGone proves the template is gone.
-//
-// A deleted workout must not be readable and must not be listed. Both are checked,
-// because an endpoint that answers a stale read and a library that still lists the
-// template are two different failures.
-func (w *writeEnv) assertWorkoutIsGone(t *testing.T, id int64, name string) {
-	t.Helper()
-
-	result := w.rawCall(t, tools.ToolGetWorkoutByID, map[string]any{argWorkoutID: id})
-	if !result.IsError {
-		t.Errorf("%s still answers for a workout %s removed",
-			tools.ToolGetWorkoutByID, tools.ToolDeleteWorkout)
-	}
-
-	w.assertWorkoutNotListed(t, tools.ToolDeleteWorkout, name)
 }
 
 // assertWorkoutNotListed proves the library no longer carries a workout by name.

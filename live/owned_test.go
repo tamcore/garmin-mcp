@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 )
 
 // An ownedKind is the class of Garmin object an identifier names.
@@ -62,6 +64,35 @@ func (k ownedKind) createdField() string {
 	}
 }
 
+// nameField is the field that carries this class's name, in the create request this
+// suite sends and in the object Garmin serves for it. The two are the same field, which
+// is what makes the read-back comparable with what was sent.
+func (k ownedKind) nameField() string {
+	switch k {
+	case kindActivity:
+		return "activityName"
+	case kindWorkout:
+		return "workoutName"
+	default:
+		return ""
+	}
+}
+
+// itemPath is the per-object path this class is read from, or "" for a class that has
+// no single-object read.
+func (k ownedKind) itemPath(id int64) string {
+	prefix := ""
+	switch k {
+	case kindActivity:
+		prefix = client.PathActivityPrefix
+	case kindWorkout:
+		prefix = client.PathWorkoutPrefix
+	default:
+		return ""
+	}
+	return prefix + "/" + strconv.FormatInt(id, 10)
+}
+
 // ownedObjects is the ledger of everything this suite created and has not yet
 // removed. It is the write analogue of readOnlyCaller: the guard consults it, so
 // "a write test only ever mutates an object it created itself" is a property of the
@@ -83,7 +114,8 @@ func newOwnedObjects() *ownedObjects {
 // which derives the identifier from something Garmin said rather than from something a
 // caller passed:
 //
-//   - ownCreated reads the identifier out of the create response Garmin returned.
+//   - ownCreated takes the identifier out of the create response Garmin returned *and*
+//     the name Garmin serves for that identifier when it is read back.
 //   - ownSwept reads the name Garmin returned for an object and requires it to be one
 //     this suite generated on an earlier run.
 //   - ownScheduled takes the calendar entry Garmin returned for a workout this suite
@@ -106,24 +138,44 @@ func (o *ownedObjects) record(kind ownedKind, id int64) {
 	o.ids[kind][id] = struct{}{}
 }
 
-// ownCreated records the object a create response names, and reports whether it could.
+// A createdObject is one create as the guard learned it from Garmin: the identifier the
+// create response named, the name this suite put in the create request, and the name
+// Garmin serves for that identifier when the object is read back.
+type createdObject struct {
+	id     int64
+	sent   string
+	stored string
+}
+
+// ownCreated records a created object, and reports whether it could.
 //
-// The identifier comes out of the body Garmin returned for a create this suite just
-// performed, so nothing is taken on a caller's word. A create that reports no
-// identifier — a calendar create does not — leaves the object unowned, and every later
-// mutation of it is then refused.
-func (o *ownedObjects) ownCreated(kind ownedKind, body []byte, encoding string) bool {
-	id, found := createdID(kind, body, encoding)
-	if !found {
+// An identifier alone is not evidence, which is the whole reason this takes three
+// fields. Garmin assigns the identifier, and a service that deduplicated a create,
+// answered from a cache or drifted could name an object this suite never made — after
+// which the guard would happily let a test mutate and delete it. The three tools that
+// create and then immediately mutate their own creation make that a live risk rather
+// than a theoretical one.
+//
+// What is required instead is a binding: the object at that identifier must carry the
+// name this suite generated for this create, read back from Garmin rather than assumed,
+// and that name must carry the reserved prefix. The read is per class, so the object
+// must also be of the class the create claimed. A create that reports no identifier — a
+// calendar create does not — leaves the object unowned, and every later mutation of it
+// is then refused.
+func (o *ownedObjects) ownCreated(kind ownedKind, created createdObject) bool {
+	if created.id <= 0 || created.sent == "" || !hasSuitePrefix(&created.sent) {
 		return false
 	}
-	o.record(kind, id)
+	if created.stored != created.sent {
+		return false
+	}
+	o.record(kind, created.id)
 	return true
 }
 
 // ownSwept records a leftover from an earlier run, and reports whether it could.
 //
-// name is the name Garmin returned for the object. It must be one suiteName generated,
+// name is the name Garmin returned for the object. It must be one this suite generated,
 // parsed field by field rather than merely prefix-matched, and its run stamp must be
 // strictly older than this run: an object this run created cannot be a leftover, and an
 // object whose name does not parse is not this suite's whatever it starts with.
@@ -229,27 +281,34 @@ func hasSuitePrefix(name *string) bool {
 	return name != nil && strings.HasPrefix(*name, objectPrefix)
 }
 
-// nameStampFloor is the earliest run stamp a suite name may carry. It is well after
-// this suite was written, so a name whose numeric tail happens to parse as a tiny
-// integer — a version, a count, an index — cannot be read as a run stamp.
-var nameStampFloor = time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+// nameStampFloor is the earliest run stamp a suite name may carry.
+//
+// It is the day this write layer first existed, not a round date before it: a floor
+// earlier than the suite's own first run admits stamps no run of it could have written,
+// which is the whole population of accidents the floor exists to exclude. Anything at or
+// before it — a version, a count, an index, a stamp from a year when this suite could
+// not have created anything — is not a run stamp.
+var nameStampFloor = time.Date(2026, time.August, 15, 0, 0, 0, 0, time.UTC)
 
 // isPreviousRunObject reports whether a name marks an object an *earlier* run of this
 // suite created.
 //
-// It is the sweeper's only licence to touch anything, so it is deliberately more than
-// a prefix test. A prefix is not ownership: it is a string a human could type. The name
-// must be exactly what suiteName renders — the prefix, a label, a run stamp and a
-// counter — with both numeric fields parsed, and the run stamp must lie between
-// nameStampFloor and the instant this run began.
+// It is the sweeper's only licence to touch anything, so it is deliberately more than a
+// prefix test. A prefix is not ownership: it is a string a human could type. The name
+// must be exactly what nameSequence renders and nothing else — the reserved prefix, one
+// of the labels this suite declares, a run stamp between the floor and the instant this
+// run began, and a counter that is a positive integer. Each of those rules excludes a
+// shape no generated name has: an empty or unknown label, a stamp from before this suite
+// existed or from this run, a zero or negative counter.
 //
-// The residual risk is stated plainly rather than hidden: a person who wrote an object
-// named "garmin-mcp-live-<label>-<a past unix second>-<a number>" by hand would have
-// their object removed. That is a name no one produces by accident, the prefix is
-// documented as reserved, and the suite runs only against a dedicated account, so the
-// residual is accepted. What is *not* accepted, and what this function exists to
-// prevent, is any pre-existing object being adopted merely because it starts with the
-// prefix.
+// What it still cannot do is prove that this suite created the object, and that is
+// stated rather than glossed: a name is evidence about a name. A person who wrote an
+// object called "garmin-mcp-live-<a declared label>-<a unix second since this suite
+// existed>-<a positive integer>" by hand would have it removed. That is a name nobody
+// produces by accident, the prefix is documented as reserved, and the suite runs only
+// against a dedicated account, so the residual is accepted. What is *not* accepted, and
+// what this function exists to prevent, is any pre-existing object being adopted merely
+// because it starts with the prefix.
 func isPreviousRunObject(name *string, before time.Time) bool {
 	if name == nil {
 		return false
@@ -263,7 +322,10 @@ func isPreviousRunObject(name *string, before time.Time) bool {
 	if len(parts) < 3 {
 		return false
 	}
-	if _, err := strconv.ParseInt(parts[len(parts)-1], 10, 64); err != nil {
+	if counter, err := strconv.ParseInt(parts[len(parts)-1], 10, 64); err != nil || counter <= 0 {
+		return false
+	}
+	if !slices.Contains(suiteLabels(), nameLabel(strings.Join(parts[:len(parts)-2], "-"))) {
 		return false
 	}
 	seconds, err := strconv.ParseInt(parts[len(parts)-2], 10, 64)

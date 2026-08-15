@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -59,21 +58,6 @@ func writeGate() string {
 	return ""
 }
 
-// nameCounter makes every generated name unique within one run.
-var nameCounter atomic.Int64
-
-// suiteName builds a recognisable, unique name for one created object.
-//
-// The shape is what the sweeper parses: the reserved prefix, a label, the run stamp
-// that separates runs and orders them against this one, and the counter that separates
-// objects inside one run. It names no account and no person. isPreviousRunObject is
-// the reader of this format, and the two must change together.
-func suiteName(kind string) string {
-	return objectPrefix + kind + "-" +
-		strconv.FormatInt(time.Now().UTC().Unix(), 10) + "-" +
-		strconv.FormatInt(nameCounter.Add(1), 10)
-}
-
 // writeScopes is the granted-scope source the write policy is built on.
 //
 // It is the single piece of the remote path this suite stands in for: the scopes a
@@ -97,6 +81,13 @@ type writeEnv struct {
 
 	owned *ownedObjects
 
+	// names renders every generated name of this run, and startedAt is the one
+	// instant the run is stamped with. They are fields rather than package state so
+	// the run's identity is something the environment carries, and so the sweeper's
+	// cut-off and the names it later parses come from the same instant.
+	names     *nameSequence
+	startedAt time.Time
+
 	session client.Session
 	mcp     *mcp.ClientSession
 
@@ -110,22 +101,52 @@ type writeEnv struct {
 	calendar *api.Calendar
 }
 
-// sharedWrite builds the write session once.
-var sharedWrite = sync.OnceValues(buildWriteEnv)
+// A writeSuite is the lifecycle of the one write environment a run may have: build it
+// at most once, and let the end-of-suite leak report reach it without building
+// anything.
+//
+// It is the write half's only package-level state, and it is one value rather than the
+// three it replaces — a counter, a clock and a pointer — because `go test` gives a
+// suite exactly one entry point that is not a test, TestMain, and a test can be handed
+// nothing but its own *testing.T. Everything a run accumulates lives inside the
+// environment this holds, so the state is per run and explicit; what cannot be avoided
+// is the single handle to it.
+type writeSuite struct {
+	once  sync.Once
+	built atomic.Pointer[writeEnv]
+	env   *writeEnv
+	err   error
+}
 
-// built holds the write environment once it exists, so the end-of-suite leak report
-// can reach the ledger without building anything.
-var built atomic.Pointer[writeEnv]
+// theWriteSuite is that single handle.
+var theWriteSuite writeSuite
+
+// get builds the environment on the first call and returns the same one after that.
+func (s *writeSuite) get(now func() time.Time) (*writeEnv, error) {
+	s.once.Do(func() {
+		s.env, s.err = buildWriteEnv(now)
+		if s.err != nil {
+			return
+		}
+		// The environment is published before the sweep runs, so a sweep that fails
+		// half way still leaves the leak report able to reach the ledger.
+		s.built.Store(s.env)
+		if s.env.skip == "" {
+			s.err = s.env.sweep()
+		}
+	})
+	return s.env, s.err
+}
 
 // builtWriteEnv returns the write environment if one was built, and nil otherwise.
-func builtWriteEnv() *writeEnv { return built.Load() }
+func builtWriteEnv() *writeEnv { return theWriteSuite.built.Load() }
 
 // liveWriteEnv returns the shared write session, skipping the calling test when a
 // gate is shut.
 func liveWriteEnv(t *testing.T) *writeEnv {
 	t.Helper()
 
-	w, err := sharedWrite()
+	w, err := theWriteSuite.get(time.Now)
 	if err != nil {
 		t.Fatalf("live: preparing the guarded write session: %v", err)
 	}
@@ -137,7 +158,12 @@ func liveWriteEnv(t *testing.T) *writeEnv {
 
 // buildWriteEnv opens the fourth gate, wraps the shared session in the write guard
 // and sweeps whatever a killed run left behind.
-func buildWriteEnv() (*writeEnv, error) {
+//
+// now is the run's clock. It is a parameter rather than a call to time.Now inside,
+// because the instant it returns is both the stamp every generated name carries and
+// the cut-off the sweeper compares those names against, and those two must be the same
+// instant or a name of this run could be read as an earlier run's.
+func buildWriteEnv(now func() time.Time) (*writeEnv, error) {
 	if skip := writeGate(); skip != "" {
 		return &writeEnv{skip: skip}, nil
 	}
@@ -156,15 +182,18 @@ func buildWriteEnv() (*writeEnv, error) {
 		return nil, fmt.Errorf("building the guarded write session: %w", err)
 	}
 
-	w := &writeEnv{owned: owned, session: session, confirmations: &atomic.Int64{}}
+	startedAt := now().UTC()
+	w := &writeEnv{
+		owned:         owned,
+		names:         newNameSequence(startedAt),
+		startedAt:     startedAt,
+		session:       session,
+		confirmations: &atomic.Int64{},
+	}
 	if err := w.buildDomainClients(read.rest); err != nil {
 		return nil, err
 	}
 	if err := w.buildMCPSession(read.rest, caller); err != nil {
-		return nil, err
-	}
-	built.Store(w)
-	if err := w.sweep(); err != nil {
 		return nil, err
 	}
 	return w, nil
