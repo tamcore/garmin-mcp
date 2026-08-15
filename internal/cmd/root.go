@@ -80,6 +80,14 @@ type Options struct {
 	// a tool package, so a test can hand it a fake registry and the binary can
 	// hand it the real one.
 	Tools ToolFactory
+
+	// Catalog reports the tools this build registers, for `tools list`. A nil
+	// catalog reports none.
+	//
+	// It is separate from Tools because listing the surface must not need the
+	// Garmin dependencies a factory takes: a catalog can be answered by a process
+	// that opens nothing, which is what keeps the listing unprivileged.
+	Catalog ToolCatalog
 }
 
 func (o Options) stdin() io.Reader {

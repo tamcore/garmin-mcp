@@ -60,9 +60,9 @@ const (
 
 // grantedScopes is the ScopeSource a write test needs.
 //
-// No scope is issued anywhere in this repository yet, so the default deployment
-// refuses every write. A test that wants to exercise a handler has to grant the scope
-// explicitly, which is exactly the seam the M2 bearer-token path will fill.
+// The default deployment refuses every write, because the tier starts disabled and no
+// scope is presented. A test that wants to exercise a handler has to grant the scope
+// explicitly, which is the same seam the remote bearer-token path fills in production.
 type grantedScopes struct {
 	scopes []policy.Scope
 }

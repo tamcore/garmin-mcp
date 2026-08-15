@@ -2,6 +2,7 @@ package tools_test
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -205,6 +206,30 @@ func TestScheduleWorkoutsValidatesTheWholeBatchBeforeWritingAny(t *testing.T) {
 	}
 }
 
+// TestScheduleWorkoutsWritesEveryValidatedEntry covers the accepted path of the
+// batch: each entry is dispatched on its own and reported on its own, which is
+// what lets a caller tell a partial success from a total one.
+func TestScheduleWorkoutsWritesEveryValidatedEntry(t *testing.T) {
+	h := newWriteHarness(t, workoutWriteScript(), enabledWrites())
+
+	out := h.call(t, tools.ToolScheduleWorkouts, map[string]any{
+		"schedules": []any{
+			map[string]any{argWorkoutID: 550001, argCalendarDate: testCalendarDate},
+			map[string]any{argWorkoutID: 550001, argCalendarDate: "2026-02-01"},
+		},
+	})
+
+	if got := out["requested"]; got != float64(2) {
+		t.Errorf("requested = %v, want 2", got)
+	}
+	if got := out["applied"]; got != float64(2) {
+		t.Errorf("applied = %v, want 2", got)
+	}
+	if outcomes, _ := out["outcomes"].([]any); len(outcomes) != 2 {
+		t.Errorf("reported %d outcomes, want one per entry", len(outcomes))
+	}
+}
+
 func workoutDeleteScript() testkit.Script {
 	return testkit.NewScript().
 		With(client.PathSocialProfile, repeat(okJSON(profileBody), 4)...).
@@ -226,6 +251,56 @@ func TestDeleteWorkoutsReportsAPartialFailureItemByItem(t *testing.T) {
 	if got := out["applied"]; got != float64(1) {
 		t.Errorf("applied = %v, want 1: the second identifier is unknown to Garmin", got)
 	}
+}
+
+// TestDeleteWorkoutRemovesTheTemplateItself separates the two removals: deleting
+// a workout takes the library template every calendar entry points at, which is
+// not what unscheduling does.
+func TestDeleteWorkoutRemovesTheTemplateItself(t *testing.T) {
+	h := newWriteHarness(t, workoutDeleteScript(), enabledWrites())
+
+	out := h.call(t, tools.ToolDeleteWorkout, map[string]any{argWorkoutID: 550001})
+
+	if deleted, _ := out["deleted"].(bool); !deleted {
+		t.Errorf("deleted = %v, want true", out["deleted"])
+	}
+	if got := out["id"]; got != float64(550001) {
+		t.Errorf("id = %v, want the workout that was named", got)
+	}
+	if !slicesContain(h.recordedMethods(), http.MethodDelete+" "+workoutPath(testWorkoutID)) {
+		t.Errorf("the template was not deleted: %v", h.recordedMethods())
+	}
+}
+
+// TestUnscheduleWorkoutsRemovesEveryCalendarEntry covers the batch form, which
+// loops the single removal and reports each entry separately.
+func TestUnscheduleWorkoutsRemovesEveryCalendarEntry(t *testing.T) {
+	h := newWriteHarness(t, calendarBatchScript(), enabledWrites())
+
+	out := h.call(t, tools.ToolUnscheduleWorkouts, map[string]any{
+		"scheduled_workout_ids": []any{550001, 550002},
+	})
+
+	if got := out["requested"]; got != float64(2) {
+		t.Errorf("requested = %v, want 2", got)
+	}
+	if got := out["applied"]; got != float64(2) {
+		t.Errorf("applied = %v, want 2", got)
+	}
+}
+
+// calendarBatchScript answers two calendar removals.
+func calendarBatchScript() testkit.Script {
+	return testkit.NewScript().
+		With(client.PathSocialProfile, repeat(okJSON(profileBody), 2)...).
+		With(client.PathWorkoutSchedule+"/"+testWorkoutID,
+			testkit.JSON(http.StatusNoContent, "")).
+		With(client.PathWorkoutSchedule+"/550002", testkit.JSON(http.StatusNoContent, ""))
+}
+
+// slicesContain reports whether values holds want.
+func slicesContain(values []string, want string) bool {
+	return slices.Contains(values, want)
 }
 
 func TestUnscheduleWorkoutRemovesTheCalendarEntryOnly(t *testing.T) {

@@ -6,10 +6,24 @@
 // scope. Operator enablement alone is never sufficient, and a granted scope
 // alone is never sufficient either.
 //
-// No scope is issued anywhere in this repository yet. ScopeSource is the seam the
-// M2 OAuth work will satisfy, and its default implementation, NoScopes, grants
-// nothing. Every write and destructive tool is therefore refused today, however
-// the operator configures enablement. That is the intended state, not a gap.
+// Where the scope comes from differs by transport, and that difference decides
+// whether a deployment can write at all:
+//
+//   - Remote (Streamable HTTP) supplies real scopes. internal/cmd builds a
+//     ScopeSource over the access token the protected-resource middleware
+//     verified, so a remote caller holds exactly the scopes its own token carries
+//     and nothing else. A write is therefore possible remotely once the operator
+//     has enabled the tier.
+//   - Stdio leaves the scope source unset. A nil source behaves as [NoScopes],
+//     which grants nothing, so every write and every destructive call is refused
+//     on that transport however the operator configures enablement.
+//
+// Both higher tiers also default to disabled. A deployment that changed no setting
+// is read-only whichever transport it runs: stdio because no scope can be
+// presented, remote because enablement starts off and the caller would still have
+// to hold the tier's scope. Making a deployment able to write takes two
+// deliberate steps — enabling the tier, and issuing a token that carries the
+// scope — and neither one alone is enough.
 //
 // Allowlists and denylists are intersected with the tiers rather than bypassing
 // them: an allowlist can only narrow what the tiers already permit.
@@ -76,7 +90,7 @@ const (
 //
 // TierReadOnly reports false: the read tier is not gated on a tier scope, because
 // a deployment that granted no scope at all must still serve reads. Per-domain
-// read scopes are enforced by the M2 bearer-token path, not here.
+// read scopes are enforced by the remote bearer-token path, not here.
 func (t Tier) RequiredScope() (Scope, bool) {
 	switch t {
 	case TierWrite:

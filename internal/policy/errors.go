@@ -49,8 +49,8 @@ var (
 	ErrTierNotEnabled = errors.New("policy: tool tier is not enabled by the operator")
 
 	// ErrScopeNotGranted reports that the caller holds no OAuth scope for the
-	// tool's tier. Today no scope is issued anywhere, so this refuses every
-	// write and destructive tool regardless of operator enablement.
+	// tool's tier. Only the remote transport can present one, so on stdio this
+	// refuses every write and destructive tool regardless of enablement.
 	ErrScopeNotGranted = errors.New("policy: required OAuth scope is not granted")
 
 	// ErrScopeLookupFailed reports that the granted scopes could not be

@@ -17,7 +17,6 @@
 package ratelimit
 
 import (
-	"container/list"
 	"fmt"
 	"sync"
 	"time"
@@ -134,11 +133,10 @@ func (b *budget) take(now time.Time) (bool, time.Duration) {
 	return false, time.Duration(missing / b.perSecond * float64(time.Second))
 }
 
-// entry holds one principal's two budgets plus its position in the LRU list.
+// entry holds one principal's two budgets.
 type entry struct {
-	read     *budget
-	write    *budget
-	lruEntry *list.Element
+	read  *budget
+	write *budget
 }
 
 // A Limiter holds one pair of budgets per principal.
@@ -148,10 +146,10 @@ type Limiter struct {
 	cfg Config
 	now func() time.Time
 
-	mu      sync.Mutex
-	entries map[identity.Principal]*entry
-	// lru orders principals by last use, least recent at the front.
-	lru *list.List
+	mu sync.Mutex
+	// table holds one entry per principal and evicts the least recently used
+	// one when it is full.
+	table *lruTable[identity.Principal, *entry]
 }
 
 // New validates cfg and returns the Limiter it describes.
@@ -167,10 +165,9 @@ func New(cfg Config, now func() time.Time) (*Limiter, error) {
 	}
 
 	return &Limiter{
-		cfg:     cfg,
-		now:     now,
-		entries: make(map[identity.Principal]*entry),
-		lru:     list.New(),
+		cfg:   cfg,
+		now:   now,
+		table: newLRUTable[identity.Principal, *entry](cfg.MaxPrincipals),
 	}, nil
 }
 
@@ -235,44 +232,16 @@ func (l *Limiter) Allow(principal identity.Principal, kind Kind) Result {
 	}
 }
 
-// touch returns principal's entry, creating it if needed, and moves it to the
-// most-recently-used end. Creating an entry may evict the least recently used one.
-// The caller holds l.mu.
+// touch returns principal's entry, creating it if needed, and marks it most
+// recently used. Creating an entry may evict the least recently used one. The
+// caller holds l.mu.
 func (l *Limiter) touch(principal identity.Principal, now time.Time) *entry {
-	if existing, ok := l.entries[principal]; ok {
-		l.lru.MoveToBack(existing.lruEntry)
-		return existing
-	}
-
-	for len(l.entries) >= l.cfg.MaxPrincipals {
-		l.evictOldest()
-	}
-
-	created := &entry{
-		read:  newBudget(l.cfg.ReadPerMinute, l.cfg.ReadBurst, now),
-		write: newBudget(l.cfg.WritePerMinute, l.cfg.WriteBurst, now),
-	}
-	created.lruEntry = l.lru.PushBack(principal)
-	l.entries[principal] = created
-	return created
-}
-
-// evictOldest drops the least recently used entry. The caller holds l.mu.
-//
-// Eviction resets the evicted principal's budget, which is a deliberate accepted
-// trade: the alternative — refusing a new principal because the table is full —
-// would let one caller lock every other caller out entirely.
-func (l *Limiter) evictOldest() {
-	oldest := l.lru.Front()
-	if oldest == nil {
-		return
-	}
-	l.lru.Remove(oldest)
-	principal, ok := oldest.Value.(identity.Principal)
-	if !ok {
-		return
-	}
-	delete(l.entries, principal)
+	return l.table.touch(principal, func() *entry {
+		return &entry{
+			read:  newBudget(l.cfg.ReadPerMinute, l.cfg.ReadBurst, now),
+			write: newBudget(l.cfg.WritePerMinute, l.cfg.WriteBurst, now),
+		}
+	})
 }
 
 // TrackedPrincipals reports how many principals currently hold a budget. It exists
@@ -283,5 +252,5 @@ func (l *Limiter) TrackedPrincipals() int {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return len(l.entries)
+	return l.table.len()
 }

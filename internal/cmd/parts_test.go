@@ -297,12 +297,12 @@ func TestDescribeChallengeNamesTheMethodWithoutEchoingAnything(t *testing.T) {
 	var out strings.Builder
 	describeChallenge(&out, loginweb.Attempt{
 		NeedsMFA:          true,
-		MFAMethod:         "email",
+		MFAMethod:         testMFAMethod,
 		DeliveryUncertain: true,
 	})
 
 	rendered := out.String()
-	if !strings.Contains(rendered, "email") {
+	if !strings.Contains(rendered, testMFAMethod) {
 		t.Errorf("the challenge text does not name the delivery method: %q", rendered)
 	}
 	if !strings.Contains(rendered, "could not be confirmed") {

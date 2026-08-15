@@ -36,8 +36,9 @@ var wantReadOnlyToolNames = []string{
 	"download_workout",
 }
 
-// wantWriteToolNames is the write tier. Every one of them is refused at call time
-// today, because no scope is granted anywhere in this repository yet.
+// wantWriteToolNames is the write tier. Every one of them needs the operator's
+// enablement and the caller's write scope, so a default deployment refuses all of
+// them and a stdio deployment refuses them whatever the operator enabled.
 var wantWriteToolNames = []string{
 	"set_activity_name",
 	"set_activity_type",

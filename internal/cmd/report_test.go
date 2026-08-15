@@ -184,24 +184,3 @@ func TestReportOutcomeSeparatesALinkedAccountFromEverythingElse(t *testing.T) {
 		t.Errorf("an unfinished run printed %q as a result", unfinished.String())
 	}
 }
-
-// TestBrowserCommandIsKnownForThisPlatform keeps the launcher table honest for the
-// platforms this project releases binaries for.
-func TestBrowserCommandIsKnownForThisPlatform(t *testing.T) {
-	name, args := browserCommand("http://127.0.0.1:1234/")
-
-	switch runtime.GOOS {
-	case "linux", "darwin", osWindows:
-		if name == "" {
-			t.Fatalf("no launcher is known for %s", runtime.GOOS)
-		}
-		if len(args) == 0 {
-			t.Fatal("the launcher receives no arguments")
-		}
-		if !strings.Contains(strings.Join(args, " "), "127.0.0.1") {
-			t.Errorf("the launcher arguments do not carry the page: %v", args)
-		}
-	default:
-		t.Skipf("no launcher is expected for %s", runtime.GOOS)
-	}
-}

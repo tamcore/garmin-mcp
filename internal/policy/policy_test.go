@@ -30,7 +30,7 @@ func baseConfig() policy.Config {
 	}
 }
 
-// grantingScopes is the M2 OAuth seam standing in for a verified bearer token.
+// grantingScopes stands in for the remote source that reads a verified bearer token.
 type grantingScopes struct {
 	scopes []policy.Scope
 	err    error

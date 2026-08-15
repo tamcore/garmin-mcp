@@ -161,6 +161,19 @@ func (s *SQLiteStore) Close() error {
 // SchemaVersion reports the migration version this store opened at.
 func (s *SQLiteStore) SchemaVersion() int { return s.schema }
 
+// Ping reports whether the database answers.
+//
+// It exists for a readiness probe, which must distinguish a process that is alive
+// from one that can actually serve. A pool that cannot reach its file answers
+// here and nowhere else: every other method would report the same failure only
+// once a request had already arrived and failed.
+func (s *SQLiteStore) Ping(ctx context.Context) error {
+	if err := s.db.PingContext(ctx); err != nil {
+		return fmt.Errorf("store: ping database: %w", err)
+	}
+	return nil
+}
+
 // EncryptionKeyVersion reports the cryptostore key version recorded when the
 // database was created. It is the starting point of a staged key rotation: a row
 // whose own key_version is lower still opens under the key of that version.

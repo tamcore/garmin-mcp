@@ -113,6 +113,73 @@ jobs:
       - name: Coverage summary
         run: go tool cover -func=cover.out
 
+      # The 80% rule is documented, so it is enforced per package rather than as
+      # one repository average: an average lets a well-tested package pay for a
+      # neglected one, and the number then falls without anything failing.
+      #
+      # The exception list is explicit and is checked in both directions. A
+      # package that has since reached the floor must be removed from it, and a
+      # name that is not in the profile fails too, so an exception cannot outlive
+      # its reason or survive a rename as a silent blanket skip.
+      - name: Enforce the per-package coverage floor
+        env:
+          COVERAGE_FLOOR: "80"
+          # cmd/garmin-mcp is the process entry point: it owns the injected build
+          #   identity, the exit status and the tool seams, and every behavior it
+          #   wires lives under internal/, where it is tested without a binary.
+          #   The e2e job runs the built command itself.
+          # internal/garmin/auth is exercised through the fake Garmin service, and
+          #   that suite is tagged fakegarmin, so this untagged profile does not
+          #   see it. The test-fakegarmin job runs and reports it.
+          COVERAGE_EXCEPTIONS: >-
+            github.com/tamcore/garmin-mcp/cmd/garmin-mcp
+            github.com/tamcore/garmin-mcp/internal/garmin/auth
+        run: |
+          set -o pipefail
+          awk -v floor="${COVERAGE_FLOOR}" -v except="${COVERAGE_EXCEPTIONS}" '
+            BEGIN {
+              count = split(except, listed, " ")
+              for (i = 1; i <= count; i++) if (listed[i] != "") allowed[listed[i]] = 1
+            }
+            # A profile line is "package/file.go:from.col,to.col statements count".
+            NR > 1 {
+              file = $1
+              sub(/:[0-9]+\.[0-9]+,[0-9]+\.[0-9]+$/, "", file)
+              pkg = file
+              sub(/\/[^\/]*$/, "", pkg)
+              if (!(pkg in total)) { total[pkg] = 0; packages++ }
+              total[pkg] += $2
+              if ($3 > 0) covered[pkg] += $2
+            }
+            END {
+              if (packages == 0) {
+                print "::error::the coverage profile lists no package; this gate would pass vacuously"
+                exit 1
+              }
+              failed = 0
+              for (pkg in total) {
+                if (total[pkg] == 0) continue
+                pct = 100 * covered[pkg] / total[pkg]
+                printf "%-56s %5.1f%%%s\n", pkg, pct, (pkg in allowed) ? "  listed as an exception" : ""
+                if (pct < floor && !(pkg in allowed)) {
+                  printf "::error::%s is at %.1f%%, under the %s%% floor\n", pkg, pct, floor
+                  failed = 1
+                }
+                if (pct >= floor && (pkg in allowed)) {
+                  printf "::error::%s reached %.1f%% and must leave the exception list\n", pkg, pct
+                  failed = 1
+                }
+              }
+              for (pkg in allowed) {
+                if (!(pkg in total)) {
+                  printf "::error::the exception %s is not in the profile; drop it or fix the name\n", pkg
+                  failed = 1
+                }
+              }
+              exit failed
+            }
+          ' cover.out | sort
+
   test-fakegarmin:
     name: Fake-Garmin integration tests
     runs-on: ubuntu-latest

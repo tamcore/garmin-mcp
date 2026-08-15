@@ -10,7 +10,11 @@ import (
 	"testing"
 
 	"github.com/tamcore/garmin-mcp/internal/cmd"
+	"github.com/tamcore/garmin-mcp/internal/cryptostore"
 )
+
+// tierReadOnly is the tier label every report prints.
+const tierReadOnly = "read-only"
 
 // The synthetic secret material doctor must never print.
 const (
@@ -85,7 +89,7 @@ func TestDoctorReportsTheRemoteDeployment(t *testing.T) {
 		database,
 		"owner-only",
 		"example-client",
-		"read-only",
+		tierReadOnly,
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("report does not mention %q:\n%s", want, stdout)
@@ -155,7 +159,7 @@ func TestDoctorReportsTheEffectiveDeploymentOnStdout(t *testing.T) {
 		"token store",
 		filepath.Join(dir, "keys"),
 		filepath.Join(dir, "tokens"),
-		"read-only",
+		tierReadOnly,
 		"write",
 		"destructive",
 		"garmin.com",
@@ -237,6 +241,58 @@ func TestDoctorFailsOnUnsafeKeyPermissions(t *testing.T) {
 		t.Error("exit code = 0 for a group-readable key file")
 	}
 	if !strings.Contains(stdout+stderr, "owner-only") {
+		t.Errorf("neither stream explains the refusal:\nstdout=%s\nstderr=%s", stdout, stderr)
+	}
+}
+
+// TestDoctorReportsAnUnlinkedAccountOnceTheKeyAndStoreExist covers the check that
+// only runs when everything before it is in place: with usable key material and an
+// owner-only store, doctor reads the bound principal's record and reports that the
+// account has not been linked yet, without creating a record of its own.
+func TestDoctorReportsAnUnlinkedAccountOnceTheKeyAndStoreExist(t *testing.T) {
+	clearGarminEnv(t)
+	dir := stateDir(t)
+
+	if _, err := cryptostore.LoadOrCreateKey(filepath.Join(dir, "keys"), 1); err != nil {
+		t.Fatalf("creating the key: %v", err)
+	}
+	tokens := filepath.Join(dir, "tokens")
+	if err := os.MkdirAll(tokens, 0o700); err != nil {
+		t.Fatalf("creating the token directory: %v", err)
+	}
+
+	stdout, _, code := runDoctor(t)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0 for a set-up deployment with no linked account", code)
+	}
+
+	if !strings.Contains(stdout, "garmin-mcp auth") {
+		t.Errorf("report does not tell the operator how to link the account:\n%s", stdout)
+	}
+	records, err := os.ReadDir(filepath.Join(tokens, "tokens"))
+	if err != nil {
+		t.Fatalf("reading the record directory: %v", err)
+	}
+	if len(records) != 0 {
+		t.Errorf("doctor wrote %d records for an account nobody linked", len(records))
+	}
+}
+
+// TestDoctorReportsAStoreThatIsNotADirectory covers the shape check: a file where
+// the store belongs is refused rather than opened.
+func TestDoctorReportsAStoreThatIsNotADirectory(t *testing.T) {
+	clearGarminEnv(t)
+	dir := stateDir(t)
+
+	if err := os.WriteFile(filepath.Join(dir, "tokens"), nil, 0o600); err != nil {
+		t.Fatalf("creating the file in the store's place: %v", err)
+	}
+
+	stdout, stderr, code := runDoctor(t)
+	if code == 0 {
+		t.Error("exit code = 0 for a token store that is not a directory")
+	}
+	if !strings.Contains(stdout+stderr, "not a directory") {
 		t.Errorf("neither stream explains the refusal:\nstdout=%s\nstderr=%s", stdout, stderr)
 	}
 }

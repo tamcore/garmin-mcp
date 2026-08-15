@@ -82,6 +82,11 @@ type HTTPOptions struct {
 	// revoked authorization is still refused at its next request, but an already
 	// open stream is not torn down.
 	Revocations RevocationSource
+
+	// Readiness decides what [ReadinessPath] answers. Optional; without it the
+	// readiness probe reports the process ready, because there is then no
+	// dependency this transport was told to assert.
+	Readiness ReadinessCheck
 }
 
 // An HTTPTransport serves MCP over Streamable HTTP.
@@ -102,6 +107,7 @@ type HTTPTransport struct {
 	sessions   *sessionBindings
 	origins    originGuard
 	forwarded  forwardedTrust
+	probes     probeHandler
 	handler    http.Handler
 
 	publicURL    string
@@ -146,6 +152,7 @@ func NewHTTPTransport(server *Server, opts HTTPOptions) (*HTTPTransport, error) 
 		sessions:     newSessionBindings(),
 		origins:      origins,
 		forwarded:    forwarded,
+		probes:       probeHandler{ready: opts.Readiness},
 		publicURL:    publicURL.String(),
 		mcpPath:      endpointPath(publicURL),
 		metadataPath: metadataPath(opts.ResourceMetadataPath),
@@ -158,6 +165,11 @@ func NewHTTPTransport(server *Server, opts HTTPOptions) (*HTTPTransport, error) 
 // route dispatches on the exact path. An http.ServeMux is not used, because its
 // subtree patterns would make the MCP endpoint answer for paths below it, and an
 // endpoint that answers for more than its own URL is a routing surprise.
+//
+// The probes are last, and that ordering is the rule: a configured path always
+// wins. A deployment that publishes MCP or its metadata document on /livez keeps
+// serving it there, so adding these two routes cannot take an endpoint away from
+// an operator who already chose that path.
 func (t *HTTPTransport) route(opts HTTPOptions) http.Handler {
 	metadata := t.authorizer.ProtectedResourceMetadataHandler()
 	protected := t.authorizer.Middleware()(t.guardSession(newSDKHandler(t.server, opts)))
@@ -168,6 +180,8 @@ func (t *HTTPTransport) route(opts HTTPOptions) http.Handler {
 			metadata.ServeHTTP(w, r)
 		case t.mcpPath:
 			protected.ServeHTTP(w, r)
+		case LivenessPath, ReadinessPath:
+			t.probes.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -208,6 +222,20 @@ func (t *HTTPTransport) PublicURL() string { return t.publicURL }
 // ClientIP returns the address to attribute a request to, honoring forwarded
 // headers only from a configured proxy range.
 func (t *HTTPTransport) ClientIP(r *http.Request) string { return t.forwarded.clientIP(r) }
+
+// ProbeHandler returns the liveness and readiness probes as a standalone handler.
+//
+// The probes are already served on this transport's own handler, at
+// [LivenessPath] and [ReadinessPath], and that is the deliberate default: they
+// disclose nothing — a status code and a fixed word — so there is no secret for a
+// second listener to protect, and a probe that needs its own listener is a probe
+// most deployments will not get.
+//
+// This accessor exists for the deployment that wants them somewhere else anyway,
+// typically an administrative listener bound to a private interface alongside
+// whatever else that listener carries. It is the same handler and the same
+// injected readiness check, so the two mount points can never disagree.
+func (t *HTTPTransport) ProbeHandler() http.Handler { return t.probes }
 
 // Run watches for revocations and terminates the sessions they cover, until ctx
 // is done or the revocation channel closes.

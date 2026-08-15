@@ -9,10 +9,11 @@ import (
 
 // A ScopeSource reports the OAuth scopes granted to the caller of a request.
 //
-// This is the seam the M2 OAuth work satisfies: the remote implementation will
-// read the scopes from the verified bearer-token context and nothing else. The
-// interface lives here, with its consumer, rather than in a shared interface
-// package.
+// The remote transport satisfies it: internal/cmd reads the scopes from the
+// verified bearer-token context and from nothing else, so no tool argument, header
+// or session identifier can reach this decision. The stdio transport supplies no
+// source at all. The interface lives here, with its consumer, rather than in a
+// shared interface package.
 //
 // An implementation must fail rather than guess. Returning an error makes Decide
 // fail closed, which is the required behavior for an unknown grant.
@@ -22,9 +23,10 @@ type ScopeSource interface {
 
 // NoScopes is the default ScopeSource and grants nothing.
 //
-// It is the honest representation of the current state: this repository issues no
-// OAuth scope anywhere, so every write and destructive tool is refused. A nil
-// ScopeSource behaves identically.
+// It is what the stdio transport runs with, because a process-bound local account
+// presents no token: every write and destructive tool is refused there. A nil
+// ScopeSource behaves identically. The remote transport supplies a real source
+// instead, so this is the default and not the only implementation.
 type NoScopes struct{}
 
 // GrantedScopes returns no scopes and no error.

@@ -2,12 +2,6 @@ package cmd
 
 import "errors"
 
-// ErrNotImplemented reports a command whose subsystem does not exist in this
-// milestone. It is a real failure with a non-zero exit status, never a silent
-// success: a caller that cannot tell "did nothing" from "did the work" would
-// eventually believe an unimplemented capability is in service.
-var ErrNotImplemented = errors.New("not implemented in this milestone")
-
 // Start-up failure sentinels. Each is comparable with errors.Is, because a caller
 // acts on the distinction: unresolvable state is a mistake in the deployment
 // layout, unsupported key material is a mistake in the secret plumbing, and
@@ -53,33 +47,18 @@ var (
 	// instead and no principal is created.
 	ErrNoGarminAccount = errors.New("the Garmin login named no account to isolate on")
 
+	// ErrNoDatabasePath reports that a command needing the multi-user database
+	// was given no location for it.
+	//
+	// Nothing is defaulted here on purpose. A guessed location would create an
+	// empty database next to whatever the process happened to be started from,
+	// which then migrates cleanly, serves nobody's data, and looks like success
+	// until the real database is found still unmigrated.
+	ErrNoDatabasePath = errors.New("no database path is configured")
+
 	// ErrUnsafeDeployment reports that a diagnostic check found something that
 	// exists and must not be used, such as key material another local account can
 	// read. The report names each finding; this sentinel is what makes the
 	// command exit non-zero so a script notices.
 	ErrUnsafeDeployment = errors.New("the deployment has a check that must be fixed before serving")
 )
-
-// NotImplementedError names the command and the missing subsystem, and points at
-// the authoritative status document instead of guessing a delivery date.
-type NotImplementedError struct {
-	// Command is the command path the operator invoked, for example
-	// "garmin-mcp serve".
-	Command string
-	// Subsystem is the capability that does not exist yet.
-	Subsystem string
-}
-
-// notImplemented builds a *NotImplementedError.
-func notImplemented(command, subsystem string) error {
-	return &NotImplementedError{Command: command, Subsystem: subsystem}
-}
-
-// Error states plainly that nothing was done.
-func (e *NotImplementedError) Error() string {
-	return e.Command + ": " + e.Subsystem + " is " + ErrNotImplemented.Error() +
-		"; nothing was started or changed. See docs/implementation-status.md"
-}
-
-// Unwrap exposes the sentinel, so a caller can match with errors.Is.
-func (e *NotImplementedError) Unwrap() error { return ErrNotImplemented }

@@ -43,8 +43,8 @@ func TestGetUnitSystemReturnsTheMeasurementSystem(t *testing.T) {
 
 	got := h.call(t, tools.ToolGetUnitSystem, nil)
 
-	if got["unit_system"] != "metric" {
-		t.Errorf("unit_system = %v, want %q", got["unit_system"], "metric")
+	if got["unit_system"] != testUnitSystem {
+		t.Errorf("unit_system = %v, want %q", got["unit_system"], testUnitSystem)
 	}
 	if len(got) != 1 {
 		t.Errorf("get_unit_system returned %d keys (%v), want only unit_system", len(got), got)

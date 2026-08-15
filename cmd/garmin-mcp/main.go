@@ -28,7 +28,27 @@ func main() {
 		Stdout:    os.Stdout,
 		Stderr:    os.Stderr,
 		Tools:     garminTools,
+		Catalog:   garminCatalog,
 	}))
+}
+
+// garminCatalog reports the tool surface for `tools list`.
+//
+// It is the read-only half of the same seam garminTools plugs into, and it exists
+// separately because listing the surface must not need what serving it needs: this
+// reads the declared contracts, so the command answers without a Garmin client, a
+// token, or a database.
+func garminCatalog() []cmd.ToolEntry {
+	contracts := tools.Contracts()
+	entries := make([]cmd.ToolEntry, 0, len(contracts))
+	for _, contract := range contracts {
+		entries = append(entries, cmd.ToolEntry{
+			Name:       contract.Spec.Name,
+			Tier:       contract.Spec.Tier,
+			Idempotent: contract.Spec.Annotations.Idempotent,
+		})
+	}
+	return entries
 }
 
 // garminTools builds the Garmin tool set for the server.

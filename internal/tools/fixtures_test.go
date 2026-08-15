@@ -11,6 +11,9 @@ import (
 
 // Every fixture here is synthetic. The health values are invented, the coordinates
 // are the null island, and no fixture is a recording of a real account.
+// testUnitSystem is the measurement system the synthetic profile reports.
+const testUnitSystem = "metric"
+
 const (
 	profileBody = `{"profileId":900001,"displayName":"` + testDisplayName + `",` +
 		`"fullName":"Fake Tester","location":"Nowhere","userLevel":3}`

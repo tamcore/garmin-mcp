@@ -2,6 +2,8 @@ package tools_test
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -29,6 +31,34 @@ func assertSanitized(t *testing.T, text string) {
 
 func containsFold(haystack, needle string) bool {
 	return strings.Contains(strings.ToLower(haystack), strings.ToLower(needle))
+}
+
+// TestAToolErrorRendersOnlyItsAdviceAndKeepsTheClassReachable pins both halves of
+// the caller-facing failure: the text the model reads is the authored advice and
+// nothing else, while the cause stays reachable through errors.Is, so a caller can
+// still act on the class without the class being rendered.
+func TestAToolErrorRendersOnlyItsAdviceAndKeepsTheClassReachable(t *testing.T) {
+	t.Parallel()
+
+	cause := fmt.Errorf("payload %q from %s: %w",
+		"sleepTimeSeconds", "https://example.invalid/path", tools.ErrInvalidArgument)
+	failure := &tools.ToolError{Advice: "The arguments were refused.", Err: cause}
+
+	if got := failure.Error(); got != "The arguments were refused." {
+		t.Errorf("Error() = %q, want the authored advice alone", got)
+	}
+	assertSanitized(t, failure.Error())
+	if !errors.Is(failure, tools.ErrInvalidArgument) {
+		t.Error("errors.Is does not reach the wrapped class")
+	}
+
+	var empty *tools.ToolError
+	if got := empty.Error(); got != "" {
+		t.Errorf("a nil *ToolError renders %q, want the empty string", got)
+	}
+	if empty.Unwrap() != nil {
+		t.Error("a nil *ToolError unwraps to something")
+	}
 }
 
 // TestSensitiveResultsReportShapeToALogSink pins the redaction convention on the
@@ -140,7 +170,7 @@ func TestSensitiveResultsReportShapeToALogSink(t *testing.T) {
 			secrets: []string{"550009", savedWorkoutName},
 		},
 		"activity update": {
-			value:   tools.ActivityUpdate{ActivityID: 987654321, Updated: "feel", Status: 200},
+			value:   tools.ActivityUpdate{ActivityID: 987654321, Updated: argFeel, Status: 200},
 			secrets: []string{"987654321"},
 		},
 		"created activity": {
@@ -162,6 +192,41 @@ func TestSensitiveResultsReportShapeToALogSink(t *testing.T) {
 				ID: 550001, Applied: true,
 			}}, Requested: 1, Applied: 1},
 			secrets: []string{"550001"},
+		},
+		"batch outcome": {
+			value:   tools.BatchOutcome{ID: 550001, Applied: false, Advice: "not applied"},
+			secrets: []string{"550001"},
+		},
+		"upload batch": {
+			value: tools.UploadBatchResult{
+				Saved: []tools.SavedWorkoutResult{{
+					WorkoutID: 550009, Name: savedWorkoutName,
+				}},
+				Requested: 1,
+			},
+			secrets: []string{"550009", savedWorkoutName},
+		},
+		"activity window": {
+			value: tools.ActivityWindow{Activities: []tools.ActivitySummary{{
+				ActivityID: int64Ptr(9001),
+				Name:       new("Morning run past home"),
+			}}, Page: 1, PageSize: 20},
+			secrets: []string{"9001", "Morning run past home"},
+		},
+		"exercise catalog": {
+			value: tools.ExerciseCatalog{
+				Categories: []tools.ExerciseCategory{{Category: testCategory}},
+				Count:      1,
+			},
+			secrets: []string{testCategory},
+		},
+		"full name": {
+			value:   tools.FullName{FullName: testFullName},
+			secrets: []string{testFullName},
+		},
+		"unit system": {
+			value:   tools.UnitSystem{UnitSystem: testUnitSystem},
+			secrets: []string{testUnitSystem},
 		},
 		"downloaded file": {
 			value: tools.DownloadedFile{

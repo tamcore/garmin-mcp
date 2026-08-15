@@ -14,6 +14,7 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/oauthserver"
 	"github.com/tamcore/garmin-mcp/internal/oauthstore"
 	"github.com/tamcore/garmin-mcp/internal/policy"
+	"github.com/tamcore/garmin-mcp/internal/ratelimit"
 	"github.com/tamcore/garmin-mcp/internal/store"
 )
 
@@ -161,7 +162,7 @@ func assembleRemote(
 		return nil, fmt.Errorf("assembling the MCP server: %w", err)
 	}
 	transport, err := mcpserver.NewHTTPTransport(server,
-		httpOptions(cfg, authorizer, parts.revocations))
+		httpOptions(cfg, authorizer, parts.revocations, parts.sqlite.Ping))
 	if err != nil {
 		return nil, fmt.Errorf("building the Streamable HTTP transport: %w", err)
 	}
@@ -181,7 +182,12 @@ func assembleRemote(
 		revocations: parts.revocations,
 		endpoints:   parts.endpoints,
 	}
-	remote.handler = remote.mount()
+	handler, err := remote.mount()
+	if err != nil {
+		return nil, fmt.Errorf("mounting the remote endpoints: %w", err)
+	}
+	remote.handler = handler
+
 	return remote, nil
 }
 
@@ -261,10 +267,11 @@ func newRemoteGraph(
 // what lets it refuse a cleartext public bind, and refusing that is not a decision
 // a caller should be able to skip by forgetting to pass it.
 func httpOptions(cfg config.Config, authorizer *mcpserver.OAuthAuthorizer,
-	revocations mcpserver.RevocationSource,
+	revocations mcpserver.RevocationSource, readiness mcpserver.ReadinessCheck,
 ) mcpserver.HTTPOptions {
 	return mcpserver.HTTPOptions{
 		Revocations:            revocations,
+		Readiness:              readiness,
 		PublicURL:              cfg.PublicURL,
 		BindAddress:            cfg.BindAddress,
 		Authorizer:             authorizer,
@@ -318,19 +325,34 @@ func newRemoteLoginServer(
 // remaining OAuth endpoints go to the authorization server; everything a browser
 // reaches goes to the login profile, which applies its own security headers and
 // answers a generic 404 for anything it does not recognize.
-func (r *remoteDeployment) mount() http.Handler {
+func (r *remoteDeployment) mount() (http.Handler, error) {
+	guard, err := r.transport.AuthorizationRateLimit(ratelimit.DefaultHTTPGateConfig())
+	if err != nil {
+		return nil, err
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle(r.endpoints.mcpPath, r.transport)
 	mux.Handle(mcpserver.DefaultResourceMetadataPath, r.transport)
-	mux.Handle(authServerMetadataPath, r.oauth.AuthorizationServerMetadataHandler())
-	mux.Handle(tokenPath, r.oauth.TokenHandler())
-	mux.Handle(revocationPath, r.oauth.RevocationHandler())
+
+	// The authorization endpoints are the ones a stranger can reach without a
+	// token, so they are the ones worth bounding. The limiter keys on the client
+	// address derived through the configured proxy trust, never on a raw header.
+	mux.Handle(authServerMetadataPath, guard(r.oauth.AuthorizationServerMetadataHandler()))
+	mux.Handle(tokenPath, guard(r.oauth.TokenHandler()))
+	mux.Handle(revocationPath, guard(r.oauth.RevocationHandler()))
+
+	// Probes answer a status code and one word, so they carry nothing worth
+	// protecting. They are registered after the endpoints above, so a deployment
+	// that publishes MCP on a probe path still reaches MCP there.
+	mux.Handle(mcpserver.LivenessPath, r.transport)
+	mux.Handle(mcpserver.ReadinessPath, r.transport)
 
 	loginHandler := r.login.Handler()
 	mux.Handle(loginweb.RemoteAuthorizePath, loginHandler)
 	mux.Handle(loginPath, loginHandler)
 	mux.Handle(loginSubtreePath, loginHandler)
-	return mux
+	return mux, nil
 }
 
 // close releases what the deployment opened. It is safe on a partially built

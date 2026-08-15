@@ -10,8 +10,15 @@ import (
 	"time"
 )
 
-// osWindows is the GOOS value the launcher and the platform checks compare against.
-const osWindows = "windows"
+// The GOOS values the launcher and the platform checks compare against.
+const (
+	osWindows = "windows"
+	osDarwin  = "darwin"
+	osLinux   = "linux"
+)
+
+// xdgOpen is the freedesktop launcher every supported free-Unix desktop provides.
+const xdgOpen = "xdg-open"
 
 // browserLaunchTimeout bounds the helper that hands the URL to the desktop. The
 // helper returns immediately in normal operation; the bound exists so a broken or
@@ -35,7 +42,7 @@ func launchBrowser(ctx context.Context, endpoint string) error {
 			ErrNoBrowser)
 	}
 
-	name, args := browserCommand(endpoint)
+	name, args := browserCommand(runtime.GOOS, endpoint)
 	if name == "" {
 		return fmt.Errorf("%w: no launcher is known for %s", ErrNoBrowser, runtime.GOOS)
 	}
@@ -49,18 +56,22 @@ func launchBrowser(ctx context.Context, endpoint string) error {
 	return nil
 }
 
-// browserCommand reports the platform's launcher and its arguments, or an empty name
+// browserCommand reports the launcher of goos and its arguments, or an empty name
 // when none is known.
-func browserCommand(endpoint string) (name string, args []string) {
-	switch runtime.GOOS {
-	case "darwin":
+//
+// The platform is a parameter rather than a read of runtime.GOOS, so every branch
+// is reachable from a test on one machine. A launcher that is wrong on a platform
+// nobody develops on is exactly the kind of defect that otherwise ships.
+func browserCommand(goos, endpoint string) (name string, args []string) {
+	switch goos {
+	case osDarwin:
 		return "open", []string{endpoint}
 	case osWindows:
 		// rundll32 takes the URL as one argument, which avoids the quoting rules
 		// of "cmd /c start" entirely.
 		return "rundll32", []string{"url.dll,FileProtocolHandler", endpoint}
-	case "linux", "freebsd", "netbsd", "openbsd":
-		return "xdg-open", []string{endpoint}
+	case osLinux, "freebsd", "netbsd", "openbsd":
+		return xdgOpen, []string{endpoint}
 	default:
 		return "", nil
 	}

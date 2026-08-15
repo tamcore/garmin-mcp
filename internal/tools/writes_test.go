@@ -128,7 +128,7 @@ func TestSetActivityFeelRefusesAValueGarminDoesNotStore(t *testing.T) {
 
 	h.callError(t, tools.ToolSetActivityFeel, map[string]any{
 		argActivityID: testActivityID,
-		"feel":        60,
+		argFeel:       60,
 	})
 
 	if len(h.fake.Requests()) != 0 {

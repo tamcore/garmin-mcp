@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -145,6 +146,35 @@ func TestServeStdioFailureWritesNothingToStdout(t *testing.T) {
 	}
 	if strings.Contains(stderr.String(), "c2VjcmV0LW1hdGVyaWFs") {
 		t.Error("stderr echoes the supplied key material")
+	}
+}
+
+// TestServeRemoteFailureIsReportedWithoutStartingAnything covers the transport
+// dispatch: a streamable-http configuration goes to the remote path, and a
+// deployment that cannot open its database is refused there rather than half
+// started. Standard output stays empty on this path too, because the same binary
+// serves frames on it in the other mode.
+func TestServeRemoteFailureIsReportedWithoutStartingAnything(t *testing.T) {
+	clearGarminEnv(t)
+	remoteDoctorEnv(t)
+	t.Setenv("GARMIN_MCP_DATABASE_PATH", filepath.Join(t.TempDir(), "..", "state.db"))
+
+	var stdout, stderr bytes.Buffer
+	code := cmd.Execute(context.Background(), cmd.Options{
+		BuildInfo: cmd.BuildInfo{Version: testVersion, Commit: testCommit},
+		Args:      []string{cmdServe},
+		Stdout:    &stdout,
+		Stderr:    &stderr,
+	})
+
+	if code == 0 {
+		t.Error("exit code = 0, but the deployment could not be assembled")
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want empty", stdout.String())
+	}
+	if stderr.Len() == 0 {
+		t.Error("stderr is empty: the operator learns nothing about the refusal")
 	}
 }
 

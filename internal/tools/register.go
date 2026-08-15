@@ -110,10 +110,12 @@ func readOnlyRegistrations() []registration {
 
 // writeRegistrations lists the write tools in registration order.
 //
-// Every one of them is refused at call time today: the write tier needs both operator
-// enablement and a granted write scope, and no scope is issued anywhere in this
-// repository yet. They are registered anyway, so the policy has a tool to refuse and
-// the start-up tier validation covers them.
+// Every one of them needs both operator enablement and a granted write scope, and the
+// two come from different places: enablement from configuration, the scope from the
+// caller's verified access token, which only the remote transport supplies. A stdio
+// deployment therefore refuses all of them, and a default deployment of either shape
+// refuses them too, because the tier starts disabled. They are registered regardless,
+// so the policy has a tool to refuse and the start-up tier validation covers them.
 func writeRegistrations() []registration {
 	return []registration{
 		{setActivityNameContract, registerSetActivityName},
