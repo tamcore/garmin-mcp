@@ -35,7 +35,7 @@ the tag changes nothing.
 | `internal/cmd` | 74.3% | 77.4% |
 | `internal/config` | 90.8% | |
 | `internal/cryptostore` | 89.9% | |
-| `internal/garmin/api` | 89.3% | 89.3% |
+| `internal/garmin/api` | 89.9% | 89.9% |
 | `internal/garmin/auth` | 67.3% | 88.2% |
 | `internal/garmin/client` | 94.3% | 94.6% |
 | `internal/garmin/protocol` | 96.7% | |
@@ -50,7 +50,7 @@ the tag changes nothing.
 | `internal/ratelimit` | 95.7% | |
 | `internal/securefile` | 84.5% | |
 | `internal/store` | 83.8% | |
-| `internal/testkit` | 95.6% | |
+| `internal/testkit` | 91.5% | |
 | `internal/tokenlink` | 80.0% | |
 | `internal/tools` | 83.5% | 83.6% |
 | `migrations` | 100.0% | |
@@ -275,10 +275,22 @@ that drops under the floor fails the build unless it is named there.
       `StrengthWrites.Create` additionally re-reads the summary and checks the
       stored activity identifier. Every other write returns what Garmin returned
       and does not read back.
-- [x] `internal/tools` registers **23 read-only, 22 write and 5 destructive
-      tools, plus the server's own `server_info`**, which is 51 tools on the
+- [x] `internal/tools` registers **32 read-only, 22 write and 5 destructive
+      tools, including the server's own `server_info`**, which is 59 tools on the
       wire. The calendar tools arrived with the GraphQL request shape.
-- [ ] The remaining upstream breadth. 45 of the 138 manifest tools are
+- [x] Activity file decoding moved to `github.com/muktihari/fit` (ADR 0007). The
+      hand-rolled container decoder shipped two defects that only real files
+      exposed: session segments collapsed to a single sample, because these
+      devices write the same instant into `session.timestamp` and
+      `session.start_time`, and whole-activity ascent came out near double
+      Garmin's own figure by summing barometric jitter. Session, lap and overall
+      figures now come from the profile the SDK carries, and three real
+      activities reproduce Garmin's own distance, elapsed time, heart rate,
+      ascent and calories exactly. The synthetic fixtures caught neither defect,
+      because a fixture built from a test's declared values agrees with any
+      derivation of them. One behaviour is lost: the old reader tolerated a
+      truncated announced `dataSize` in the header, and the SDK rejects it.
+- [ ] The remaining upstream breadth. 53 of the 138 manifest tools are
       implemented and **no resource is**. Health and wellness, nutrition, weight
       management, training, challenges, courses, women's health, data management,
       the device surface beyond `get_devices`, and the gear reads are all still

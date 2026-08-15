@@ -34,7 +34,8 @@ type FITSegmentView struct {
 	DurationSecs     float64          `json:"duration_seconds" jsonschema:"the elapsed seconds of the segment"`
 	Samples          int              `json:"samples" jsonschema:"how many records the segment covers"`
 	DistanceMeters   *float64         `json:"distance_meters,omitempty" jsonschema:"the distance covered in meters"`
-	AscentMeters     *float64         `json:"ascent_meters,omitempty" jsonschema:"the summed positive elevation change"`
+	AscentMeters     *float64         `json:"ascent_meters,omitempty" jsonschema:"the elevation gained in meters"`
+	Calories         *float64         `json:"calories_kcal,omitempty" jsonschema:"the energy the device computed, in kcal"`
 	AveragePower     *float64         `json:"average_power_w,omitempty" jsonschema:"the average power in watts"`
 	MaxPower         *float64         `json:"max_power_w,omitempty" jsonschema:"the peak power in watts"`
 	NormalizedPower  *float64         `json:"normalized_power_w,omitempty" jsonschema:"the normalized power in watts"`
@@ -145,6 +146,7 @@ func newFITSegmentView(segment api.FITSegment) FITSegmentView {
 		Samples:          segment.Samples,
 		DistanceMeters:   fitOptional(segment.Distance, placesOne),
 		AscentMeters:     fitOptional(segment.Ascent, placesOne),
+		Calories:         fitOptional(segment.Calories, placesWhole),
 		AveragePower:     fitOptional(segment.AvgPower, placesOne),
 		MaxPower:         fitOptional(segment.MaxPower, placesWhole),
 		NormalizedPower:  fitOptional(segment.NormalizedPw, placesOne),

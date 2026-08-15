@@ -44,8 +44,93 @@ func TestAnalyzeFITSummarizesTheWholeActivity(t *testing.T) {
 	if !overall.Distance.OK || overall.Distance.Value != rideMetersPerS*599 {
 		t.Errorf("distance = %+v, want %v", overall.Distance, rideMetersPerS*599)
 	}
-	if !overall.Ascent.OK || overall.Ascent.Value != 599 {
-		t.Errorf("ascent = %+v, want 599", overall.Ascent)
+	// The file carries no session summary, so the ascent is derived. A derived
+	// ascent banks a rise only once it clears the three metre noise threshold, so
+	// the 599 metre climb reports the 597 metres already banked and holds the rest.
+	if !overall.Ascent.OK || overall.Ascent.Value != 597 {
+		t.Errorf("ascent = %+v, want the 597 banked metres of a 599 metre climb", overall.Ascent)
+	}
+}
+
+// TestAnalyzeFITPrefersTheProfileSummary proves a figure the device wrote into the
+// session message wins over the one the record stream implies. The two disagree on
+// purpose here: the records describe a steady climb, and the summary says otherwise.
+func TestAnalyzeFITPrefersTheProfileSummary(t *testing.T) {
+	t.Parallel()
+
+	file := rideFile(600)
+	file.Summary = &testkit.FITSummaryFixture{
+		ElapsedSeconds:  new(612.5),
+		DistanceMeters:  new(6120.25),
+		AscentMeters:    new(63),
+		Calories:        new(877),
+		AvgHeartRate:    new(169),
+		MaxHeartRate:    new(191),
+		AvgCadence:      new(88),
+		AvgPower:        new(355),
+		MaxPower:        new(612),
+		NormalizedPower: new(389),
+	}
+
+	overall := analyzeRide(t, file).Overall
+	for name, got := range map[string]struct {
+		reading api.FITNumber
+		want    float64
+	}{
+		"distance":      {overall.Distance, 6120.25},
+		"ascent":        {overall.Ascent, 63},
+		"calories":      {overall.Calories, 877},
+		"average power": {overall.AvgPower, 355},
+		"peak power":    {overall.MaxPower, 612},
+		"normalized":    {overall.NormalizedPw, 389},
+		"cadence":       {overall.AvgCadence, 88},
+		"average heart": {overall.AvgHeartRate, 169},
+		"peak heart":    {overall.MaxHeartRate, 191},
+	} {
+		if !got.reading.OK || got.reading.Value != got.want {
+			t.Errorf("%s = %+v, want the profile's %v", name, got.reading, got.want)
+		}
+	}
+	if overall.Seconds != 612.5 {
+		t.Errorf("seconds = %v, want the profile's 612.5", overall.Seconds)
+	}
+	if !nearly(overall.Variability.Value, 389.0/355.0) {
+		t.Errorf("variability index = %+v, want it recomputed from the profile figures",
+			overall.Variability)
+	}
+}
+
+// TestAnalyzeFITReadsTheLapSummaryNumbering proves the lap message is read with the
+// lap message's own field numbers. A lap numbers average heart rate 15 where a
+// session numbers it 16, which is exactly the class of mistake the profile prevents.
+func TestAnalyzeFITReadsTheLapSummaryNumbering(t *testing.T) {
+	t.Parallel()
+
+	file := rideFile(60)
+	file.Laps = []testkit.FITLapFixture{{StartSecond: 0, EndSecond: 59}}
+	file.LapSummary = &testkit.FITSummaryFixture{
+		DistanceMeters: new(1234.5),
+		AscentMeters:   new(17),
+		AvgHeartRate:   new(151),
+		MaxHeartRate:   new(163),
+	}
+
+	summary := analyzeRide(t, file)
+	if len(summary.Laps) != 1 {
+		t.Fatalf("%d lap summaries, want 1", len(summary.Laps))
+	}
+	lap := summary.Laps[0]
+	if !lap.AvgHeartRate.OK || lap.AvgHeartRate.Value != 151 {
+		t.Errorf("lap average heart rate = %+v, want 151", lap.AvgHeartRate)
+	}
+	if !lap.MaxHeartRate.OK || lap.MaxHeartRate.Value != 163 {
+		t.Errorf("lap peak heart rate = %+v, want 163", lap.MaxHeartRate)
+	}
+	if !lap.Distance.OK || lap.Distance.Value != 1234.5 {
+		t.Errorf("lap distance = %+v, want 1234.5", lap.Distance)
+	}
+	if !lap.Ascent.OK || lap.Ascent.Value != 17 {
+		t.Errorf("lap ascent = %+v, want 17", lap.Ascent)
 	}
 }
 
@@ -107,68 +192,6 @@ func TestAnalyzeFITCutsSegmentsFromTheLapWindows(t *testing.T) {
 	}
 }
 
-// TestPowerDurationCurveReportsEveryFittingWindow pins the curve of a steady ride:
-// every window that fits reports the ride's power, and a window that does not fit is
-// left out rather than reported from a shorter sample.
-func TestPowerDurationCurveReportsEveryFittingWindow(t *testing.T) {
-	t.Parallel()
-
-	summary := analyzeRide(t, rideFile(600))
-	if len(summary.Curve) != 5 {
-		t.Fatalf("curve = %+v, want the five windows that fit in ten minutes", summary.Curve)
-	}
-	for _, best := range summary.Curve {
-		if best.Watts != ridePower {
-			t.Errorf("%ds best = %v watts, want %d", best.Seconds, best.Watts, ridePower)
-		}
-	}
-	if got := summary.Curve[len(summary.Curve)-1].Seconds; got != 600 {
-		t.Errorf("longest window = %ds, want 600", got)
-	}
-}
-
-// TestPowerDurationCurveFindsThePeakWindow proves the curve reports the best window
-// and where it started, not the first one or the average.
-func TestPowerDurationCurveFindsThePeakWindow(t *testing.T) {
-	t.Parallel()
-
-	samples := make([]testkit.FITSample, 0, 60)
-	for second := range 60 {
-		watts := 100
-		if second >= 30 && second < 35 {
-			watts = 400
-		}
-		samples = append(samples, testkit.FITSample{Second: second, Power: new(watts)})
-	}
-
-	summary := analyzeRide(t, testkit.FITFile{Samples: samples})
-	best := summary.Curve[0]
-	if best.Seconds != 5 || best.Watts != 400 || best.StartOffset != 30 {
-		t.Errorf("five second best = %+v, want 400 watts starting at 30 seconds", best)
-	}
-}
-
-// TestPowerDurationCurveIsEmptyWithoutPower keeps a ride recorded without a power
-// meter from reporting a curve of zeroes.
-func TestPowerDurationCurveIsEmptyWithoutPower(t *testing.T) {
-	t.Parallel()
-
-	samples := make([]testkit.FITSample, 0, 60)
-	for second := range 60 {
-		samples = append(samples, testkit.FITSample{
-			Second: second, HeartRate: new(rideHeartRate),
-		})
-	}
-
-	summary := analyzeRide(t, testkit.FITFile{Samples: samples})
-	if len(summary.Curve) != 0 {
-		t.Errorf("curve = %+v, want none without a power meter", summary.Curve)
-	}
-	if summary.Overall.NormalizedPw.OK || summary.Overall.AvgPower.OK {
-		t.Errorf("power figures = %+v, want none", summary.Overall)
-	}
-}
-
 // TestAnalyzeFITHandlesAnEmptyStream proves an activity file with no records is a
 // zero summary rather than a panic or a set of not-a-number readings.
 func TestAnalyzeFITHandlesAnEmptyStream(t *testing.T) {
@@ -180,17 +203,5 @@ func TestAnalyzeFITHandlesAnEmptyStream(t *testing.T) {
 	}
 	if summary.Drift.OK || summary.Temperature.OK {
 		t.Errorf("derived comparisons = %+v %+v, want neither", summary.Drift, summary.Temperature)
-	}
-}
-
-// TestCurveDurationsIsACopy keeps a caller from reaching into the package's own
-// duration set.
-func TestCurveDurationsIsACopy(t *testing.T) {
-	t.Parallel()
-
-	first := api.CurveDurations()
-	first[0] = 9999
-	if api.CurveDurations()[0] != 5 {
-		t.Error("CurveDurations() handed out its own backing array")
 	}
 }

@@ -10,14 +10,10 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/testkit"
 )
 
-// fitContainer wraps a record stream in the FIT header and CRC the format defines.
-func fitContainer(body []byte) []byte {
-	out := []byte{12, 0x20, 0x5C, 0x08}
-	out = binary.LittleEndian.AppendUint32(out, uint32(len(body)))
-	out = append(out, ".FIT"...)
-	out = append(out, body...)
-	return append(out, 0, 0)
-}
+// fitContainer wraps a record stream in the FIT header and the checksum the format
+// defines. The checksum is real: the SDK verifies it, and a fixture that emitted a
+// zero one would only be proving that a lenient reader accepted it.
+func fitContainer(body []byte) []byte { return testkit.FITContainer(body) }
 
 // fitStamp is a synthetic FIT date_time for the tests that hand-build a stream.
 const fitStamp = 1_136_073_600

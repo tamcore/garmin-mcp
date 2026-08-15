@@ -98,6 +98,16 @@ var moduleNotices = map[string]moduleNotice{
 	"golang.org/x/oauth2":                  licenseOnly(spdxBSD3),
 	"modernc.org/mathutil":                 licenseOnly(spdxBSD3),
 
+	"github.com/muktihari/fit": {
+		SPDX: spdxBSD3,
+		Note: "The Go code is BSD-3-Clause. The module also carries `LICENSE-FIT-SDK`, " +
+			"Garmin's own FIT Protocol licence agreement, because the profile the module " +
+			"generates its typed messages from is Garmin's. That agreement governs use of " +
+			"the FIT protocol itself rather than the authorship of this module's code, and " +
+			"both files are reproduced.",
+		Files: []string{fileLicense, "LICENSE-FIT-SDK"},
+	},
+
 	"github.com/spf13/afero": {SPDX: spdxApache2, Files: []string{fileLicenseTxt}},
 	"github.com/spf13/cobra": {SPDX: spdxApache2, Files: []string{fileLicenseTxt}},
 

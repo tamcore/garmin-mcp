@@ -82,21 +82,57 @@ failure would teach maintainers to ignore the gate.
 
 ## Direct requirements [NOW]
 
-This table matches the first `require` block of `go.mod` exactly: six modules, no
-more and no fewer.
+This table matches the first `require` block of `go.mod` exactly: seven modules,
+no more and no fewer.
 
 | Module | Version | License | Released | Used by |
 |--------|---------|---------|----------|---------|
 | `github.com/modelcontextprotocol/go-sdk` | `v1.7.0` | Apache-2.0 with a residual MIT subset; see below | 2026-07-28 | `internal/mcpserver`, `internal/tools`, `internal/oauthserver` |
+| `github.com/muktihari/fit` | `v0.28.3` | BSD-3-Clause, plus Garmin's `LICENSE-FIT-SDK` | 2026-08-11 | `internal/garmin/api` (FIT activity decoding) |
 | `github.com/spf13/cobra` | `v1.10.2` | Apache-2.0 (`LICENSE.txt`) | 2025-12-03 | `internal/cmd` |
 | `github.com/spf13/pflag` | `v1.0.10` | BSD-3-Clause | 2025-09-02 | `internal/config` |
 | `github.com/spf13/viper` | `v1.21.0` | MIT | 2025-09-08 | `internal/config` |
 | `golang.org/x/sys` | `v0.47.0` | BSD-3-Clause | 2026-06-30 | `internal/securefile` (Windows-tagged files only) |
 | `modernc.org/sqlite` | `v1.56.0` | BSD-3-Clause | 2026-08-03 | `internal/store` (multi-user backend) |
 
-All six are at the latest version published by `proxy.golang.org` on the
+All seven are at the latest version published by `proxy.golang.org` on the
 verification date. `golang.org/x/sys` sits far above the version Viper selects,
 which is what its advisory required.
+
+### `github.com/muktihari/fit`
+
+**Version.** `v0.28.3`. License BSD-3-Clause.
+
+**Rationale.** `internal/garmin/api` decodes the device FIT file behind
+`get_activity_fit_data` and `get_power_duration_curve`. The FIT container is a
+public binary format and was hand-decoded here; the FIT *profile* — which field
+number carries which quantity on which message, at which scale and offset — is
+not something that can be verified by hand, and the hand-rolled decoder was
+therefore written to refuse every session and lap summary field. That refusal
+produced two wrong figures on real files: a whole-activity ascent roughly double
+the device's own, and a per-session window that collapsed to a single sample.
+This module ships the official profile as generated typed Go structs, which
+removes the guesswork rather than making it more careful. See
+[ADR 0007](adr/0007-fit-decoding-library.md) for the full comparison and for
+what is deliberately not delegated.
+
+**License.** BSD-3-Clause on the Go code. The module additionally ships
+`LICENSE-FIT-SDK`, Garmin's FIT Protocol licence agreement, because the profile
+the code is generated from is Garmin's. Both texts are reproduced in
+`THIRD_PARTY_NOTICES.md`. The agreement governs use of the FIT protocol, which
+this server already makes by reading Garmin's own files.
+
+**Maintenance.** Active: `v0.28.3` was released 2026-08-11, with 62 commits in
+the year before it. It supports FIT Protocol V2. It is the same module
+`tamcore/kadence` depends on, so the maintainer already tracks it.
+
+**Cost.** No new module. Its `go.mod` requirements — `google/go-cmp`,
+`muktihari/carto`, `thedatashed/xlsxreader` and `client9/misspell` — are
+test-only or code-generation-only, so `go list -deps ./cmd/garmin-mcp` links none
+of them and the indirect set below gains no entry. It does move two existing
+indirect requirements up by minimal version selection: `golang.org/x/text` from
+`v0.39.0` to `v0.40.0` and `golang.org/x/sync` from `v0.21.0` to `v0.22.0`. Both
+stay above the advisory floors recorded below.
 
 ### `github.com/spf13/cobra`
 
@@ -229,7 +265,8 @@ ADR 0002.
 
 ## Indirect set [NOW]
 
-`go.mod` carries 26 `// indirect` requirements, from four direct modules:
+`go.mod` carries 26 `// indirect` requirements, from four direct modules.
+`github.com/muktihari/fit` adds none: it links no third-party package.
 
 - 9 reach the module only through Viper — `fsnotify/fsnotify`,
   `go-viper/mapstructure/v2`, `pelletier/go-toml/v2`, `sagikazarmark/locafero`,
@@ -271,7 +308,7 @@ resolved by an explicit bump in `go.mod`:
 
 | Advisory | Module | Viper selects | This module pins |
 |----------|--------|---------------|------------------|
-| `GO-2026-5970` | `golang.org/x/text` | `v0.28.0` | `v0.39.0` |
+| `GO-2026-5970` | `golang.org/x/text` | `v0.28.0` | `v0.40.0` |
 | `GO-2026-5024` | `golang.org/x/sys` | `v0.29.0` | `v0.47.0` |
 
 Neither was on a called path even before the bump, so the gate was green either

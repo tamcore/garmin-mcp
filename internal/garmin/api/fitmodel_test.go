@@ -1,7 +1,10 @@
 package api_test
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/api"
@@ -196,6 +199,43 @@ func TestParseFITDecodesGearChanges(t *testing.T) {
 	}
 	if !activity.Shifts[1].Front {
 		t.Errorf("second shift = %+v, want a front change", activity.Shifts[1])
+	}
+}
+
+// TestParseFITNeverDecodesCoordinates is the position suppression test. The file
+// carries a synthetic track in every record, and neither the semicircle value nor
+// the degrees it renders as may appear anywhere in the decoded model.
+func TestParseFITNeverDecodesCoordinates(t *testing.T) {
+	t.Parallel()
+
+	const (
+		latitude  = 48.137154
+		longitude = 11.576124
+	)
+	samples := rideSamples(10)
+	for index := range samples {
+		samples[index].Latitude = new(latitude)
+		samples[index].Longitude = new(longitude)
+	}
+
+	activity, err := api.ParseFITActivity(
+		testkit.FITFile{Sport: 2, Session: true, Samples: samples}.Bytes(), api.FITLimits{})
+	if err != nil {
+		t.Fatalf("ParseFITActivity() = %v", err)
+	}
+	if len(activity.Records) != 10 {
+		t.Fatalf("%d records, want 10", len(activity.Records))
+	}
+
+	rendered := fmt.Sprintf("%+v", activity)
+	encoded, err := json.Marshal(activity)
+	if err != nil {
+		t.Fatalf("json.Marshal() = %v", err)
+	}
+	for _, needle := range []string{"48.13", "11.57", "574653", "138126", "Lat", "Long", "osition"} {
+		if strings.Contains(rendered, needle) || strings.Contains(string(encoded), needle) {
+			t.Errorf("the decoded activity carries %q, want no position of any kind", needle)
+		}
 	}
 }
 

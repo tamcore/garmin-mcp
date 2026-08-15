@@ -67,6 +67,27 @@ func detectClimbs(records []FITRecord) []FITClimb {
 	return out
 }
 
+// netGain is the height a detected run actually gained: its last altitude less its
+// first. A climb is one sustained rise, so its gain is the difference across it, not
+// a sum of per-sample deltas — summing would re-add every metre of sensor jitter
+// inside the run and report a climb steeper than the one that was ridden.
+func netGain(run []FITRecord) float64 {
+	var first, last FITNumber
+	for _, record := range run {
+		if !record.Altitude.OK {
+			continue
+		}
+		if !first.OK {
+			first = record.Altitude
+		}
+		last = record.Altitude
+	}
+	if !first.OK || last.Value <= first.Value {
+		return 0
+	}
+	return last.Value - first.Value
+}
+
 // sinceSample reports the seconds between two samples.
 func sinceSample(records []FITRecord, from, to int) float64 {
 	if from < 0 || to < 0 {
@@ -81,7 +102,7 @@ func appendClimb(out []FITClimb, run []FITRecord) []FITClimb {
 		return out
 	}
 	seconds := run[len(run)-1].Time.Sub(run[0].Time).Seconds()
-	gain := ascentOf(run)
+	gain := netGain(run)
 	if seconds < climbMinSeconds || gain < climbMinGainMeters {
 		return out
 	}

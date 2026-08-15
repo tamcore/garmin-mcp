@@ -11,36 +11,18 @@ import (
 // These are this server's own, not upstream's: upstream's helpers are not published
 // as a specification, so the thresholds are stated here rather than claimed to match.
 const (
-	// maxSeriesSeconds bounds the per-second series one activity is rendered into.
-	maxSeriesSeconds = 24 * 60 * 60
-
-	// normalizedWindow is the rolling window of the normalized-power definition.
-	normalizedWindow = 30
-
-	// normalizedExponent is the fourth-power weighting of that definition.
-	normalizedExponent = 4.0
-
 	// maxSampleGapSeconds caps the time one sample is credited with, so a paused
 	// recorder cannot inflate a time-in-band total.
 	maxSampleGapSeconds = 10
+
+	// ascentThreshold is the rise a run of samples must accumulate before it counts
+	// as a climb rather than as barometric noise. Summing every positive delta of a
+	// one-second altitude series roughly doubles the figure a device reports, because
+	// the sensor jitters by a few decimeters between consecutive samples. This
+	// threshold is only reached by the record-derived fallback: a file that carries
+	// total_ascent is read, not resummed.
+	ascentThreshold = 3.0
 )
-
-// curveDurations are the standard power-duration points, in seconds.
-var curveDurations = [...]int{5, 30, 60, 300, 600, 1200, 3600}
-
-// CurveDurations returns the durations the power duration curve reports.
-func CurveDurations() []int {
-	out := make([]int, 0, len(curveDurations))
-	out = append(out, curveDurations[:]...)
-	return out
-}
-
-// A FITPowerBest is the best mean maximal power over one duration.
-type FITPowerBest struct {
-	Seconds     int
-	Watts       float64
-	StartOffset int
-}
 
 // FITDynamics are the cycling-dynamics averages of one segment.
 type FITDynamics struct {
@@ -59,12 +41,12 @@ func (d FITDynamics) Present() bool {
 		d.LeftSmooth.OK || d.RightSmooth.OK || d.LeftPCO.OK || d.RightPCO.OK
 }
 
-// A FITSegment is the computed summary of one session or lap.
+// A FITSegment is the computed summary of one session, lap or whole activity.
 //
-// Every figure is computed from the record stream rather than read out of the
-// session or lap message. The container is public; the field numbering of those
-// summary messages is not, so deriving the figures keeps a profile guess from
-// becoming a reported measurement.
+// A figure the FIT profile carries is read out of the session or lap message and is
+// preferred over the same figure derived from the record stream. Only what the
+// profile does not carry — normalized power over an arbitrary window, the
+// variability index and the cycling-dynamics averages — is derived here.
 type FITSegment struct {
 	Start        time.Time
 	End          time.Time
@@ -72,6 +54,7 @@ type FITSegment struct {
 	Seconds      float64
 	Distance     FITNumber
 	Ascent       FITNumber
+	Calories     FITNumber
 	AvgPower     FITNumber
 	MaxPower     FITNumber
 	NormalizedPw FITNumber
@@ -103,7 +86,7 @@ type FITSummary struct {
 func AnalyzeFIT(activity FITActivity) FITSummary {
 	records := activity.Records
 	summary := FITSummary{
-		Overall:     analyzeSegment(records, FITSpan{}),
+		Overall:     analyzeSegment(records, overallSpan(activity.Sessions)),
 		Curve:       PowerDurationCurve(records),
 		Climbs:      detectClimbs(records),
 		GradeBands:  gradeBands(records),
@@ -132,9 +115,15 @@ func analyzeSpans(records []FITRecord, spans []FITSpan) []FITSegment {
 	return out
 }
 
-// analyzeSegment summarizes the records inside one window. A zero window means the
+// analyzeSegment summarizes the records inside one window and then lets the profile
+// figures of that window override what the records implied. A zero window means the
 // whole stream.
 func analyzeSegment(records []FITRecord, span FITSpan) FITSegment {
+	return withProfileFigures(deriveSegment(records, span), span)
+}
+
+// deriveSegment computes every figure of one window from the record stream alone.
+func deriveSegment(records []FITRecord, span FITSpan) FITSegment {
 	inside := recordsIn(records, span)
 	segment := FITSegment{Start: span.Start, End: span.End, Sport: span.Sport, Samples: len(inside)}
 	if len(inside) == 0 {
@@ -151,6 +140,35 @@ func analyzeSegment(records []FITRecord, span FITSpan) FITSegment {
 	segment.Distance = distanceOf(inside)
 	segment.Ascent = fitNumber(ascentOf(inside))
 	return withPowerMetrics(segment, inside)
+}
+
+// withProfileFigures replaces each derived figure with the one the device wrote into
+// the session or lap message, where the file carries it. A figure the profile does
+// not carry keeps its derived value.
+func withProfileFigures(segment FITSegment, span FITSpan) FITSegment {
+	if span.Elapsed.OK {
+		segment.Seconds = span.Elapsed.Value
+	}
+	segment.Distance = preferred(span.Distance, segment.Distance)
+	segment.Ascent = preferred(span.Ascent, segment.Ascent)
+	segment.Calories = span.Calories
+	segment.AvgPower = preferred(span.AvgPower, segment.AvgPower)
+	segment.MaxPower = preferred(span.MaxPower, segment.MaxPower)
+	segment.NormalizedPw = preferred(span.NormalizedPw, segment.NormalizedPw)
+	segment.AvgCadence = preferred(span.AvgCadence, segment.AvgCadence)
+	segment.AvgHeartRate = preferred(span.AvgHeartRate, segment.AvgHeartRate)
+	segment.MaxHeartRate = preferred(span.MaxHeartRate, segment.MaxHeartRate)
+	segment.Variability = variabilityIndex(segment.NormalizedPw, segment.AvgPower)
+	return segment
+}
+
+// preferred returns the profile reading when the file carries one, and the derived
+// reading otherwise.
+func preferred(profile, derived FITNumber) FITNumber {
+	if profile.OK {
+		return profile
+	}
+	return derived
 }
 
 // withPowerMetrics adds every averaged and peak reading of one segment.
@@ -242,115 +260,29 @@ func distanceOf(records []FITRecord) FITNumber {
 	return fitNumber(last.Value - first.Value)
 }
 
-// ascentOf sums the positive altitude deltas of a segment.
+// ascentOf sums the climbs of a segment, ignoring any rise that never accumulates
+// past the noise threshold.
+//
+// The anchor is the lowest altitude seen since the last banked climb. A rise is
+// credited only once it clears the threshold above that anchor, and a descent moves
+// the anchor down, so sensor jitter cancels instead of accumulating.
 func ascentOf(records []FITRecord) float64 {
 	var total float64
-	var previous FITNumber
+	var anchor FITNumber
 	for _, record := range records {
-		if !record.Altitude.OK {
+		altitude := record.Altitude
+		if !altitude.OK {
 			continue
 		}
-		if previous.OK && record.Altitude.Value > previous.Value {
-			total += record.Altitude.Value - previous.Value
+		switch {
+		case !anchor.OK, altitude.Value < anchor.Value:
+			anchor = altitude
+		case altitude.Value-anchor.Value >= ascentThreshold:
+			total += altitude.Value - anchor.Value
+			anchor = altitude
 		}
-		previous = record.Altitude
 	}
 	return total
-}
-
-// PowerDurationCurve returns the best mean maximal power at each standard duration.
-//
-// The stream is rendered onto a one-second grid first, so a gap in the recording
-// counts as zero watts rather than shortening the window it falls in.
-func PowerDurationCurve(records []FITRecord) []FITPowerBest {
-	series := powerSeries(records)
-	out := make([]FITPowerBest, 0, len(curveDurations))
-	if len(series) == 0 {
-		return out
-	}
-
-	prefix := make([]float64, len(series)+1)
-	for index, watts := range series {
-		prefix[index+1] = prefix[index] + watts
-	}
-	for _, duration := range curveDurations {
-		if best, ok := bestWindow(prefix, duration); ok {
-			out = append(out, best)
-		}
-	}
-	return out
-}
-
-// bestWindow reports the highest mean over one window length.
-func bestWindow(prefix []float64, duration int) (FITPowerBest, bool) {
-	samples := len(prefix) - 1
-	if duration <= 0 || duration > samples {
-		return FITPowerBest{}, false
-	}
-
-	best, offset := math.Inf(-1), 0
-	for start := 0; start+duration <= samples; start++ {
-		total := prefix[start+duration] - prefix[start]
-		if total > best {
-			best, offset = total, start
-		}
-	}
-	if math.IsInf(best, -1) {
-		return FITPowerBest{}, false
-	}
-	return FITPowerBest{Seconds: duration, Watts: best / float64(duration), StartOffset: offset}, true
-}
-
-// powerSeries renders the recorded power onto a one-second grid.
-func powerSeries(records []FITRecord) []float64 {
-	if len(records) == 0 {
-		return nil
-	}
-	start := records[0].Time
-	span := int(records[len(records)-1].Time.Sub(start).Seconds()) + 1
-	if span < 1 {
-		return nil
-	}
-	if span > maxSeriesSeconds {
-		span = maxSeriesSeconds
-	}
-
-	series := make([]float64, span)
-	seen := false
-	for _, record := range records {
-		index := int(record.Time.Sub(start).Seconds())
-		if index < 0 || index >= span || !record.Power.OK {
-			continue
-		}
-		series[index] = record.Power.Value
-		seen = true
-	}
-	if !seen {
-		return nil
-	}
-	return series
-}
-
-// normalizedPower is the fourth-power mean of the thirty-second rolling average.
-func normalizedPower(series []float64) FITNumber {
-	if len(series) < normalizedWindow {
-		return FITNumber{}
-	}
-
-	var window, total float64
-	for index := range normalizedWindow {
-		window += series[index]
-	}
-	count := 0
-	for index := normalizedWindow; ; index++ {
-		total += math.Pow(window/normalizedWindow, normalizedExponent)
-		count++
-		if index >= len(series) {
-			break
-		}
-		window += series[index] - series[index-normalizedWindow]
-	}
-	return fitNumber(math.Pow(total/float64(count), 1/normalizedExponent))
 }
 
 // A fitAccumulator averages and peaks a stream of optional readings.

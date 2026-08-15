@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/binary"
-	"math"
 	"time"
 )
 
@@ -12,15 +11,12 @@ import (
 //
 // Nothing here is a recording. Every byte is generated from the values a test
 // declares, so a fixture can never carry a credential, a coordinate or a real
-// person's health data. The layout is the public FIT container: a twelve-byte
-// header carrying the ".FIT" signature, a stream of definition and data records,
-// then a two-byte CRC, which a reader that does not verify it may ignore.
+// person's health data. The layout is the public FIT container, which
+// FITContainer renders: header, a stream of definition and data records, and the
+// checksum a conforming reader verifies.
 
-// FIT container and message constants the builder emits.
+// The local message slots and global message numbers the builder emits.
 const (
-	fitHeaderSize    = 12
-	fitProtocol      = 0x20
-	fitProfile       = 2140
 	fitDefinitionBit = 0x40
 
 	fitLocalRecord  = 0
@@ -44,16 +40,14 @@ const (
 	fitUint8  = 0x02
 	fitSint16 = 0x83
 	fitUint16 = 0x84
+	fitSint32 = 0x85
 	fitUint32 = 0x86
 )
 
-// The invalid sentinels of those base types.
+// The scales the FIT profile gives the summary fields the builder writes.
 const (
-	invalidUint8  = 0xFF
-	invalidSint8  = 0x7F
-	invalidUint16 = 0xFFFF
-	invalidSint16 = 0x7FFF
-	invalidUint32 = 0xFFFFFFFF
+	scaleDistance = 100.0
+	scaleSeconds  = 1000.0
 )
 
 // fitFixtureEpoch is the FIT date_time epoch.
@@ -65,7 +59,12 @@ var fitFixtureStart = time.Date(2026, time.January, 2, 8, 0, 0, 0, time.UTC)
 // A FITSample is one synthetic record message. A nil field is written as the base
 // type's invalid sentinel, which is how a test declares a missing sensor.
 type FITSample struct {
-	Second      int
+	Second int
+	// Latitude and Longitude are synthetic degrees. They exist so a test can prove
+	// that a file carrying a position decodes to a model that carries none; nothing
+	// here is a recorded location.
+	Latitude    *float64
+	Longitude   *float64
 	Power       *int
 	HeartRate   *int
 	Cadence     *int
@@ -91,6 +90,23 @@ type FITLapFixture struct {
 	EndSecond   int
 }
 
+// A FITSummaryFixture is the profile-carried summary of a session or lap: the
+// figures a device computes itself and writes into the summary message, rather
+// than the ones a reader would have to derive from the record stream. A nil field
+// is written as its invalid sentinel.
+type FITSummaryFixture struct {
+	ElapsedSeconds  *float64
+	DistanceMeters  *float64
+	AscentMeters    *int
+	Calories        *int
+	AvgHeartRate    *int
+	MaxHeartRate    *int
+	AvgCadence      *int
+	AvgPower        *int
+	MaxPower        *int
+	NormalizedPower *int
+}
+
 // A FITFile is a synthetic activity file to build.
 type FITFile struct {
 	// Start is the instant the first record carries.
@@ -99,6 +115,10 @@ type FITFile struct {
 	Sport int
 	// Session reports whether a session message is written.
 	Session bool
+	// Summary is the session's profile-carried summary, when a test declares one.
+	Summary *FITSummaryFixture
+	// LapSummary is written into every lap message, when a test declares one.
+	LapSummary *FITSummaryFixture
 	// Samples are the record messages, in order.
 	Samples []FITSample
 	// Shifts are the gear-change event messages.
@@ -108,16 +128,7 @@ type FITFile struct {
 }
 
 // Bytes renders the file.
-func (f FITFile) Bytes() []byte {
-	body := f.records()
-	out := make([]byte, 0, fitHeaderSize+len(body)+2)
-	out = append(out, fitHeaderSize, fitProtocol)
-	out = binary.LittleEndian.AppendUint16(out, fitProfile)
-	out = binary.LittleEndian.AppendUint32(out, uint32(len(body)))
-	out = append(out, ".FIT"...)
-	out = append(out, body...)
-	return append(out, 0, 0)
-}
+func (f FITFile) Bytes() []byte { return FITContainer(f.records()) }
 
 // records renders every definition and data record of the file.
 func (f FITFile) records() []byte {
@@ -127,11 +138,11 @@ func (f FITFile) records() []byte {
 		out = append(out, f.recordData(sample)...)
 	}
 	if f.Session {
-		out = append(out, sessionDefinition()...)
+		out = append(out, f.sessionDefinition()...)
 		out = append(out, f.sessionData()...)
 	}
 	if len(f.Laps) > 0 {
-		out = append(out, lapDefinition()...)
+		out = append(out, f.lapDefinition()...)
 		for _, lap := range f.Laps {
 			out = append(out, f.lapData(lap)...)
 		}
@@ -169,6 +180,8 @@ func definition(local byte, global uint16, fields [][3]byte) []byte {
 func recordDefinition() []byte {
 	return definition(fitLocalRecord, fitGlobalRecord, [][3]byte{
 		{253, 4, fitUint32},
+		{0, 4, fitSint32},
+		{1, 4, fitSint32},
 		{7, 2, fitUint16},
 		{3, 1, fitUint8},
 		{4, 1, fitUint8},
@@ -185,6 +198,8 @@ func recordDefinition() []byte {
 func (f FITFile) recordData(sample FITSample) []byte {
 	out := []byte{fitLocalRecord}
 	out = binary.LittleEndian.AppendUint32(out, f.stamp(sample.Second))
+	out = appendSemicircles(out, sample.Latitude)
+	out = appendSemicircles(out, sample.Longitude)
 	out = appendUint16(out, sample.Power)
 	out = appendUint8(out, sample.HeartRate)
 	out = appendUint8(out, sample.Cadence)
@@ -197,13 +212,69 @@ func (f FITFile) recordData(sample FITSample) []byte {
 	return out
 }
 
+// summaryFields are the session summary field definitions, in the order
+// summaryData writes them. Source: the FIT profile's session message.
+var summaryFields = [][3]byte{
+	{7, 4, fitUint32},  // total_elapsed_time, scale 1000
+	{9, 4, fitUint32},  // total_distance, scale 100
+	{22, 2, fitUint16}, // total_ascent
+	{11, 2, fitUint16}, // total_calories
+	{20, 2, fitUint16}, // avg_power
+	{21, 2, fitUint16}, // max_power
+	{34, 2, fitUint16}, // normalized_power
+	{16, 1, fitUint8},  // avg_heart_rate
+	{17, 1, fitUint8},  // max_heart_rate
+	{18, 1, fitUint8},  // avg_cadence
+}
+
+// lapSummaryFields are the same quantities on the lap message, which numbers them
+// differently. Source: the FIT profile's lap message.
+var lapSummaryFields = [][3]byte{
+	{7, 4, fitUint32},  // total_elapsed_time, scale 1000
+	{9, 4, fitUint32},  // total_distance, scale 100
+	{21, 2, fitUint16}, // total_ascent
+	{11, 2, fitUint16}, // total_calories
+	{19, 2, fitUint16}, // avg_power
+	{20, 2, fitUint16}, // max_power
+	{33, 2, fitUint16}, // normalized_power
+	{15, 1, fitUint8},  // avg_heart_rate
+	{16, 1, fitUint8},  // max_heart_rate
+	{17, 1, fitUint8},  // avg_cadence
+}
+
+// summaryData writes the summary values in the order the definitions above declare.
+func summaryData(out []byte, summary *FITSummaryFixture) []byte {
+	if summary == nil {
+		return out
+	}
+	out = appendScaledUint32(out, summary.ElapsedSeconds, scaleSeconds)
+	out = appendScaledUint32(out, summary.DistanceMeters, scaleDistance)
+	out = appendUint16(out, summary.AscentMeters)
+	out = appendUint16(out, summary.Calories)
+	out = appendUint16(out, summary.AvgPower)
+	out = appendUint16(out, summary.MaxPower)
+	out = appendUint16(out, summary.NormalizedPower)
+	out = appendUint8(out, summary.AvgHeartRate)
+	out = appendUint8(out, summary.MaxHeartRate)
+	return appendUint8(out, summary.AvgCadence)
+}
+
+// withSummary appends the summary field definitions when a summary is declared.
+func withSummary(base [][3]byte, summary *FITSummaryFixture, extra [][3]byte) [][3]byte {
+	if summary == nil {
+		return base
+	}
+	return append(base, extra...)
+}
+
 // sessionDefinition declares the session layout.
-func sessionDefinition() []byte {
-	return definition(fitLocalSession, fitGlobalSession, [][3]byte{
+func (f FITFile) sessionDefinition() []byte {
+	fields := withSummary([][3]byte{
 		{253, 4, fitUint32},
 		{2, 4, fitUint32},
 		{5, 1, fitEnum},
-	})
+	}, f.Summary, summaryFields)
+	return definition(fitLocalSession, fitGlobalSession, fields)
 }
 
 // sessionData renders the session message spanning every sample.
@@ -211,22 +282,25 @@ func (f FITFile) sessionData() []byte {
 	out := []byte{fitLocalSession}
 	out = binary.LittleEndian.AppendUint32(out, f.stamp(f.lastSecond()))
 	out = binary.LittleEndian.AppendUint32(out, f.stamp(f.firstSecond()))
-	return append(out, byte(f.Sport))
+	out = append(out, byte(f.Sport))
+	return summaryData(out, f.Summary)
 }
 
 // lapDefinition declares the lap layout.
-func lapDefinition() []byte {
-	return definition(fitLocalLap, fitGlobalLap, [][3]byte{
+func (f FITFile) lapDefinition() []byte {
+	fields := withSummary([][3]byte{
 		{253, 4, fitUint32},
 		{2, 4, fitUint32},
-	})
+	}, f.LapSummary, lapSummaryFields)
+	return definition(fitLocalLap, fitGlobalLap, fields)
 }
 
 // lapData renders one lap message.
 func (f FITFile) lapData(lap FITLapFixture) []byte {
 	out := []byte{fitLocalLap}
 	out = binary.LittleEndian.AppendUint32(out, f.stamp(lap.EndSecond))
-	return binary.LittleEndian.AppendUint32(out, f.stamp(lap.StartSecond))
+	out = binary.LittleEndian.AppendUint32(out, f.stamp(lap.StartSecond))
+	return summaryData(out, f.LapSummary)
 }
 
 // eventDefinition declares the event layout.
@@ -239,7 +313,9 @@ func eventDefinition() []byte {
 	})
 }
 
-// shiftData renders one gear-change event message.
+// shiftData renders one gear-change event message. The gear_change_data payload
+// packs the rear gear number and gear into the low two bytes and the front gear
+// number and gear into the high two.
 func (f FITFile) shiftData(shift FITShiftFixture) []byte {
 	kind := byte(fitRearShift)
 	if shift.Front {
@@ -267,62 +343,6 @@ func (f FITFile) lastSecond() int {
 		return 0
 	}
 	return f.Samples[len(f.Samples)-1].Second
-}
-
-// appendUint8 writes an optional byte reading, or its invalid sentinel.
-func appendUint8(out []byte, value *int) []byte {
-	if value == nil {
-		return append(out, invalidUint8)
-	}
-	return append(out, byte(*value))
-}
-
-// appendSint8 writes an optional signed byte reading.
-func appendSint8(out []byte, value *int) []byte {
-	if value == nil {
-		return append(out, invalidSint8)
-	}
-	return append(out, byte(int8(*value)))
-}
-
-// appendScaledUint8 writes an optional scaled byte reading.
-func appendScaledUint8(out []byte, value *float64, scale float64) []byte {
-	if value == nil {
-		return append(out, invalidUint8)
-	}
-	return append(out, byte(math.Round(*value*scale)))
-}
-
-// appendUint16 writes an optional two-byte reading.
-func appendUint16(out []byte, value *int) []byte {
-	if value == nil {
-		return binary.LittleEndian.AppendUint16(out, invalidUint16)
-	}
-	return binary.LittleEndian.AppendUint16(out, uint16(*value))
-}
-
-// appendScaledUint16 writes an optional scaled and offset two-byte reading.
-func appendScaledUint16(out []byte, value *float64, scale, offset float64) []byte {
-	if value == nil {
-		return binary.LittleEndian.AppendUint16(out, invalidUint16)
-	}
-	return binary.LittleEndian.AppendUint16(out, uint16(math.Round((*value+offset)*scale)))
-}
-
-// appendScaledSint16 writes an optional scaled signed two-byte reading.
-func appendScaledSint16(out []byte, value *float64, scale float64) []byte {
-	if value == nil {
-		return binary.LittleEndian.AppendUint16(out, invalidSint16)
-	}
-	return binary.LittleEndian.AppendUint16(out, uint16(int16(math.Round(*value*scale))))
-}
-
-// appendScaledUint32 writes an optional scaled four-byte reading.
-func appendScaledUint32(out []byte, value *float64, scale float64) []byte {
-	if value == nil {
-		return binary.LittleEndian.AppendUint32(out, invalidUint32)
-	}
-	return binary.LittleEndian.AppendUint32(out, uint32(math.Round(*value*scale)))
 }
 
 // ZipFIT wraps a FIT file in the zip archive Garmin serves the original format as.

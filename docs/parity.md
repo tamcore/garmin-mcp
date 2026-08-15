@@ -665,8 +665,14 @@ schema accepts the numeric identifier, and the description says so.
 
 The two calendar reads that once sat here — `get_scheduled_workouts` and
 `get_training_plan_workouts` — are registered now that the API layer builds the
-GraphQL calendar request, and `get_activity_fit_data` followed once the FIT
-container decoder landed in `internal/garmin/api`. What is left is short, and it
+GraphQL calendar request, and `get_activity_fit_data` followed once FIT decoding
+landed in `internal/garmin/api`. That decoding now reads the official FIT profile
+through `github.com/muktihari/fit`, so the session and lap summary figures a
+device computes itself — distance, elapsed time, ascent, calories, average and
+peak heart rate, average and peak power, normalized power — are reported as the
+device wrote them rather than re-derived from the record stream. Coordinates are
+still never decoded. See [ADR 0007](adr/0007-fit-decoding-library.md). What is
+left is short, and it
 is the whole gap between the implemented rows of [Tools](#tools) and the
 deviations above:
 

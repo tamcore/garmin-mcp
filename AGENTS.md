@@ -38,9 +38,9 @@ date.
 | `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, and the login response classifier (JSON and widget HTML). No I/O | 96.7% |
 | `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, refresh with per-principal collapsing and CAS, the shared `TokenGate`, the request-time host guard, unverified-JWT `exp` parsing | 67.3% untagged, 88.2% with `-tags=fakegarmin` |
 | `internal/garmin/client` | The authenticated request layer: bounded wire and decompressed sizes, page and page-start caps, one bounded post-`401` retry that never replays a `POST` or `PATCH`, typed errors | 93.0% |
-| `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the compiled-in exercise catalog | 86.9% |
+| `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the compiled-in exercise catalog, and FIT activity decoding through `github.com/muktihari/fit` | 89.9% |
 | `internal/mcpserver` | Server, registry, stdio and Streamable HTTP transports, bearer middleware, session binding, origin and forwarded-header guards, elicitation confirmation, `server_info` | 89.0% |
-| `internal/tools` | 47 registered tools — 21 read-only, 21 write, 5 destructive — with contracts snapshot-tested against `compat/tools.json` | 77.0% |
+| `internal/tools` | 59 registered tools — 32 read-only, 22 write, 5 destructive — with contracts snapshot-tested against `compat/tools.json` | 83.5% |
 | `internal/policy` | Three tiers, explicit name lists validated against the registered set at start-up, the enablement-and-scope intersection, confirmation requirement | 91.7% |
 | `internal/identity` | Principal type, request context, and the bearer resolver that takes the principal only from a verified token | 97.7% |
 | `internal/oauthserver` | The authorization server: PKCE S256 only, exact issuer and redirect matching, single-use bound codes, hashed opaque tokens, rotating refresh with family revocation, consent | 92.4% |
@@ -54,19 +54,22 @@ date.
 | `internal/mcplog` | Structured `slog` logging with the allowlisted field set, level mapping, and the stderr sink that refuses stdout | 98.5% |
 | `internal/notices` | The `THIRD_PARTY_NOTICES.md` generator: the linked module set unioned over the six released targets, the curated SPDX and licence-file registry, verbatim licence copying, and the freshness test that fails on a stale notices file | 89.3% |
 | `internal/ratelimit` | The per-principal limiter and its handler middleware | 95.7% |
-| `internal/testkit` | Scripted fake Garmin service, fake clock, fixtures, transport guard | 96.8% |
+| `internal/testkit` | Scripted fake Garmin service, fake clock, fixtures, synthetic FIT builder, transport guard | 91.5% |
 | `e2e` | Build tag `e2e`. `cli_test.go` builds the binary and drives it as a subprocess: version output, clean stdout on the stdio path, unknown command | n/a |
 
 Everything else in the repository is documentation, contract manifests
 (`compat/`), and CI, lint, pre-commit, GoReleaser, and container configuration.
 
-`internal/tools` at 77.0% and `internal/cmd` at 74.3% are **below** the 80% rule
-below. No CI job enforces a threshold, so raise them with the next slice that
-touches them.
+`internal/cmd` at 74.3% is **below** the 80% rule below; `internal/tools` left
+that list, rising to 83.5%. CI enforces a per-package floor with an explicit
+exception list, so a package that drops under it fails the build unless it is
+named there.
 
 `go.mod` direct requirements: `modelcontextprotocol/go-sdk`, `spf13/cobra`,
-`spf13/viper`, `spf13/pflag`, `golang.org/x/sys` and `modernc.org/sqlite`, plus
-the transitive indirect set. `golang.org/x/sys` is direct because
+`spf13/viper`, `spf13/pflag`, `golang.org/x/sys`, `modernc.org/sqlite` and
+`github.com/muktihari/fit`, plus the transitive indirect set. `muktihari/fit`
+decodes Garmin activity files and links no third-party package of its own; ADR
+0007 records why the format is not hand-decoded. `golang.org/x/sys` is direct because
 `internal/securefile` reads Windows security descriptors through
 `golang.org/x/sys/windows`. `modernc.org/libc` moves only together with
 `modernc.org/sqlite`. See `docs/dependencies.md`.
@@ -274,9 +277,10 @@ still-passing tests is caught, because the declared name disappears with it.
 Rules:
 
 - Always run Go tests with `-race`.
-- 80%+ coverage on new code. CI prints a coverage summary but does not yet
-  enforce a threshold, so this is a review duty until it does. Two packages are
-  under the rule today — `internal/tools` at 77.0% and `internal/cmd` at 74.3%.
+- 80%+ coverage on new code. CI enforces this per package against an explicit
+  exception list, checked in both directions: a package under the floor fails,
+  and a listed package that reaches the floor must leave the list. One package is
+  under the rule today — `internal/cmd` at 74.3%.
 - No test may reach the public Garmin service by default.
 - Live tests need the `garminlive` tag, an explicit environment
   acknowledgement, and a dedicated non-primary account. They never mutate
@@ -367,6 +371,10 @@ These apply to every commit, including the code that already exists.
   insecure combinations.
 - No hardcoded values in handlers. Runtime settings come from `config.Config`;
   protocol constants live in the focused protocol package with source comments.
+  FIT profile field numbers, scales and offsets come from the SDK's generated
+  profile, never from a hand-written table: session and lap number the same
+  quantity differently (average heart rate is field 16 on a session and 15 on a
+  lap), and a hand-kept table of those is a silent wrong-measurement bug.
 - Secrets must not be printable: `String`, `MarshalJSON`, error, and debug paths
   on secret-bearing structs never reveal fields.
 - Secret material sits **at least one pointer deeper** than the redacting type.
