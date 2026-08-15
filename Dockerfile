@@ -15,6 +15,14 @@ LABEL org.opencontainers.image.title="garmin-mcp" \
 
 COPY --chown=65532:65532 ${TARGETPLATFORM}/garmin-mcp /usr/local/bin/garmin-mcp
 
+# The MIT license and the upstream MIT material recorded in the notices both
+# require the notice to travel with the distribution, and an image is a
+# distribution. The files go in a project-named subdirectory so they add to
+# /licenses instead of replacing it: this base keeps its own Debian licenses in
+# /usr/share/common-licenses and /usr/share/doc/*/copyright and creates no
+# /licenses of its own today, but a subdirectory stays correct if it ever does.
+COPY LICENSE THIRD_PARTY_NOTICES.md /licenses/garmin-mcp/
+
 # Numeric nonroot uid/gid so the image works with read-only root filesystems and
 # `runAsNonRoot` admission policies that cannot resolve names.
 USER 65532:65532

@@ -7,6 +7,30 @@ This file is that record for direct module requirements that no ADR covers.
 Last updated: 2026-08-15. Verified against `go.mod`, `go mod graph`, the module
 cache license files, and `proxy.golang.org`.
 
+## Licensing
+
+This project is licensed under the MIT License. `LICENSE` at the repository
+root is the authoritative text, and it is what the
+`org.opencontainers.image.licenses="MIT"` label on the container image asserts.
+
+This file is the *rationale* record: why each dependency exists, what it costs,
+and how it is maintained. It is not the notice record. `THIRD_PARTY_NOTICES.md`
+at the repository root is, and it carries the complete license text of every
+module that reaches a released binary, plus the two upstream compatibility
+references (`Taxuspt/garmin_mcp` and `cyberjunky/python-garminconnect`, both
+MIT) that `docs/upstream-pins.md` pins. There is no separate `NOTICE` file.
+
+The two records must agree. A license identifier stated here and a license text
+reproduced there describe the same module, so any dependency change edits both
+in the same commit. `THIRD_PARTY_NOTICES.md` is generated from the module cache
+at the pinned versions, so it covers the linked set — every module
+`go list -deps ./cmd/garmin-mcp` reaches under `CGO_ENABLED=0` across the six
+released `GOOS`/`GOARCH` targets — rather than the `go.mod` requirement set.
+
+Both files ship with the distribution, not only in the repository: the release
+archives carry them through the `archives.files` list in `.goreleaser.yaml`, and
+the container image carries them under `/licenses/garmin-mcp/`.
+
 ## Direct requirements [NOW]
 
 This table matches the first `require` block of `go.mod` exactly: six modules, no
@@ -178,7 +202,13 @@ this build does not select, and `go mod tidy` keeps the requirement for the
 platforms that do.
 
 Licenses across the set are MIT, Apache-2.0, and BSD-3-Clause only. No copyleft
-and no unlicensed module is present.
+and no unlicensed module is present. Every one of them was read from the module
+cache and reproduced in full in `THIRD_PARTY_NOTICES.md`; none was inferred.
+Three entries are not a single identifier and the notices file states each in
+its own words: the MCP SDK is `Apache-2.0 AND MIT` mid-relicensing,
+`go.yaml.in/yaml/v3` is `MIT AND Apache-2.0` split by file, and
+`modernc.org/sqlite` is BSD-3-Clause around a bundled SQLite that its authors
+dedicated to the public domain.
 
 `sourcegraph/conc` is pinned by Viper at a pseudo-version
 (`v0.3.1-0.20240121214520-5f936abd7ae8`), not at a release tag. That is Viper's

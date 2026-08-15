@@ -36,6 +36,13 @@ archives:
         formats:
           - zip
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Explicit list: without it GoReleaser applies its own default set, which
+    # does not carry the notices. Both files are a distribution condition of
+    # the MIT licence and of the upstream MIT material recorded in the notices,
+    # so every archive must contain them.
+    files:
+      - LICENSE
+      - THIRD_PARTY_NOTICES.md
 
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
@@ -65,6 +72,11 @@ dockers_v2:
     images:
       - "ghcr.io/tamcore/garmin-mcp"
     dockerfile: Dockerfile
+    # The Dockerfile COPYs both files, so they must be in the build context
+    # that GoReleaser assembles; only the binaries are there by default.
+    extra_files:
+      - LICENSE
+      - THIRD_PARTY_NOTICES.md
     platforms:
       - linux/amd64
       - linux/arm64
