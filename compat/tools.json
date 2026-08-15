@@ -81,8 +81,8 @@
   "counts": {
     "tools": 138,
     "byStatus": {
-      "implemented": 53,
-      "not-implemented": 85
+      "implemented": 80,
+      "not-implemented": 58
     },
     "byEffect": {
       "destructive": 8,
@@ -4452,7 +4452,7 @@
     },
     {
       "name": "get_stats",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 22,
@@ -4515,10 +4515,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetStats",
+        "file": "internal/tools/get_stats.go",
+        "registeredName": "get_stats"
       },
       "tests": {
         "unit": [],
@@ -4604,7 +4604,7 @@
     },
     {
       "name": "get_body_composition",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 115,
@@ -4671,10 +4671,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetBodyComposition",
+        "file": "internal/tools/get_body_composition.go",
+        "registeredName": "get_body_composition"
       },
       "tests": {
         "unit": [],
@@ -4684,7 +4684,7 @@
     },
     {
       "name": "get_stats_and_body",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 137,
@@ -4747,10 +4747,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetStatsAndBody",
+        "file": "internal/tools/get_stats_and_body.go",
+        "registeredName": "get_stats_and_body"
       },
       "tests": {
         "unit": [],
@@ -4760,7 +4760,7 @@
     },
     {
       "name": "get_steps_data",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 153,
@@ -4823,10 +4823,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetStepsData",
+        "file": "internal/tools/get_steps_data.go",
+        "registeredName": "get_steps_data"
       },
       "tests": {
         "unit": [],
@@ -4836,7 +4836,7 @@
     },
     {
       "name": "get_daily_steps",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 172,
@@ -4903,10 +4903,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetDailySteps",
+        "file": "internal/tools/get_daily_steps.go",
+        "registeredName": "get_daily_steps"
       },
       "tests": {
         "unit": [],
@@ -4916,7 +4916,7 @@
     },
     {
       "name": "get_training_readiness",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 189,
@@ -4979,10 +4979,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetTrainingReadiness",
+        "file": "internal/tools/get_training_readiness.go",
+        "registeredName": "get_training_readiness"
       },
       "tests": {
         "unit": [],
@@ -4992,7 +4992,7 @@
     },
     {
       "name": "get_body_battery",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 247,
@@ -5059,10 +5059,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetBodyBattery",
+        "file": "internal/tools/get_body_battery.go",
+        "registeredName": "get_body_battery"
       },
       "tests": {
         "unit": [],
@@ -5072,7 +5072,7 @@
     },
     {
       "name": "get_body_battery_events",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 293,
@@ -5135,10 +5135,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetBodyBatteryEvents",
+        "file": "internal/tools/get_body_battery_events.go",
+        "registeredName": "get_body_battery_events"
       },
       "tests": {
         "unit": [],
@@ -5148,7 +5148,7 @@
     },
     {
       "name": "get_blood_pressure",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 309,
@@ -5215,10 +5215,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetBloodPressure",
+        "file": "internal/tools/get_blood_pressure.go",
+        "registeredName": "get_blood_pressure"
       },
       "tests": {
         "unit": [],
@@ -5228,7 +5228,7 @@
     },
     {
       "name": "get_floors",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 326,
@@ -5291,10 +5291,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetFloors",
+        "file": "internal/tools/get_floors.go",
+        "registeredName": "get_floors"
       },
       "tests": {
         "unit": [],
@@ -5304,7 +5304,7 @@
     },
     {
       "name": "get_rhr_day",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 342,
@@ -5367,10 +5367,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetRestingHeartRateDay",
+        "file": "internal/tools/get_rhr_day.go",
+        "registeredName": "get_rhr_day"
       },
       "tests": {
         "unit": [],
@@ -5380,7 +5380,7 @@
     },
     {
       "name": "get_heart_rates",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 358,
@@ -5443,10 +5443,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetHeartRates",
+        "file": "internal/tools/get_heart_rates.go",
+        "registeredName": "get_heart_rates"
       },
       "tests": {
         "unit": [],
@@ -5456,7 +5456,7 @@
     },
     {
       "name": "get_heart_rates_summary",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 377,
@@ -5519,10 +5519,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetHeartRatesSummary",
+        "file": "internal/tools/get_heart_rates_summary.go",
+        "registeredName": "get_heart_rates_summary"
       },
       "tests": {
         "unit": [],
@@ -5532,7 +5532,7 @@
     },
     {
       "name": "get_hydration_data",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 415,
@@ -5595,10 +5595,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetHydrationData",
+        "file": "internal/tools/get_hydration_data.go",
+        "registeredName": "get_hydration_data"
       },
       "tests": {
         "unit": [],
@@ -5684,7 +5684,7 @@
     },
     {
       "name": "get_sleep_summary",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 450,
@@ -5747,10 +5747,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetSleepSummary",
+        "file": "internal/tools/get_sleep_summary.go",
+        "registeredName": "get_sleep_summary"
       },
       "tests": {
         "unit": [],
@@ -5760,7 +5760,7 @@
     },
     {
       "name": "get_stress_data",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 524,
@@ -5823,10 +5823,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetStressData",
+        "file": "internal/tools/get_stress_data.go",
+        "registeredName": "get_stress_data"
       },
       "tests": {
         "unit": [],
@@ -5836,7 +5836,7 @@
     },
     {
       "name": "get_stress_summary",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 543,
@@ -5899,10 +5899,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetStressSummary",
+        "file": "internal/tools/get_stress_summary.go",
+        "registeredName": "get_stress_summary"
       },
       "tests": {
         "unit": [],
@@ -5912,7 +5912,7 @@
     },
     {
       "name": "get_respiration_data",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 588,
@@ -5975,10 +5975,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetRespirationData",
+        "file": "internal/tools/get_respiration_data.go",
+        "registeredName": "get_respiration_data"
       },
       "tests": {
         "unit": [],
@@ -5988,7 +5988,7 @@
     },
     {
       "name": "get_respiration_summary",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 607,
@@ -6051,10 +6051,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetRespirationSummary",
+        "file": "internal/tools/get_respiration_summary.go",
+        "registeredName": "get_respiration_summary"
       },
       "tests": {
         "unit": [],
@@ -6064,7 +6064,7 @@
     },
     {
       "name": "get_spo2_data",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 636,
@@ -6127,10 +6127,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetSpO2Data",
+        "file": "internal/tools/get_spo2_data.go",
+        "registeredName": "get_spo2_data"
       },
       "tests": {
         "unit": [],
@@ -6140,7 +6140,7 @@
     },
     {
       "name": "get_all_day_stress",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 671,
@@ -6203,10 +6203,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetAllDayStress",
+        "file": "internal/tools/get_all_day_stress.go",
+        "registeredName": "get_all_day_stress"
       },
       "tests": {
         "unit": [],
@@ -6216,7 +6216,7 @@
     },
     {
       "name": "get_all_day_events",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 687,
@@ -6279,10 +6279,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetAllDayEvents",
+        "file": "internal/tools/get_all_day_events.go",
+        "registeredName": "get_all_day_events"
       },
       "tests": {
         "unit": [],
@@ -6292,7 +6292,7 @@
     },
     {
       "name": "get_lifestyle_logging_data",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 703,
@@ -6355,10 +6355,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetLifestyleLoggingData",
+        "file": "internal/tools/get_lifestyle_logging_data.go",
+        "registeredName": "get_lifestyle_logging_data"
       },
       "tests": {
         "unit": [],
@@ -6368,7 +6368,7 @@
     },
     {
       "name": "get_weekly_steps",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 722,
@@ -6440,10 +6440,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetWeeklySteps",
+        "file": "internal/tools/get_weekly_steps.go",
+        "registeredName": "get_weekly_steps"
       },
       "tests": {
         "unit": [],
@@ -6453,7 +6453,7 @@
     },
     {
       "name": "get_weekly_stress",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 769,
@@ -6525,10 +6525,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetWeeklyStress",
+        "file": "internal/tools/get_weekly_stress.go",
+        "registeredName": "get_weekly_stress"
       },
       "tests": {
         "unit": [],
@@ -6538,7 +6538,7 @@
     },
     {
       "name": "get_weekly_intensity_minutes",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 811,
@@ -6610,10 +6610,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetWeeklyIntensityMinutes",
+        "file": "internal/tools/get_weekly_intensity_minutes.go",
+        "registeredName": "get_weekly_intensity_minutes"
       },
       "tests": {
         "unit": [],
@@ -6623,7 +6623,7 @@
     },
     {
       "name": "get_morning_training_readiness",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/health_wellness.py",
         "line": 867,
@@ -6686,10 +6686,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetMorningTrainingReadiness",
+        "file": "internal/tools/get_morning_training_readiness.go",
+        "registeredName": "get_morning_training_readiness"
       },
       "tests": {
         "unit": [],

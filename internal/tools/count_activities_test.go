@@ -15,7 +15,7 @@ func TestCountActivitiesReportsTheAccountTotal(t *testing.T) {
 
 	script := testkit.NewScript().With(client.PathActivitiesCount,
 		testkit.JSON(http.StatusOK, `{"totalCount":1234}`))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	result := h.call(t, ToolCountActivities, nil)
 
@@ -34,7 +34,7 @@ func TestCountActivitiesAcceptsANumericString(t *testing.T) {
 
 	script := testkit.NewScript().With(client.PathActivitiesCount,
 		testkit.JSON(http.StatusOK, `{"totalCount":"77","unknownField":true}`))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	if got := number(t, h.call(t, ToolCountActivities, nil), "total_activities"); got != 77 {
 		t.Errorf("total_activities = %v, want 77", got)
@@ -57,7 +57,7 @@ func TestCountActivitiesRefusesAnAnswerWithoutACount(t *testing.T) {
 
 			script := testkit.NewScript().With(client.PathActivitiesCount,
 				testkit.JSON(http.StatusOK, body))
-			h := newParityHarness(t, script)
+			h := newToolHarness(t, script)
 
 			if advice := h.callError(t, ToolCountActivities, nil); advice == "" {
 				t.Error("the refusal carries no advice")

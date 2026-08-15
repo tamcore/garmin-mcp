@@ -35,7 +35,7 @@ func TestGetActivityGearReturnsTheLinkedGear(t *testing.T) {
 
 	script := testkit.NewScript().With(client.PathGearFilter,
 		testkit.JSON(http.StatusOK, gearArray(1)))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	result := h.call(t, ToolGetActivityGear, activityIDArgs())
 
@@ -85,7 +85,7 @@ func TestGetActivityGearSendsTheActivityAsAQueryParameter(t *testing.T) {
 
 	script := testkit.NewScript().With(client.PathGearFilter,
 		testkit.JSON(http.StatusOK, gearArray(1)))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	h.call(t, ToolGetActivityGear, activityIDArgs())
 
@@ -108,7 +108,7 @@ func TestGetActivityGearReportsNoGearAsEmpty(t *testing.T) {
 
 	script := testkit.NewScript().With(client.PathGearFilter,
 		testkit.JSON(http.StatusOK, `[]`))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	result := h.call(t, ToolGetActivityGear, activityIDArgs())
 	if got := number(t, result, "count"); got != 0 {
@@ -123,7 +123,7 @@ func TestGetActivityGearTruncatesAnOversizedList(t *testing.T) {
 
 	script := testkit.NewScript().With(client.PathGearFilter,
 		testkit.JSON(http.StatusOK, gearArray(defaultMaxActivityGear+5)))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	result := h.call(t, ToolGetActivityGear, activityIDArgs())
 
@@ -140,7 +140,7 @@ func TestGetActivityGearTruncatesAnOversizedList(t *testing.T) {
 func TestGetActivityGearRefusesAnIdentifierThatIsNotOne(t *testing.T) {
 	t.Parallel()
 
-	h := newParityHarness(t, testkit.NewScript())
+	h := newToolHarness(t, testkit.NewScript())
 
 	if advice := h.callError(t, ToolGetActivityGear,
 		map[string]any{argActivityID: "not-an-id"}); advice == "" {

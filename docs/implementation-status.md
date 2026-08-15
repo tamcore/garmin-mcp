@@ -19,7 +19,7 @@ Last updated: 2026-08-15.
 | 2 — core auth and storage (M1) | **CLOSED** |
 | 3 — MCP foundation (M1) | **CLOSED** |
 | 4 — remote multi-user (M2) | **CLOSED.** The MCP conformance requirement is **blocked upstream**, with evidence below, not outstanding work |
-| 5 — compatibility breadth (M3) | **IN PROGRESS** — 53 of the 138 upstream tools are implemented, plus 5 tools the pinned manifest does not carry. No resource is implemented |
+| 5 — compatibility breadth (M3) | **IN PROGRESS** — 80 of the 138 upstream tools are implemented, plus 5 tools the pinned manifest does not carry. No resource is implemented |
 | 6 — hardening and release | not started |
 
 Phase definitions are in `docs/phases.md`.
@@ -335,7 +335,56 @@ that drops under the floor fails the build unless it is named there.
         the 204 read-back copied whatever the GET returned. Both now require the
         identifier to be the one the request addressed and fail loudly otherwise:
         the result of an update is what a caller schedules or deletes next.
-- [ ] The remaining upstream breadth. 53 of the 138 manifest tools are
+- [x] Health and wellness, all 27 remaining tools of `health_wellness.py`, all
+      read-only and all `health` sensitivity. The request constants landed first
+      and centrally (ADR-free, `internal/garmin/client/endpoints_health.go`)
+      because `Request.Validate` refuses anything outside its allowlists, so a
+      missing entry makes a tool impossible to call.
+
+      Shapes were established from the pinned upstream source where it names a
+      field, and from **sampled responses** where it does not: `Taxuspt`'s
+      `health_wellness.py` is the curating layer and therefore names Garmin's
+      wire fields directly, which sourced most of them. Six live samples were
+      taken against a real account under a one-call-per-ten-minutes budget, with
+      every call logged. They are not in this repository — they carry health
+      data — but they changed the code in ways no source reading did:
+
+        * `get_respiration_data` encodes a missing reading as the **sentinel**
+          `-1.0` or `-2.0`, not as null. Decoded at face value that is a
+          respiration rate of minus one breath per minute, and every minimum or
+          mean computed over the series is silently wrong. The two sentinels
+          differ, so both are kept distinguishable, and the handling was applied
+          to every intraday series: a negative heart rate or SpO2 is not a
+          measurement either.
+        * The same document carries a **second** series whose descriptor list
+          uses different key names — `respirationAveragesValueDescriptionKey`,
+          "Description" where the first list says "Descriptor". A reader written
+          for the first silently falls back to positional order on the second.
+        * `get_heart_rates` returns a raw Garmin document where a reading may be
+          `null` and the series is neither contiguous nor evenly spaced, while
+          `get_stats` returns a curated one. The two shapes are not symmetric.
+        * `get_body_composition` returns `totalAverage` **present with every
+          metric null** when an account records no weight, so absence is per
+          field and not per object.
+
+      Where a shape could not be established, the tool returns Garmin's document
+      under Garmin's own key names and under a bound, rather than inventing
+      curated ones. That is recorded per tool in `docs/parity.md`.
+
+      Keeping Garmin's names is not the same as forwarding Garmin's document.
+      Every untyped passthrough goes through one shared sanitiser,
+      `internal/tools/sanitize.go`, which recursively removes the keys that
+      identify a person or a place — `userProfilePK` and every other `*ProfilePK`,
+      `userId`, `userProfileId`, `ownerId`, `ownerDisplayName`, `displayName`, and
+      the latitude, longitude and `position*` keys — and reports how many it
+      removed as `dropped_fields`, a count and never a list of names. The walk is
+      bounded in depth and node count, so a drifted or hostile document cannot
+      exhaust the stack or the heap. Five tools use it: `get_lifestyle_logging_data`,
+      `get_body_composition`, `get_stats_and_body`, `get_body_battery_events` and
+      `get_all_day_events`. No allowlist was preferred over it for the two event
+      tools, because upstream curates no field of either document and no observed
+      sample establishes one — an allowlist there would be invented, not sourced.
+- [ ] The remaining upstream breadth. 80 of the 138 manifest tools are
       implemented and **no resource is**. Health and wellness, nutrition, weight
       management, training, challenges, courses, women's health, data management,
       the device surface beyond `get_devices`, and the gear reads are all still
@@ -434,10 +483,10 @@ evidence, and the operations documentation, which is real remaining work.
 ## M3 — full Taxuspt parity
 
 - [ ] The generated parity matrix accounts for every tool and resource at the
-      pinned Taxuspt commit. `docs/parity.md` carries per-tool status, and 85 of
+      pinned Taxuspt commit. `docs/parity.md` carries per-tool status, and 58 of
       the 138 tools and all 5 resources are still `not-implemented`.
 - [ ] Every required contract has passing name/schema/behavior tests, or a
-      documented exclusion with evidence. The implemented 53 do; the rest have no
+      documented exclusion with evidence. The implemented 80 do; the rest have no
       handler yet. The documented exclusions are in `docs/parity.md` and in the
       ADR 0006 register.
 - [ ] 0.3.2 to 0.3.10 behavior differences affecting those contracts are

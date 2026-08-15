@@ -119,26 +119,30 @@ const (
 	EndpointLifestyleLogging            = Endpoint("connectapi.lifestylelogging.daily_log")
 )
 
-var healthEndpoints = [...]Endpoint{
-	EndpointDailySummaryChart,
-	EndpointFloorsChartDaily,
-	EndpointDailyHeartRate,
-	EndpointDailyStress,
-	EndpointDailyRespiration,
-	EndpointDailySpO2,
-	EndpointDailyEvents,
-	EndpointBodyBatteryDaily,
-	EndpointBodyBatteryEvents,
-	EndpointDailyHydration,
-	EndpointDailyStepsStats,
-	EndpointWeeklyStepsStats,
-	EndpointWeeklyStressStats,
-	EndpointWeeklyIntensityMinutesStats,
-	EndpointBodyComposition,
-	EndpointBloodPressure,
-	EndpointRestingHeartRate,
-	EndpointTrainingReadiness,
-	EndpointLifestyleLogging,
+// healthEndpoints returns the health labels. A function, not a var: AGENTS.md
+// allows no package-level mutable state.
+func healthEndpoints() []Endpoint {
+	return []Endpoint{
+		EndpointDailySummaryChart,
+		EndpointFloorsChartDaily,
+		EndpointDailyHeartRate,
+		EndpointDailyStress,
+		EndpointDailyRespiration,
+		EndpointDailySpO2,
+		EndpointDailyEvents,
+		EndpointBodyBatteryDaily,
+		EndpointBodyBatteryEvents,
+		EndpointDailyHydration,
+		EndpointDailyStepsStats,
+		EndpointWeeklyStepsStats,
+		EndpointWeeklyStressStats,
+		EndpointWeeklyIntensityMinutesStats,
+		EndpointBodyComposition,
+		EndpointBloodPressure,
+		EndpointRestingHeartRate,
+		EndpointTrainingReadiness,
+		EndpointLifestyleLogging,
+	}
 }
 
 // Sanitized operation labels for the health-and-wellness reads, one per tool.
@@ -175,40 +179,46 @@ const (
 	OpGetLifestyleLoggingData     = Op("get_lifestyle_logging_data")
 )
 
-var healthOps = [...]Op{
-	OpGetStats,
-	OpGetStatsAndBody,
-	OpGetBodyComposition,
-	OpGetStepsData,
-	OpGetDailySteps,
-	OpGetWeeklySteps,
-	OpGetWeeklyStress,
-	OpGetWeeklyIntensityMinutes,
-	OpGetTrainingReadiness,
-	OpGetMorningTrainingReadiness,
-	OpGetBodyBattery,
-	OpGetBodyBatteryEvents,
-	OpGetBloodPressure,
-	OpGetFloors,
-	OpGetRestingHeartRateDay,
-	OpGetHeartRates,
-	OpGetHeartRatesSummary,
-	OpGetHydrationData,
-	OpGetSleepSummary,
-	OpGetStressData,
-	OpGetStressSummary,
-	OpGetAllDayStress,
-	OpGetAllDayEvents,
-	OpGetRespirationData,
-	OpGetRespirationSummary,
-	OpGetSpO2Data,
-	OpGetLifestyleLoggingData,
+// healthOps returns the health operations. A function for the same reason.
+func healthOps() []Op {
+	return []Op{
+		OpGetStats,
+		OpGetStatsAndBody,
+		OpGetBodyComposition,
+		OpGetStepsData,
+		OpGetDailySteps,
+		OpGetWeeklySteps,
+		OpGetWeeklyStress,
+		OpGetWeeklyIntensityMinutes,
+		OpGetTrainingReadiness,
+		OpGetMorningTrainingReadiness,
+		OpGetBodyBattery,
+		OpGetBodyBatteryEvents,
+		OpGetBloodPressure,
+		OpGetFloors,
+		OpGetRestingHeartRateDay,
+		OpGetHeartRates,
+		OpGetHeartRatesSummary,
+		OpGetHydrationData,
+		OpGetSleepSummary,
+		OpGetStressData,
+		OpGetStressSummary,
+		OpGetAllDayStress,
+		OpGetAllDayEvents,
+		OpGetRespirationData,
+		OpGetRespirationSummary,
+		OpGetSpO2Data,
+		OpGetLifestyleLoggingData,
+	}
 }
 
 // knownEndpoints and knownOps are the package-wide allowlists Request.Validate
 // checks a request against. They are assembled here because this file declares
 // the second half of each set; endpoints.go declares the first.
-var (
-	knownEndpoints = slices.Concat(coreEndpoints[:], healthEndpoints[:])
-	knownOps       = slices.Concat(coreOps[:], healthOps[:])
-)
+//
+// Both are functions rather than vars. The allocation is one small slice per
+// validated request, which is nothing beside the HTTP round trip that follows,
+// and it buys an allowlist no code can reassign.
+func knownEndpoints() []Endpoint { return slices.Concat(coreEndpoints(), healthEndpoints()) }
+
+func knownOps() []Op { return slices.Concat(coreOps(), healthOps()) }

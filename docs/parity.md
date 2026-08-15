@@ -20,8 +20,8 @@ when the manifest status and the registered surface disagree either way.
 
 | | Count |
 | --- | --- |
-| Manifest tools implemented | **53** of 138 |
-| Manifest tools not implemented | 85 |
+| Manifest tools implemented | **80** of 138 |
+| Manifest tools not implemented | 58 |
 | Manifest resources implemented | **0** of 5 |
 | Tools registered beyond the manifest | 5 |
 | Tools registered in total | 50, plus the server's own `server_info` |
@@ -313,19 +313,19 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_activity_types` | **implemented** | read-only | ordinary | `garmin:activities:read` | idempotent | activity_management.py:942 |
 | `get_activity_weather` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:655 |
 | `get_adhoc_challenges` | not-implemented | read-only | ordinary | `garmin:challenges:read` | idempotent | challenges.py:363 |
-| `get_all_day_events` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:687 |
-| `get_all_day_stress` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:671 |
+| `get_all_day_events` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:687 |
+| `get_all_day_stress` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:671 |
 | `get_available_badge_challenges` | not-implemented | read-only | health | `garmin:challenges:read` | idempotent | challenges.py:412 |
 | `get_badge_challenges` | not-implemented | read-only | health | `garmin:challenges:read` | idempotent | challenges.py:445 |
-| `get_blood_pressure` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:309 |
-| `get_body_battery` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:247 |
-| `get_body_battery_events` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:293 |
-| `get_body_composition` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:115 |
+| `get_blood_pressure` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:309 |
+| `get_body_battery` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:247 |
+| `get_body_battery_events` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:293 |
+| `get_body_composition` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:115 |
 | `get_courses` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | courses.py:173 |
 | `get_custom_food_serving_units` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:253 |
 | `get_custom_foods` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:220 |
 | `get_cycling_ftp` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:647 |
-| `get_daily_steps` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:172 |
+| `get_daily_steps` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:172 |
 | `get_daily_weigh_ins` | not-implemented | read-only | health | `garmin:health:read` | idempotent | weight_management.py:86 |
 | `get_device_alarms` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:279 |
 | `get_device_last_used` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:62 |
@@ -335,23 +335,23 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_earned_badges` | not-implemented | read-only | ordinary | `garmin:challenges:read` | idempotent | challenges.py:297 |
 | `get_endurance_score` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:274 |
 | `get_fitnessage_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:487 |
-| `get_floors` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:326 |
+| `get_floors` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:326 |
 | `get_full_name` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:22 |
 | `get_garmin_coach_workouts` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1098 |
 | `get_gear` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | gear_management.py:42 |
 | `get_goals` | not-implemented | read-only | health | `garmin:health:read` | idempotent | challenges.py:237 |
-| `get_heart_rates` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:358 |
-| `get_heart_rates_summary` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:377 |
+| `get_heart_rates` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:358 |
+| `get_heart_rates_summary` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:377 |
 | `get_hill_score` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:217 |
 | `get_hrv_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:431 |
 | `get_hrv_trend` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:998 |
-| `get_hydration_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:415 |
+| `get_hydration_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:415 |
 | `get_inprogress_virtual_challenges` | not-implemented | read-only | health | `garmin:challenges:read` | idempotent | challenges.py:552 |
 | `get_lactate_threshold` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:675 |
-| `get_lifestyle_logging_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:703 |
+| `get_lifestyle_logging_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:703 |
 | `get_menstrual_calendar_data` | not-implemented | read-only | womens-health | `garmin:womens-health:read` | idempotent | womens_health.py:75 |
 | `get_menstrual_data_for_date` | not-implemented | read-only | womens-health | `garmin:womens-health:read` | idempotent | womens_health.py:60 |
-| `get_morning_training_readiness` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:867 |
+| `get_morning_training_readiness` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:867 |
 | `get_non_completed_badge_challenges` | not-implemented | read-only | health | `garmin:challenges:read` | idempotent | challenges.py:478 |
 | `get_nutrition_daily_food_log` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:32 |
 | `get_nutrition_daily_meals` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:51 |
@@ -362,33 +362,33 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_primary_training_device` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:177 |
 | `get_progress_summary_between_dates` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:161 |
 | `get_race_predictions` | not-implemented | read-only | health | `garmin:health:read` | idempotent | challenges.py:513 |
-| `get_respiration_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:588 |
-| `get_respiration_summary` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:607 |
+| `get_respiration_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:588 |
+| `get_respiration_summary` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:607 |
 | `get_respiration_trend` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:1227 |
-| `get_rhr_day` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:342 |
+| `get_rhr_day` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:342 |
 | `get_scheduled_workouts` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1059 |
 | `get_sleep_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:431 |
-| `get_sleep_summary` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:450 |
-| `get_spo2_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:636 |
-| `get_stats` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:22 |
-| `get_stats_and_body` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:137 |
-| `get_steps_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:153 |
-| `get_stress_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:524 |
-| `get_stress_summary` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:543 |
+| `get_sleep_summary` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:450 |
+| `get_spo2_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:636 |
+| `get_stats` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:22 |
+| `get_stats_and_body` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:137 |
+| `get_steps_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:153 |
+| `get_stress_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:524 |
+| `get_stress_summary` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:543 |
 | `get_training_effect` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:388 |
 | `get_training_load_balance` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:899 |
 | `get_training_load_trend` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:791 |
 | `get_training_plan_workouts` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1132 |
-| `get_training_readiness` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:189 |
+| `get_training_readiness` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:189 |
 | `get_training_status` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:566 |
 | `get_unit_system` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:31 |
 | `get_user_profile` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:40 |
 | `get_user_summary` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:99 |
 | `get_userprofile_settings` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:51 |
 | `get_vo2max_trend` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:1072 |
-| `get_weekly_intensity_minutes` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:811 |
-| `get_weekly_steps` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:722 |
-| `get_weekly_stress` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:769 |
+| `get_weekly_intensity_minutes` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:811 |
+| `get_weekly_steps` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:722 |
+| `get_weekly_stress` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:769 |
 | `get_weigh_ins` | not-implemented | read-only | health | `garmin:health:read` | idempotent | weight_management.py:22 |
 | `get_workout_by_id` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:729 |
 | `get_workouts` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:707 |

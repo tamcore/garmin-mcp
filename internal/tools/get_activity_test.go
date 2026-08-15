@@ -39,7 +39,7 @@ func TestGetActivityReturnsTheCuratedRecord(t *testing.T) {
 
 	script := testkit.NewScript().With(parityActivityPath(),
 		testkit.JSON(http.StatusOK, activityRecord))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	result := h.call(t, ToolGetActivity, activityIDArgs())
 
@@ -105,10 +105,10 @@ func TestGetActivityDropsTheStartCoordinates(t *testing.T) {
 
 	script := testkit.NewScript().With(parityActivityPath(),
 		testkit.JSON(http.StatusOK, activityRecord))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	rendered := h.text(t, ToolGetActivity, activityIDArgs())
-	for _, forbidden := range []string{"48.1", "11.5", "startLatitude", "startLongitude"} {
+	for _, forbidden := range []string{"48.1", "11.5", keyStartLatitude, "startLongitude"} {
 		if strings.Contains(rendered, forbidden) {
 			t.Errorf("the result carries %q, which must never leave this server", forbidden)
 		}
@@ -132,7 +132,7 @@ func TestGetActivityToleratesAThinRecord(t *testing.T) {
 
 			script := testkit.NewScript().With(parityActivityPath(),
 				testkit.JSON(http.StatusOK, body))
-			h := newParityHarness(t, script)
+			h := newToolHarness(t, script)
 
 			result := h.call(t, ToolGetActivity, activityIDArgs())
 			if got := number(t, result, "activity_id"); got != 987654321 {
@@ -150,7 +150,7 @@ func TestGetActivityToleratesAThinRecord(t *testing.T) {
 func TestGetActivityRefusesAnIdentifierThatIsNotOne(t *testing.T) {
 	t.Parallel()
 
-	h := newParityHarness(t, testkit.NewScript())
+	h := newToolHarness(t, testkit.NewScript())
 
 	for _, raw := range []any{"../../etc/passwd", "0", "-4", "12.5", true} {
 		advice := h.callError(t, ToolGetActivity, map[string]any{argActivityID: raw})
@@ -170,7 +170,7 @@ func TestGetActivitySanitizesAGarminFailure(t *testing.T) {
 
 	script := testkit.NewScript().With(parityActivityPath(),
 		testkit.JSON(http.StatusNotFound, `{"message":"secret-detail","token":"abc.def"}`))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	advice := h.callError(t, ToolGetActivity, activityIDArgs())
 	for _, forbidden := range []string{"secret-detail", "abc.def"} {

@@ -32,7 +32,7 @@ func TestGetActivityTypesReturnsTheCatalog(t *testing.T) {
 
 	script := testkit.NewScript().With(client.PathActivityTypes,
 		testkit.JSON(http.StatusOK, activityTypeRows(2)))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	result := h.call(t, ToolGetActivityTypes, nil)
 
@@ -70,7 +70,7 @@ func TestGetActivityTypesReadsTheCatalogPath(t *testing.T) {
 
 	script := testkit.NewScript().With(client.PathActivityTypes,
 		testkit.JSON(http.StatusOK, activityTypeRows(1)))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	h.call(t, ToolGetActivityTypes, nil)
 
@@ -90,7 +90,7 @@ func TestGetActivityTypesReportsAnEmptyCatalogAsEmpty(t *testing.T) {
 
 	script := testkit.NewScript().With(client.PathActivityTypes,
 		testkit.JSON(http.StatusOK, `[]`))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	if got := number(t, h.call(t, ToolGetActivityTypes, nil), "count"); got != 0 {
 		t.Errorf("count = %v, want 0", got)
@@ -114,7 +114,7 @@ func TestGetActivityTypesSanitizesAGarminFailure(t *testing.T) {
 
 	script := testkit.NewScript().With(client.PathActivityTypes,
 		testkit.JSON(http.StatusInternalServerError, `{"trace":"internal-detail"}`))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	if advice := h.callError(t, ToolGetActivityTypes, nil); strings.Contains(advice, "internal-detail") {
 		t.Errorf("the refusal %q carries the upstream payload", advice)

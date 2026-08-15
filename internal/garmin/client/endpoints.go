@@ -181,37 +181,41 @@ const (
 	EndpointGraphQL = Endpoint("connectapi.graphql.gateway")
 )
 
-// coreEndpoints are the labels declared here; endpoints_health.go declares the rest and joins both into knownEndpoints.
-var coreEndpoints = [...]Endpoint{
-	EndpointSocialProfile,
-	EndpointUserSettings,
-	EndpointUserProfileSettings,
-	EndpointActivitySearch,
-	EndpointActivitiesCount,
-	EndpointActivitiesForDate,
-	EndpointDailySleep,
-	EndpointUserSummary,
-	EndpointDevices,
-	EndpointActivityTypedSplits,
-	EndpointActivityExerciseSet,
-	EndpointActivity,
-	EndpointActivityTypes,
-	EndpointActivityEventTypes,
-	EndpointActivitySplits,
-	EndpointActivitySplitSummaries,
-	EndpointActivityWeather,
-	EndpointActivityHRInZones,
-	EndpointActivityPowerInZones,
-	EndpointActivityDownload,
-	EndpointGearFilter,
-	EndpointGearLink,
-	EndpointGearUnlink,
-	EndpointPersonalRecords,
-	EndpointWorkoutList,
-	EndpointWorkout,
-	EndpointWorkoutDownload,
-	EndpointWorkoutSchedule,
-	EndpointGraphQL,
+// coreEndpoints returns the labels declared here; endpoints_health.go declares the
+// rest and joins both into knownEndpoints. A function, not a var: AGENTS.md allows
+// no package-level mutable state and a var array is assignable.
+func coreEndpoints() []Endpoint {
+	return []Endpoint{
+		EndpointSocialProfile,
+		EndpointUserSettings,
+		EndpointUserProfileSettings,
+		EndpointActivitySearch,
+		EndpointActivitiesCount,
+		EndpointActivitiesForDate,
+		EndpointDailySleep,
+		EndpointUserSummary,
+		EndpointDevices,
+		EndpointActivityTypedSplits,
+		EndpointActivityExerciseSet,
+		EndpointActivity,
+		EndpointActivityTypes,
+		EndpointActivityEventTypes,
+		EndpointActivitySplits,
+		EndpointActivitySplitSummaries,
+		EndpointActivityWeather,
+		EndpointActivityHRInZones,
+		EndpointActivityPowerInZones,
+		EndpointActivityDownload,
+		EndpointGearFilter,
+		EndpointGearLink,
+		EndpointGearUnlink,
+		EndpointPersonalRecords,
+		EndpointWorkoutList,
+		EndpointWorkout,
+		EndpointWorkoutDownload,
+		EndpointWorkoutSchedule,
+		EndpointGraphQL,
+	}
 }
 
 // labelUnknown is what an unrecognized label renders as, matching protocol.
@@ -219,14 +223,12 @@ const labelUnknown = "unknown"
 
 // KnownEndpoints returns a copy of the endpoint labels this package can render.
 func KnownEndpoints() []Endpoint {
-	out := make([]Endpoint, len(knownEndpoints))
-	copy(out, knownEndpoints[:])
-	return out
+	return knownEndpoints()
 }
 
 // IsKnown reports whether e is one of the package's Endpoint constants.
 func (e Endpoint) IsKnown() bool {
-	return slices.Contains(knownEndpoints, e)
+	return slices.Contains(knownEndpoints(), e)
 }
 
 // String returns the label, or "unknown" for a value that is not a package
@@ -295,53 +297,56 @@ const (
 	OpGetTrainingPlanWorkouts   = Op("get_training_plan_workouts")
 )
 
-// coreOps are the operations declared here; endpoints_health.go declares the rest and joins both into knownOps.
-var coreOps = [...]Op{
-	OpGetSocialProfile,
-	OpGetUserSettings,
-	OpGetUserProfileSettings,
-	OpListActivities,
-	OpListActivitiesByDate,
-	OpCountActivities,
-	OpListActivitiesForDate,
-	OpGetDailySleep,
-	OpGetUserSummary,
-	OpListDevices,
-	OpGetActivityTypedSplits,
-	OpGetActivityExerciseSets,
-	OpGetActivity,
-	OpGetActivityTypes,
-	OpGetActivityEventTypes,
-	OpGetActivitySplits,
-	OpGetActivitySplitSummaries,
-	OpGetActivityWeather,
-	OpGetActivityHRInZones,
-	OpGetActivityPowerInZones,
-	OpGetActivityGear,
-	OpGetPersonalRecords,
-	OpDownloadActivityFile,
-	OpSetActivityName,
-	OpSetActivityType,
-	OpSetActivityEventType,
-	OpSetActivityDescription,
-	OpSetActivityFeel,
-	OpSetPerceivedEffort,
-	OpSetActivityExerciseSets,
-	OpAddGearToActivity,
-	OpRemoveGearFromActivity,
-	OpDeleteActivity,
-	OpCreateManualActivity,
-	OpCreateStrengthActivity,
-	OpListWorkouts,
-	OpGetWorkout,
-	OpUploadWorkout,
-	OpUpdateWorkout,
-	OpDeleteWorkout,
-	OpScheduleWorkout,
-	OpUnscheduleWorkout,
-	OpDownloadWorkout,
-	OpGetScheduledWorkouts,
-	OpGetTrainingPlanWorkouts,
+// coreOps returns the operations declared here; endpoints_health.go declares the
+// rest and joins both into knownOps. A function, for coreEndpoints' reason.
+func coreOps() []Op {
+	return []Op{
+		OpGetSocialProfile,
+		OpGetUserSettings,
+		OpGetUserProfileSettings,
+		OpListActivities,
+		OpListActivitiesByDate,
+		OpCountActivities,
+		OpListActivitiesForDate,
+		OpGetDailySleep,
+		OpGetUserSummary,
+		OpListDevices,
+		OpGetActivityTypedSplits,
+		OpGetActivityExerciseSets,
+		OpGetActivity,
+		OpGetActivityTypes,
+		OpGetActivityEventTypes,
+		OpGetActivitySplits,
+		OpGetActivitySplitSummaries,
+		OpGetActivityWeather,
+		OpGetActivityHRInZones,
+		OpGetActivityPowerInZones,
+		OpGetActivityGear,
+		OpGetPersonalRecords,
+		OpDownloadActivityFile,
+		OpSetActivityName,
+		OpSetActivityType,
+		OpSetActivityEventType,
+		OpSetActivityDescription,
+		OpSetActivityFeel,
+		OpSetPerceivedEffort,
+		OpSetActivityExerciseSets,
+		OpAddGearToActivity,
+		OpRemoveGearFromActivity,
+		OpDeleteActivity,
+		OpCreateManualActivity,
+		OpCreateStrengthActivity,
+		OpListWorkouts,
+		OpGetWorkout,
+		OpUploadWorkout,
+		OpUpdateWorkout,
+		OpDeleteWorkout,
+		OpScheduleWorkout,
+		OpUnscheduleWorkout,
+		OpDownloadWorkout,
+		OpGetScheduledWorkouts,
+		OpGetTrainingPlanWorkouts,
+	}
 }
 
 // credentialOps are the protocol operations that carry a password or a one-time
@@ -360,15 +365,13 @@ var credentialOps = [...]protocol.Op{
 // protocol operations Op also accepts are deliberately not included: they label
 // work another package performs.
 func KnownOps() []Op {
-	out := make([]Op, len(knownOps))
-	copy(out, knownOps[:])
-	return out
+	return knownOps()
 }
 
 // IsKnown reports whether o is one of this package's Op constants or one of
 // protocol's.
 func (o Op) IsKnown() bool {
-	if slices.Contains(knownOps, o) {
+	if slices.Contains(knownOps(), o) {
 		return true
 	}
 	return protocol.Op(o).IsKnown()

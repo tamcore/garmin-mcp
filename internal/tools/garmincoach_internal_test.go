@@ -161,7 +161,7 @@ func assertCalendarDateProperty(t *testing.T, date Property) {
 		t.Error("the reference date is optional, want it required")
 	}
 
-	for _, selector := range []string{"user_id", "email", "display_name", "token"} {
+	for _, selector := range []string{"user_id", keyEmail, keyDisplayName, keyToken} {
 		if strings.Contains(strings.ToLower(date.Description), selector) {
 			t.Errorf("the argument description mentions the account selector %q", selector)
 		}

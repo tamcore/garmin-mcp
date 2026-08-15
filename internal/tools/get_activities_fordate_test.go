@@ -30,7 +30,7 @@ func TestGetActivitiesForDateReturnsTheDaysActivities(t *testing.T) {
 
 	script := testkit.NewScript().With(parityForDatePath(),
 		testkit.JSON(http.StatusOK, dayDocument))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	result := h.call(t, ToolGetActivitiesForDate, forDateArgs())
 
@@ -79,13 +79,13 @@ func TestGetActivitiesForDateDropsTheHeartRateSeriesAndTheCoordinates(t *testing
 
 	script := testkit.NewScript().With(parityForDatePath(),
 		testkit.JSON(http.StatusOK, dayDocument))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	rendered := h.text(t, ToolGetActivitiesForDate, forDateArgs())
 
 	for _, forbidden := range []string{
 		"heartRateValues", "restingHeartRate", "1738296000000",
-		"48.1", "11.5", "startLatitude", "startLongitude",
+		"48.1", "11.5", keyStartLatitude, "startLongitude",
 	} {
 		if strings.Contains(rendered, forbidden) {
 			t.Errorf("the result carries %q, which must never leave this server", forbidden)
@@ -110,7 +110,7 @@ func TestGetActivitiesForDateReportsAQuietDayAsEmpty(t *testing.T) {
 
 			script := testkit.NewScript().With(parityForDatePath(),
 				testkit.JSON(http.StatusOK, body))
-			h := newParityHarness(t, script)
+			h := newToolHarness(t, script)
 
 			result := h.call(t, ToolGetActivitiesForDate, forDateArgs())
 			if got := number(t, result, "count"); got != 0 {
@@ -128,7 +128,7 @@ func TestGetActivitiesForDateReportsAQuietDayAsEmpty(t *testing.T) {
 func TestGetActivitiesForDateRefusesAnImpossibleDateBeforeAnyCall(t *testing.T) {
 	t.Parallel()
 
-	h := newParityHarness(t, testkit.NewScript())
+	h := newToolHarness(t, testkit.NewScript())
 
 	advice := h.callError(t, ToolGetActivitiesForDate, map[string]any{argDate: "2026-13-45"})
 	if !strings.Contains(advice, argDate) {
@@ -164,7 +164,7 @@ func TestGetActivitiesForDateRefusesAnImplausibleDay(t *testing.T) {
 	}
 	body := `{"ActivitiesForDay":{"payload":[` + strings.Join(entries, ",") + `]}}`
 	script := testkit.NewScript().With(parityForDatePath(), testkit.JSON(http.StatusOK, body))
-	h := newParityHarness(t, script)
+	h := newToolHarness(t, script)
 
 	if advice := h.callError(t, ToolGetActivitiesForDate, forDateArgs()); advice == "" {
 		t.Error("the refusal carries no advice")
