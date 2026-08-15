@@ -19,7 +19,7 @@ Last updated: 2026-08-15.
 | 2 — core auth and storage (M1) | **CLOSED** |
 | 3 — MCP foundation (M1) | **CLOSED** |
 | 4 — remote multi-user (M2) | **CLOSED.** The MCP conformance requirement is **blocked upstream**, with evidence below, not outstanding work |
-| 5 — compatibility breadth (M3) | **IN PROGRESS** — 42 of the 138 upstream tools are implemented, plus 5 tools the pinned manifest does not carry. No resource is implemented |
+| 5 — compatibility breadth (M3) | **IN PROGRESS** — 45 of the 138 upstream tools are implemented, plus 5 tools the pinned manifest does not carry. No resource is implemented |
 | 6 — hardening and release | not started |
 
 Phase definitions are in `docs/phases.md`.
@@ -273,11 +273,10 @@ duty. Raise both with the next slice that touches them.
       `StrengthWrites.Create` additionally re-reads the summary and checks the
       stored activity identifier. Every other write returns what Garmin returned
       and does not read back.
-- [x] `internal/tools` gained 37 tools in this slice: 11 read-only, 21 write, 5
-      destructive. The registered surface is now **21 read-only, 21 write and 5
-      destructive from `internal/tools`, plus the server's own `server_info`**,
-      which is 48 tools on the wire.
-- [ ] The remaining upstream breadth. 42 of the 138 manifest tools are
+- [x] `internal/tools` registers **23 read-only, 22 write and 5 destructive
+      tools, plus the server's own `server_info`**, which is 51 tools on the
+      wire. The calendar tools arrived with the GraphQL request shape.
+- [ ] The remaining upstream breadth. 45 of the 138 manifest tools are
       implemented and **no resource is**. Health and wellness, nutrition, weight
       management, training, challenges, courses, women's health, data management,
       the device surface beyond `get_devices`, and the gear reads are all still
@@ -415,7 +414,8 @@ a running server as an MCP client over Streamable HTTP.
 
 **What was run.** A live deployment of this server: a generated TLS certificate,
 a master key, an empty database and one preregistered public client, serving at
-`https://127.0.0.1:8443/mcp` with protocol version `2026-07-28` and 48 tools.
+`https://127.0.0.1:8443/mcp` with protocol version `2026-07-28` and 48 tools,
+which was the registered count on the day of that run.
 Result: **45 passed, 106 failed.** Every one of the 36 scored server scenarios
 failed except three, and two of those three passed vacuously with zero checks.
 
@@ -489,11 +489,12 @@ them.
   authoritative.
 - **`get_workout_by_id` serves the numeric identifier only.** The UUID form that
   adaptive Garmin Coach plans use is not served.
-- **Five tools are left unregistered rather than stubbed**:
-  `get_scheduled_workouts`, `get_training_plan_workouts` and `schedule_week`
-  (they need the GraphQL calendar read that the API layer does not build),
+- **Two tools are left unregistered rather than stubbed**:
   `get_activity_fit_data` (no FIT parsing), and `set_fit_download_dir` (it would
   persist a caller-supplied server filesystem path, and is refused by design).
+  The three calendar tools that were also unregistered — `get_scheduled_workouts`,
+  `get_training_plan_workouts` and `schedule_week` — are registered now that the
+  client layer builds the GraphQL request they need.
 
 Five registered tools are **not** in the pinned manifest at all, because they
 come from open upstream pull requests rather than the pinned commit:
