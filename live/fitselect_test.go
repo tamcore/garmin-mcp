@@ -188,10 +188,14 @@ func analyse(ctx context.Context, id client.ID, raw []byte) (*analysed, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decoding the device file: %w", err)
 	}
+	summary, err := api.AnalyzeFIT(ctx, activity)
+	if err != nil {
+		return nil, fmt.Errorf("analysing the device file: %w", err)
+	}
 	return &analysed{
 		id:       id,
 		activity: activity,
-		summary:  api.AnalyzeFIT(activity),
+		summary:  summary,
 		fileSize: len(raw),
 	}, nil
 }

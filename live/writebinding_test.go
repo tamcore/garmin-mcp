@@ -67,36 +67,59 @@ func TestReadGuardJudgesTheBytesItDispatches(t *testing.T) {
 // The identifier is a number the service chose. Deduplication, a cache or plain drift
 // can make it name an object this suite never created, and the guard would then permit
 // mutating and deleting it — inside a single call, for a tool that creates and then
-// writes to its own creation. Ownership therefore requires the object at that
-// identifier to carry the name the create sent, and this drives both answers.
+// writes to its own creation. Ownership therefore requires the object at that identifier
+// to report that identifier *and* to carry the name the create sent, and this drives
+// every answer: a foreign name, a foreign identifier under the right name, a read-back
+// naming nothing, and the one that must still be admitted.
+//
+// The foreign-identifier case is not a duplicate of the foreign-name one. A generated
+// name carries a one-second run stamp and a per-run counter, so two runs of this suite
+// starting inside the same second render byte-identical names: the object a drifted
+// identifier names can carry exactly the name that was sent while being the other run's.
+// Only the identifier comparison separates those two, which is why it is not enough for
+// the read-back to look right.
 func TestWriteGuardOwnsOnlyACreateItReadsBack(t *testing.T) {
 	t.Parallel()
 
 	sent := objectPrefix + string(labelNameWorkout) + "-" +
-		strconv.FormatInt(nameStampFloor.Unix(), 10) + "-1"
+		strconv.FormatInt(nameStampFloor().Unix(), 10) + "-1"
+	item := client.PathWorkoutPrefix + "/" + strconv.FormatInt(createdProbeID, 10)
 
-	foreign := &recordingCaller{created: createdProbeID, stored: "someone else's workout"}
-	owned := newOwnedObjects()
-	createWorkoutProbe(t, writeCaller{inner: foreign, owned: owned}, sent)
-
-	if owned.owns(kindWorkout, createdProbeID) {
-		t.Error("the guard owned an identifier whose object carries somebody else's name")
+	refused := map[string]*recordingCaller{
+		"an object carrying somebody else's name": {
+			created: createdProbeID, stored: "someone else's workout", storedID: createdProbeID,
+		},
+		"an object reporting a different identifier under the name that was sent": {
+			created: createdProbeID, stored: sent, storedID: createdProbeID + 1,
+		},
+		"an object reporting no identifier at all": {
+			created: createdProbeID, stored: sent,
+		},
 	}
-	if err := writeProbe(t, writeCaller{inner: foreign, owned: owned}, http.MethodDelete,
-		client.PathWorkoutPrefix+"/"+strconv.FormatInt(createdProbeID, 10)); err == nil {
-		t.Error("the guard then admitted a delete of that object")
+	for label, caller := range refused {
+		owned := newOwnedObjects()
+		createWorkoutProbe(t, writeCaller{inner: caller, owned: owned}, sent)
+
+		if owned.owns(kindWorkout, createdProbeID) {
+			t.Errorf("the guard owned an identifier whose read-back answered with %s", label)
+		}
+		if err := writeProbe(t, writeCaller{inner: caller, owned: owned},
+			http.MethodDelete, item); err == nil {
+			t.Errorf("the guard then admitted a delete of an object read back as %s", label)
+		}
 	}
 
-	matching := &recordingCaller{created: createdProbeID, stored: sent}
+	matching := &recordingCaller{
+		created: createdProbeID, stored: sent, storedID: createdProbeID,
+	}
 	proven := newOwnedObjects()
 	createWorkoutProbe(t, writeCaller{inner: matching, owned: proven}, sent)
 
 	if !proven.owns(kindWorkout, createdProbeID) {
-		t.Fatal("the guard refused a create whose object carries the name it sent, so every " +
-			"write test would be refused")
+		t.Fatal("the guard refused a create whose object reports the identifier it addressed " +
+			"and the name it sent, so every write test would be refused")
 	}
-	want := client.PathWorkoutPrefix + "/" + strconv.FormatInt(createdProbeID, 10)
-	if !matching.sawPath(want) {
+	if !matching.sawPath(item) {
 		t.Error("the guard recorded ownership without reading the created workout back")
 	}
 }
@@ -136,12 +159,20 @@ func replayOf(body string) func() (io.ReadCloser, error) {
 	}
 }
 
-// recordingCaller answers a create with an identifier and a read-back with a name, and
-// records what reached it. It contacts nothing.
+// recordingCaller answers a create with an identifier and a read-back with the object
+// that identifier names, and records what reached it. It contacts nothing.
+//
+// The read-back answer carries an identifier as well as a name, because the real one
+// does and because a fixture that omitted it would make every identifier comparison
+// vacuous: an absent field decodes to no identifier, which the ledger refuses, so a
+// missing-id fixture cannot distinguish a guard that compares identifiers from one that
+// does not. storedID of zero is the deliberate exception, and it renders an answer with
+// no identifier field at all.
 type recordingCaller struct {
-	mu      sync.Mutex
-	created int64
-	stored  string
+	mu       sync.Mutex
+	created  int64
+	stored   string
+	storedID int64
 
 	calls  int
 	paths  []string
@@ -163,6 +194,10 @@ func (c *recordingCaller) Do(
 	c.bodies = append(c.bodies, body)
 
 	answer := `{"workoutName":"` + c.stored + `"}`
+	if c.storedID != 0 {
+		answer = `{"workoutId":` + strconv.FormatInt(c.storedID, 10) +
+			`,"workoutName":"` + c.stored + `"}`
+	}
 	if req.Method == http.MethodPost {
 		answer = `{"workoutId":` + strconv.FormatInt(c.created, 10) + `}`
 	}

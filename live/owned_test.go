@@ -4,7 +4,7 @@ package live
 
 import (
 	"fmt"
-	"os"
+	"log/slog"
 	"slices"
 	"strconv"
 	"strings"
@@ -139,34 +139,50 @@ func (o *ownedObjects) record(kind ownedKind, id int64) {
 }
 
 // A createdObject is one create as the guard learned it from Garmin: the identifier the
-// create response named, the name this suite put in the create request, and the name
-// Garmin serves for that identifier when the object is read back.
+// create response named, the name this suite put in the create request, and the
+// identifier *and* name Garmin serves for that identifier when the object is read back.
+//
+// storedID is not a formality and is not the same fact as id. id is what the create
+// response claimed; storedID is what the object itself reports when it is fetched. A
+// read-back that answers with some other object — a cache, a redirect, a gateway that
+// resolved the path differently — carries that object's identifier, and comparing only
+// the name would adopt it whenever the two names happened to agree. Names collide here
+// by construction: a generated name carries a one-second run stamp and a counter, so two
+// runs that start in the same second render the same names.
 type createdObject struct {
-	id     int64
-	sent   string
-	stored string
+	id       int64
+	sent     string
+	stored   string
+	storedID int64
 }
 
 // ownCreated records a created object, and reports whether it could.
 //
-// An identifier alone is not evidence, which is the whole reason this takes three
+// An identifier alone is not evidence, which is the whole reason this takes four
 // fields. Garmin assigns the identifier, and a service that deduplicated a create,
 // answered from a cache or drifted could name an object this suite never made — after
 // which the guard would happily let a test mutate and delete it. The three tools that
 // create and then immediately mutate their own creation make that a live risk rather
 // than a theoretical one.
 //
-// What is required instead is a binding: the object at that identifier must carry the
-// name this suite generated for this create, read back from Garmin rather than assumed,
-// and that name must carry the reserved prefix. The read is per class, so the object
-// must also be of the class the create claimed. A create that reports no identifier — a
-// calendar create does not — leaves the object unowned, and every later mutation of it
-// is then refused.
+// What is required instead is a binding: the object read back at that identifier must
+// report that same identifier *and* carry the name this suite generated for this create,
+// both read from Garmin rather than assumed, and that name must carry the reserved
+// prefix. The read is per class, so the object must also be of the class the create
+// claimed. A create that reports no identifier — a calendar create does not — leaves the
+// object unowned, and every later mutation of it is then refused.
+//
+// The identifier half of that binding is what makes the name half safe. A generated name
+// carries a run stamp of one-second resolution and a per-run counter, so two runs that
+// start in the same second render byte-identical names: a stale or drifted create
+// identifier naming the *other* run's object would pass a name comparison. Requiring the
+// fetched object to report the identifier being adopted closes that, because the object
+// this suite is about to mutate has to agree that it is the one addressed.
 func (o *ownedObjects) ownCreated(kind ownedKind, created createdObject) bool {
 	if created.id <= 0 || created.sent == "" || !hasSuitePrefix(&created.sent) {
 		return false
 	}
-	if created.stored != created.sent {
+	if created.storedID != created.id || created.stored != created.sent {
 		return false
 	}
 	o.record(kind, created.id)
@@ -252,8 +268,9 @@ func (o *ownedObjects) outstanding() []string {
 // leakedObjects reports what the suite created and failed to remove, or "" when
 // nothing leaked or the write layer never ran.
 //
-// It prints the count per class and never an identifier, and it writes to stderr
-// rather than stdout so it cannot be confused with a test result.
+// It prints the count per class and never an identifier, and it goes through the
+// suite's structured logger to stderr rather than stdout so it cannot be confused with
+// a test result.
 func leakedObjects() string {
 	w := builtWriteEnv()
 	if w == nil || w.owned == nil {
@@ -268,73 +285,10 @@ func leakedObjects() string {
 
 	report := "the write suite could not remove " + strings.Join(lines, ", ") +
 		"; they carry the " + objectPrefix + " prefix, and the next run's sweeper removes them"
-	fmt.Fprintln(os.Stderr, "live:", report)
+	suiteLogger().Error("live: the write suite could not remove everything it created",
+		slog.String("outstanding", strings.Join(lines, ", ")),
+		slog.String("prefix", objectPrefix))
 	return report
-}
-
-// hasSuitePrefix reports whether a name merely starts with the reserved prefix.
-//
-// It is the *skip* test, never the removal test, and the asymmetry is the point: a
-// reader that skips one object too many loses nothing, while a sweeper that removes
-// one object too many is a defect. isPreviousRunObject is what a removal asks.
-func hasSuitePrefix(name *string) bool {
-	return name != nil && strings.HasPrefix(*name, objectPrefix)
-}
-
-// nameStampFloor is the earliest run stamp a suite name may carry.
-//
-// It is the day this write layer first existed, not a round date before it: a floor
-// earlier than the suite's own first run admits stamps no run of it could have written,
-// which is the whole population of accidents the floor exists to exclude. Anything at or
-// before it — a version, a count, an index, a stamp from a year when this suite could
-// not have created anything — is not a run stamp.
-var nameStampFloor = time.Date(2026, time.August, 15, 0, 0, 0, 0, time.UTC)
-
-// isPreviousRunObject reports whether a name marks an object an *earlier* run of this
-// suite created.
-//
-// It is the sweeper's only licence to touch anything, so it is deliberately more than a
-// prefix test. A prefix is not ownership: it is a string a human could type. The name
-// must be exactly what nameSequence renders and nothing else — the reserved prefix, one
-// of the labels this suite declares, a run stamp between the floor and the instant this
-// run began, and a counter that is a positive integer. Each of those rules excludes a
-// shape no generated name has: an empty or unknown label, a stamp from before this suite
-// existed or from this run, a zero or negative counter.
-//
-// What it still cannot do is prove that this suite created the object, and that is
-// stated rather than glossed: a name is evidence about a name. A person who wrote an
-// object called "garmin-mcp-live-<a declared label>-<a unix second since this suite
-// existed>-<a positive integer>" by hand would have it removed. That is a name nobody
-// produces by accident, the prefix is documented as reserved, and the suite runs only
-// against a dedicated account, so the residual is accepted. What is *not* accepted, and
-// what this function exists to prevent, is any pre-existing object being adopted merely
-// because it starts with the prefix.
-func isPreviousRunObject(name *string, before time.Time) bool {
-	if name == nil {
-		return false
-	}
-	rest, found := strings.CutPrefix(*name, objectPrefix)
-	if !found {
-		return false
-	}
-
-	parts := strings.Split(rest, "-")
-	if len(parts) < 3 {
-		return false
-	}
-	if counter, err := strconv.ParseInt(parts[len(parts)-1], 10, 64); err != nil || counter <= 0 {
-		return false
-	}
-	if !slices.Contains(suiteLabels(), nameLabel(strings.Join(parts[:len(parts)-2], "-"))) {
-		return false
-	}
-	seconds, err := strconv.ParseInt(parts[len(parts)-2], 10, 64)
-	if err != nil {
-		return false
-	}
-
-	stamp := time.Unix(seconds, 0).UTC()
-	return stamp.After(nameStampFloor) && stamp.Before(before)
 }
 
 // deletionOrder is the order the sweeper and the leak report walk the classes:

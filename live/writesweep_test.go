@@ -5,7 +5,7 @@ package live
 import (
 	"context"
 	"fmt"
-	"os"
+	"log/slog"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/api"
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
@@ -56,10 +56,10 @@ func (w *writeEnv) sweep() error {
 	}
 
 	if workouts+activities > 0 {
-		fmt.Fprintf(os.Stderr,
-			"live: the sweeper removed %d workout(s) and %d activity(ies) carrying the %s "+
-				"prefix, which a previous run left behind\n",
-			workouts, activities, objectPrefix)
+		suiteLogger().Info(
+			"live: the sweeper removed leftovers a previous run left behind",
+			slog.Int("workouts", workouts), slog.Int("activities", activities),
+			slog.String("prefix", objectPrefix))
 	}
 	return nil
 }
@@ -74,7 +74,11 @@ func (w *writeEnv) sweepWorkouts(ctx context.Context, page client.Page) (int, er
 
 	removed := 0
 	for _, summary := range summaries {
-		value, present := summary.WorkoutID.Int64()
+		// Int64Exact, not Int64: this identifier addresses the DELETE below, and Int64
+		// truncates the float64 the payload was parsed into. A listing that named
+		// 18446744.9, or two identifiers one apart above 2^53, would otherwise resolve
+		// to an identifier the library never listed and the sweeper would delete that.
+		value, present := summary.WorkoutID.Int64Exact()
 		if !present {
 			continue
 		}

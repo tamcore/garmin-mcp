@@ -242,8 +242,12 @@ func TestParseFITReturnsNoCoordinates(t *testing.T) {
 	}
 	// The summary is checked too: it is what a tool renders, and a figure derived
 	// from a position would carry one just as a retained field would.
-	summary := fmt.Sprintf("%+v", api.AnalyzeFIT(activity))
-	encodedSummary, err := json.Marshal(api.AnalyzeFIT(activity))
+	analysed, err := api.AnalyzeFIT(t.Context(), activity)
+	if err != nil {
+		t.Fatalf("AnalyzeFIT() = %v", err)
+	}
+	summary := fmt.Sprintf("%+v", analysed)
+	encodedSummary, err := json.Marshal(analysed)
 	if err != nil {
 		t.Fatalf("json.Marshal() of the summary = %v", err)
 	}

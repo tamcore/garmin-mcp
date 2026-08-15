@@ -19,7 +19,11 @@ func analyzeRide(t *testing.T, file testkit.FITFile) api.FITSummary {
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}
-	return api.AnalyzeFIT(activity)
+	summary, err := api.AnalyzeFIT(t.Context(), activity)
+	if err != nil {
+		t.Fatalf("AnalyzeFIT() = %v", err)
+	}
+	return summary
 }
 
 // TestAnalyzeFITSummarizesTheWholeActivity pins the derived figures of a steady
@@ -197,7 +201,10 @@ func TestAnalyzeFITCutsSegmentsFromTheLapWindows(t *testing.T) {
 func TestAnalyzeFITHandlesAnEmptyStream(t *testing.T) {
 	t.Parallel()
 
-	summary := api.AnalyzeFIT(api.FITActivity{})
+	summary, err := api.AnalyzeFIT(t.Context(), api.FITActivity{})
+	if err != nil {
+		t.Fatalf("AnalyzeFIT() = %v", err)
+	}
 	if summary.Overall.Samples != 0 || len(summary.Curve) != 0 || len(summary.Climbs) != 0 {
 		t.Errorf("summary = %+v, want an empty one", summary)
 	}

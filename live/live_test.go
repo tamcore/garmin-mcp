@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,7 +70,8 @@ var shared = sync.OnceValues(buildEnv)
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "garmin-mcp-live")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "live: creating the temporary state directory:", err)
+		suiteLogger().Error("live: creating the temporary state directory",
+			slog.String("reason", safeError(err)))
 		os.Exit(1)
 	}
 	// internal/securefile refuses a path reached through a symlink, and the
@@ -77,7 +79,8 @@ func TestMain(m *testing.M) {
 	// before any secret file is installed under it.
 	stateDir, err = filepath.EvalSymlinks(dir)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "live: resolving the temporary state directory:", err)
+		suiteLogger().Error("live: resolving the temporary state directory",
+			slog.String("reason", safeError(err)))
 		os.Exit(1)
 	}
 
@@ -94,7 +97,8 @@ func TestMain(m *testing.M) {
 		release()
 	}
 	if err := os.RemoveAll(dir); err != nil {
-		fmt.Fprintln(os.Stderr, "live: removing the temporary state directory:", err)
+		suiteLogger().Error("live: removing the temporary state directory",
+			slog.String("reason", safeError(err)))
 	}
 	os.Exit(code)
 }

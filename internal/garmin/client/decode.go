@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -56,6 +57,17 @@ func decodeFailure(p Payload, cause error) error {
 type Number struct {
 	value   float64
 	present bool
+
+	// literal is the payload's own spelling of the number, kept verbatim.
+	//
+	// float64 is the right type for every measurement this decoder carries and the
+	// wrong type for the few fields that are identifiers. It cannot represent an
+	// integer above 2^53, so two identifiers one apart compare equal up there; and
+	// it forgets that a value was ever fractional, so "123.9" and "123" become the
+	// same int64 once truncated. Int64Exact answers from this string instead, which
+	// is why an identifier comparison never round-trips through a float. It is empty
+	// for a Number built in code rather than decoded.
+	literal string
 }
 
 // NewNumber returns a present Number.
@@ -86,7 +98,7 @@ func (n *Number) parse(value string) error {
 	if err != nil {
 		return fmt.Errorf("garmin api: numeric field is not a number: %w", ErrMalformedPayload)
 	}
-	*n = NewNumber(parsed)
+	*n = Number{value: parsed, present: true, literal: value}
 	return nil
 }
 
@@ -106,7 +118,43 @@ func (n Number) IsSet() bool { return n.present }
 func (n Number) Float64() (float64, bool) { return n.value, n.present }
 
 // Int64 returns the truncated value and whether it was present.
+//
+// It is for a measurement a caller wants as a whole number. It is **not** for an
+// identifier: it truncates, so a payload naming 123.9 answers 123, and it has already
+// lost precision above 2^53 before it is called. Use Int64Exact for anything a later
+// request will address.
 func (n Number) Int64() (int64, bool) { return int64(n.value), n.present }
+
+// Int64Exact returns the value as an integer only when the payload named that integer
+// exactly, and reports false otherwise.
+//
+// This is the accessor an identifier is read through. "Exactly" is decided on the
+// payload's own spelling rather than on the parsed float: a fractional literal, a
+// literal in exponent form, and a literal outside the int64 range are all refused
+// rather than rounded into a neighbouring identifier, and an integer above 2^53 keeps
+// every digit it arrived with. A Number built in code carries no literal, so it is
+// answered from the float and refused unless the float is an exact integer inside the
+// range where a float64 still distinguishes consecutive ones.
+func (n Number) Int64Exact() (int64, bool) {
+	if !n.present {
+		return 0, false
+	}
+	if n.literal != "" {
+		value, err := strconv.ParseInt(n.literal, 10, 64)
+		if err != nil {
+			return 0, false
+		}
+		return value, true
+	}
+	if n.value != math.Trunc(n.value) || math.Abs(n.value) > exactFloatIntegerLimit {
+		return 0, false
+	}
+	return int64(n.value), true
+}
+
+// exactFloatIntegerLimit is the largest magnitude at which a float64 still tells two
+// consecutive integers apart. Above it, int64(float64) is a guess.
+const exactFloatIntegerLimit = 1 << 53
 
 // Text is a union decoder for a field Garmin may send as a string, a number or a
 // boolean. The zero value reports absent.

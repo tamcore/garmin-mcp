@@ -5,7 +5,7 @@ package live
 import (
 	"context"
 	"fmt"
-	"os"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -32,7 +32,7 @@ func (w *writeEnv) keepClean(t *testing.T, kind ownedKind, id int64) {
 		}
 		if err := w.remove(kind, id); err != nil {
 			t.Errorf("live: the %s this test created could not be removed and is left on the "+
-				"account; the next run's sweeper removes it: %v", kind, err)
+				"account; the next run's sweeper removes it: %s", kind, safeError(err))
 			return
 		}
 		w.owned.release(kind, id)
@@ -53,8 +53,10 @@ func (w *writeEnv) removeOutstanding() int {
 	for _, kind := range deletionOrder() {
 		for _, id := range w.owned.identifiers(kind) {
 			if err := w.remove(kind, id); err != nil {
-				fmt.Fprintf(os.Stderr,
-					"live: a %s this suite created could not be removed: %v\n", kind, err)
+				suiteLogger().Error(
+					"live: an object this suite created could not be removed",
+					slog.String("kind", kind.String()),
+					slog.String("reason", safeError(err)))
 				left++
 				continue
 			}
@@ -107,7 +109,7 @@ func (w *writeEnv) remove(kind ownedKind, id int64) error {
 // stopped being reached — exactly the kind of regression a live run should catch and
 // a fixture cannot.
 func (w *writeEnv) deleteViaTool(
-	t *testing.T, tool, field string, kind ownedKind, id int64, gone func() bool,
+	t *testing.T, tool, field string, kind ownedKind, id int64, gone absenceProof,
 ) {
 	t.Helper()
 
@@ -129,30 +131,77 @@ func (w *writeEnv) deleteViaTool(
 	w.owned.release(kind, id)
 }
 
-// The absence proof. absenceProofs consecutive reads must agree the object is gone,
-// within absenceReads attempts.
+// The absence proof. proofs consecutive reads must agree the object is gone, within
+// reads attempts.
 //
-// One read is not enough and repetition alone is not either. Garmin serves some of
-// these objects through a gateway that lags in both directions, so a single absent
-// answer can precede a present one — a removal that never happened would then be
-// certified by the first read that had not caught up yet. Requiring consecutive
-// agreement is what turns "it did not answer this time" into "it is gone", and the
-// attempt bound is what keeps a wait from becoming a pass.
+// One read is not enough and repetition alone is not either. Garmin serves some of these
+// objects through a gateway that lags in both directions, so a single absent answer can
+// precede a present one — a removal that never happened would then be certified by the
+// first read that had not caught up yet. Requiring consecutive agreement is what turns
+// "it did not answer this time" into "it is gone", and the attempt bound is what keeps a
+// wait from becoming a pass. Every read is separated from the last by rawCall's own
+// pause, so consecutive agreement is agreement over time rather than inside one instant.
+//
+// The two classes below are priced differently on purpose, and the difference is what
+// each read is evidence of rather than how careful the test feels. See absenceProof.
 const (
-	absenceProofs = 2
-	absenceReads  = 5
+	recordAbsenceProofs = 2
+	recordAbsenceReads  = 5
+
+	calendarAbsenceProofs = 3
+	calendarAbsenceReads  = 8
 )
 
+// An absenceProof is a repeated read that decides whether one object is gone, together
+// with the agreement it demands.
+//
+// The two are one value because they are not independent: how much agreement is enough
+// depends on what a single absent answer proves, and that differs per class.
+//
+//   - A record read — a workout template, an activity — has an authoritative negative.
+//     The REST tier answers a removed record with the one refusal the tool layer renders
+//     as AdviceNoSuchRecord, and no other outcome counts, so an absent answer is Garmin
+//     stating the record is not there. Two agreeing reads then establish it.
+//
+//   - A calendar read has **no** authoritative negative, and this is the honest limit of
+//     this suite. The workout calendar is served by a GraphQL gateway that answers a day
+//     with the entries it holds; an entry that was never replicated to the replica
+//     serving the read is indistinguishable from an entry that was deleted, because both
+//     are simply not in the list. There is no per-entry fetch that can answer "no such
+//     entry". Repeating the read raises the number of replicas that must all have missed
+//     the entry, and it cannot rule out a single lagging replica answering every read.
+//     That residual is accepted and not papered over: what actually guarantees the
+//     calendar is clean is the removal of the workout template the entry points at,
+//     which *is* proven authoritatively — Garmin removes an entry with its template, and
+//     every test that schedules also deletes the template and proves that removal by
+//     AdviceNoSuchRecord. The entry check is a check on unschedule_workout's own effect,
+//     not the guarantee that nothing is left behind.
+type absenceProof struct {
+	gone   func() bool
+	proofs int
+	reads  int
+}
+
+// recordAbsence is the proof for a class with an authoritative not-found.
+func recordAbsence(gone func() bool) absenceProof {
+	return absenceProof{gone: gone, proofs: recordAbsenceProofs, reads: recordAbsenceReads}
+}
+
+// calendarAbsence is the proof for the one class that has none.
+func calendarAbsence(gone func() bool) absenceProof {
+	return absenceProof{gone: gone, proofs: calendarAbsenceProofs, reads: calendarAbsenceReads}
+}
+
 // awaitAbsent reports whether the object was consistently absent.
-func awaitAbsent(gone func() bool) bool {
-	proofs := 0
-	for range absenceReads {
-		if !gone() {
-			proofs = 0
+func awaitAbsent(proof absenceProof) bool {
+	agreed := 0
+	for range proof.reads {
+		if !proof.gone() {
+			agreed = 0
 			continue
 		}
-		proofs++
-		if proofs >= absenceProofs {
+		agreed++
+		if agreed >= proof.proofs {
 			return true
 		}
 	}
@@ -166,34 +215,39 @@ func awaitAbsent(gone func() bool) bool {
 // decode are all failures of the read, and reading a delete into them is how a run
 // certifies a removal that never happened. Every other outcome is reported as unknown,
 // which leaves the object in the ledger.
-func (w *writeEnv) workoutGone(t *testing.T, id int64) func() bool {
+func (w *writeEnv) workoutGone(t *testing.T, id int64) absenceProof {
 	t.Helper()
 
-	return func() bool {
+	return recordAbsence(func() bool {
 		return noSuchRecord(w.rawCall(t, tools.ToolGetWorkoutByID,
 			map[string]any{argWorkoutID: id}))
-	}
+	})
 }
 
 // activityGone reports the same for one activity record.
-func (w *writeEnv) activityGone(t *testing.T, id int64) func() bool {
+func (w *writeEnv) activityGone(t *testing.T, id int64) absenceProof {
 	t.Helper()
 
-	return func() bool {
+	return recordAbsence(func() bool {
 		return noSuchRecord(w.rawCall(t, tools.ToolGetActivity,
 			map[string]any{argActivityID: id}))
-	}
+	})
 }
 
 // entryGone reports whether the calendar no longer carries one created workout's entry
 // on one date.
-func (w *writeEnv) entryGone(t *testing.T, workout int64, date string) func() bool {
+//
+// It is the weakest of the three proofs and it says so: the GraphQL calendar gateway
+// offers no authoritative not-found for a single entry, so absence here is an entry
+// missing from a list rather than Garmin stating the entry does not exist. See
+// absenceProof for what that leaves open and for what closes it.
+func (w *writeEnv) entryGone(t *testing.T, workout int64, date string) absenceProof {
 	t.Helper()
 
-	return func() bool {
+	return calendarAbsence(func() bool {
 		_, present := w.scheduledEntry(t, workout, date)
 		return !present
-	}
+	})
 }
 
 // noSuchRecord reports whether a tool result is the authored refusal for a record

@@ -111,6 +111,11 @@ type writeEnv struct {
 // nothing but its own *testing.T. Everything a run accumulates lives inside the
 // environment this holds, so the state is per run and explicit; what cannot be avoided
 // is the single handle to it.
+//
+// That handle, theWriteSuite below, is one of the two package-level variables AGENTS.md
+// records as forced exceptions to the no-package-state rule; see its "Code Conventions"
+// section. It is written once, by the sync.Once inside it, and read afterwards. New
+// state of the write half goes inside writeEnv rather than beside it.
 type writeSuite struct {
 	once  sync.Once
 	built atomic.Pointer[writeEnv]

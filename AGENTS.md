@@ -37,7 +37,7 @@ date.
 | `internal/config` | `Config`, deterministic four-layer precedence, `_FILE` secret variants, full lexical validation, redacted output, and the operator OAuth client registry | 90.8% |
 | `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, and the login response classifier (JSON and widget HTML). No I/O | 96.7% |
 | `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, refresh with per-principal collapsing and CAS, the shared `TokenGate`, the request-time host guard, unverified-JWT `exp` parsing | 67.3% untagged, 88.2% with `-tags=fakegarmin` |
-| `internal/garmin/client` | The authenticated request layer: bounded wire and decompressed sizes, page and page-start caps, one bounded post-`401` retry that never replays a `POST` or `PATCH`, typed errors | 94.3% |
+| `internal/garmin/client` | The authenticated request layer: bounded wire and decompressed sizes, page and page-start caps, one bounded post-`401` retry that never replays a `POST` or `PATCH`, typed errors, and the exact-integer accessor an identifier is compared through | 94.4% |
 | `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the compiled-in exercise catalog, and FIT activity decoding through `github.com/muktihari/fit` | 90.0% |
 | `internal/mcpserver` | Server, registry, stdio and Streamable HTTP transports, bearer middleware, session binding, origin and forwarded-header guards, elicitation confirmation, `server_info` | 89.3% |
 | `internal/tools` | 59 registered tools — 32 read-only, 22 write, 5 destructive — with contracts snapshot-tested against `compat/tools.json` | 83.6% |
@@ -213,7 +213,19 @@ File discipline, in force now:
 - Files under 400 lines, functions under 50 lines, nesting depth under 5.
   Extract helpers before you cross those limits.
 - No package-level mutable state. Pass `*config.Config`, stores, clocks, and
-  loggers explicitly.
+  loggers explicitly. A constant that cannot be a `const` — `time.Date` above all
+  — is a function returning the value, never a `var`.
+
+  There are exactly **two** exceptions, both in `live/` and both forced by
+  `go test`: a suite gets one entry point that is not a test, `TestMain`, and a
+  test can be handed nothing but its own `*testing.T`, so state that must
+  outlive an individual test has nowhere else to live. They are
+  `live/live_test.go`'s `stateDir`, `closers` and `shared`, and
+  `live/writeenv_test.go`'s `theWriteSuite`. Each is written once during
+  start-up and read afterwards, and everything a run accumulates lives inside
+  the environment the handle points at, so the state is per run and explicit.
+  Any further package-level `var` anywhere in the repository is a defect, and
+  new state in `live/` goes inside `writeEnv` rather than beside it.
 - Interfaces live with the consumer, not in a global interfaces package.
 
 ## Adding a New MCP Tool [NOW]
@@ -350,9 +362,12 @@ Rules the suite enforces on itself:
 - **Owned objects only on the write half.** The write half has its own caller,
   which refuses any mutating request whose target is not an object this suite
   created — before the request leaves the process. Ownership is learned from
-  Garmin's own create responses rather than declared by a test, the recognised
-  endpoint set is an allowlist, and both halves of the guard are pinned by
-  tests. The maintainer's own pre-existing activity and workout are untouchable
+  Garmin's own create responses rather than declared by a test: the created
+  object is read back and admitted only when it reports **both** the identifier
+  being adopted and the name the create sent, because a generated name carries a
+  one-second run stamp and two runs starting in the same second render the same
+  names. The recognised endpoint set is an allowlist, and both halves of the
+  guard are pinned by tests. The maintainer's own pre-existing activity and workout are untouchable
   by construction, and the read half additionally skips any object carrying the
   suite's prefix so the two halves cannot interfere.
 - **Every created object is removed.** Each create registers a `t.Cleanup`
@@ -360,7 +375,11 @@ Rules the suite enforces on itself:
   holds when the suite ends is removed there; a removal that fails is reported
   loudly and never swallowed. Every created object carries the
   `garmin-mcp-live-` name prefix, and a sweeper at suite start removes leftovers
-  **matching that prefix only**, so a killed run cannot accumulate junk.
+  **matching that prefix only**, so a killed run cannot accumulate junk. The
+  sweeper parses the whole generated shape — every numeric field must be spelled
+  the way `strconv.FormatInt` spells it — and compares the run stamp against a
+  cut-off truncated to the second the stamp carries, so a run that starts in the
+  same second as another never sweeps that run's live objects.
 - **No golden values.** Nothing is pinned to the account under test: no
   distance, heart rate, name, date or identifier appears in the package. Every
   check compares two sources Garmin itself provides, or asserts an invariant.
@@ -507,7 +526,10 @@ These apply to every commit, including the code that already exists.
   shape. Each has a leak test that strips the type's methods with an alias and
   asserts the material is still absent from every verb. Every future
   secret-bearing type must follow it too.
-- Structured `slog` logging only. Log request ID, pseudonymous principal ID,
+- Structured `slog` logging only, in `live/` as well: a diagnostic there goes
+  through the suite logger and every error through `safeError`, because a raw
+  `*url.Error` carries the request URL and that URL names an account object.
+  Log request ID, pseudonymous principal ID,
   client ID, coarse category, outcome, latency, and coarse status. Never log
   request or response bodies by default.
 - Stdout is reserved exclusively for MCP frames in stdio mode. Logs go to

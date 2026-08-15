@@ -161,17 +161,19 @@ func TestLiveDestructiveToolIsRefusedForAnObjectThisSuiteDidNotCreate(t *testing
 //
 // It reaches the ledger the way everything else does, through the verifying entry
 // points: there is no way to declare ownership, so even a guard test has to present the
-// evidence — here, a create whose read-back carries the same generated name that was
-// sent. Every value below is synthetic and names the literal ownedID, which is no
-// identifier of the account's.
+// evidence — here, a create whose read-back reports the identifier that was addressed
+// and carries the same generated name that was sent. Every value below is synthetic and
+// names the literal ownedID, which is no identifier of the account's.
 func seededLedger(t *testing.T) *ownedObjects {
 	t.Helper()
 
 	owned := newOwnedObjects()
 	name := objectPrefix + string(labelNameWorkout) + "-" +
-		strconv.FormatInt(nameStampFloor.Unix(), 10) + "-1"
+		strconv.FormatInt(nameStampFloor().Unix(), 10) + "-1"
 	for _, kind := range []ownedKind{kindActivity, kindWorkout} {
-		if !owned.ownCreated(kind, createdObject{id: ownedID, sent: name, stored: name}) {
+		if !owned.ownCreated(kind, createdObject{
+			id: ownedID, sent: name, stored: name, storedID: ownedID,
+		}) {
 			t.Fatalf("the ledger refused a synthetic %s create", kind)
 		}
 	}

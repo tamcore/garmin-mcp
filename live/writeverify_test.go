@@ -19,7 +19,15 @@ import (
 // would let a test mutate and delete it, which for a create-then-mutate tool happens
 // inside a single call. What is required instead is a binding between the create this
 // suite sent and the object that identifier now names: the name goes out in the create
-// request, and the object is read back and must carry it.
+// request, and the object is read back and must report both that name and that
+// identifier.
+//
+// The identifier half of the read-back is not redundant with the name half. A generated
+// name carries a one-second run stamp and a per-run counter, so two runs of this suite
+// that start inside the same second render byte-identical names; a create identifier that
+// named the *other* run's object would then satisfy a name-only comparison. Requiring the
+// fetched object to report the identifier being adopted is what makes the name evidence
+// about this object rather than about a name.
 
 // nameProbeLimit bounds both bodies this file reads: the create request whose name is
 // extracted, and the read-back whose name is compared. A create body is a workout
@@ -47,41 +55,53 @@ func sentName(kind ownedKind, req *http.Request) string {
 	return nameIn(raw, "", field)
 }
 
-// storedName reads the name Garmin serves for one object, or reports why it could not.
+// storedObject reads the identifier and the name Garmin serves for one object, or
+// reports why it could not.
 //
 // The read is a GET built from the create's own URL, so it addresses the same host and
 // the same deployment, and it carries the create's headers so the request layer's own
 // negotiation still applies. It goes through the inner caller, which is what attaches
 // the credential; the guard is not re-entered, and a GET would pass it anyway.
 //
+// Both fields come from the same body, and both are compared before anything is owned:
+// the identifier proves the object served is the one addressed, and the name proves that
+// object is this suite's create rather than a same-named object of a concurrent run.
+//
 // A failure here is deliberately not fatal to the run and deliberately not ownership
 // either. The object stays unowned, so nothing may mutate or delete it — and if it was
 // in fact this suite's, it carries this suite's prefix and the next run's sweeper
 // removes it. Refusing to guess is the whole point: the alternative is guessing about
 // somebody's data.
-func (c writeCaller) storedName(
+//
+// Every failure it reports is authored text plus safeError, never a wrapped transport
+// error: the error is logged, and a *url.Error carries the item URL and with it an
+// account object identifier.
+func (c writeCaller) storedObject(
 	ctx context.Context, principal string, kind ownedKind, id int64, model *http.Request,
-) (string, error) {
+) (name string, storedID int64, err error) {
 	probe, err := c.readBackRequest(ctx, kind, id, model)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	resp, err := c.inner.Do(ctx, principal, probe)
 	if err != nil {
-		return "", fmt.Errorf("reading the created %s back: %w", kind, err)
+		return "", 0, fmt.Errorf("reading the created %s back: %s", kind, safeError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= http.StatusMultipleChoices {
-		return "", fmt.Errorf("reading the created %s back answered with status %d",
+		return "", 0, fmt.Errorf("reading the created %s back answered with status %d",
 			kind, resp.StatusCode)
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, nameProbeLimit+1))
 	if err != nil || int64(len(raw)) > nameProbeLimit {
-		return "", fmt.Errorf("the read-back of the created %s could not be read", kind)
+		return "", 0, fmt.Errorf("the read-back of the created %s could not be read", kind)
 	}
-	return nameIn(raw, resp.Header.Get(headerContentEncoding), kind.nameField()), nil
+
+	encoding := resp.Header.Get(headerContentEncoding)
+	storedID, _ = createdID(kind, raw, encoding)
+	return nameIn(raw, encoding, kind.nameField()), storedID, nil
 }
 
 // readBackRequest builds the per-object GET for one created identifier.

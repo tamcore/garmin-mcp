@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"fmt"
 	"math"
 	"sort"
 	"time"
@@ -83,19 +85,44 @@ type FITSummary struct {
 }
 
 // AnalyzeFIT computes the whole summary of one decoded activity.
-func AnalyzeFIT(activity FITActivity) FITSummary {
+//
+// ctx bounds the analysis, and it is not decoration. This is the one stage of the FIT
+// path whose cost is set by the file rather than by the request: the bounds cap a decode
+// at DefaultMaxFITSessions sessions, DefaultMaxFITLaps laps and DefaultMaxFITRecords
+// records, and a file is free to make every span cover the whole record stream, so the
+// worst case is the product of all three, several walks deep. The arithmetic is pinned
+// in fitcollector_test.go. Every stage below and every span is separated by a context
+// check, so a caller who has given up stops paying at the next one rather than at the
+// end of the file, and a cancelled caller is reported as itself.
+func AnalyzeFIT(ctx context.Context, activity FITActivity) (FITSummary, error) {
 	records := activity.Records
-	summary := FITSummary{
-		Overall:     analyzeSegment(records, overallSpan(activity.Sessions)),
-		Curve:       PowerDurationCurve(records),
-		Climbs:      detectClimbs(records),
-		GradeBands:  gradeBands(records),
-		Temperature: temperatureSplit(records),
-		Drift:       heartRateDrift(records),
-		Shifts:      summarizeShifts(activity.Shifts, records),
+	var summary FITSummary
+
+	// The whole-activity stages, each one walk over the record stream. They are a list
+	// rather than one struct literal so a context check can sit between them.
+	stages := []func(){
+		func() { summary.Overall = analyzeSegment(records, overallSpan(activity.Sessions)) },
+		func() { summary.Curve = PowerDurationCurve(records) },
+		func() { summary.Climbs = detectClimbs(records) },
+		func() { summary.GradeBands = gradeBands(records) },
+		func() { summary.Temperature = temperatureSplit(records) },
+		func() { summary.Drift = heartRateDrift(records) },
+		func() { summary.Shifts = summarizeShifts(activity.Shifts, records) },
 	}
-	summary.Sessions = analyzeSpans(records, activity.Sessions)
-	summary.Laps = analyzeSpans(records, activity.Laps)
+	for _, stage := range stages {
+		if err := analysisContext(ctx); err != nil {
+			return FITSummary{}, err
+		}
+		stage()
+	}
+
+	var err error
+	if summary.Sessions, err = analyzeSpans(ctx, records, activity.Sessions); err != nil {
+		return FITSummary{}, err
+	}
+	if summary.Laps, err = analyzeSpans(ctx, records, activity.Laps); err != nil {
+		return FITSummary{}, err
+	}
 
 	if len(records) > 0 {
 		summary.Start, summary.End = records[0].Time, records[len(records)-1].Time
@@ -103,16 +130,33 @@ func AnalyzeFIT(activity FITActivity) FITSummary {
 	if len(activity.Sessions) > 0 {
 		summary.Sport = activity.Sessions[0].Sport
 	}
-	return summary
+	return summary, nil
+}
+
+// analysisContext reports the caller's cancellation as itself, wrapped with what was
+// being done. A cancelled caller is never reported as a malformed file.
+func analysisContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("analysing the activity file: %w", err)
+	}
+	return nil
 }
 
 // analyzeSpans summarizes every session or lap window.
-func analyzeSpans(records []FITRecord, spans []FITSpan) []FITSegment {
+//
+// The context is checked per span rather than per list, because the span count is the
+// multiplier: one span is a bounded amount of work and a list of them is not.
+func analyzeSpans(
+	ctx context.Context, records []FITRecord, spans []FITSpan,
+) ([]FITSegment, error) {
 	out := make([]FITSegment, 0, len(spans))
 	for _, span := range spans {
+		if err := analysisContext(ctx); err != nil {
+			return nil, err
+		}
 		out = append(out, analyzeSegment(records, span))
 	}
-	return out
+	return out, nil
 }
 
 // analyzeSegment summarizes the records inside one window and then lets the profile

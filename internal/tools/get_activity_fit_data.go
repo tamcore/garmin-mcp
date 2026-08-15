@@ -166,7 +166,11 @@ func (s *service) activityFITData(ctx context.Context, in activityFITInput) (FIT
 		return FITData{}, err
 	}
 	include := in.IncludeRecords != nil && *in.IncludeRecords
-	return newFITData(id.Int64(), size, activity, include), nil
+	data, err := newFITData(ctx, id.Int64(), size, activity, include)
+	if err != nil {
+		return FITData{}, fail(err)
+	}
+	return data, nil
 }
 
 // downloadFITActivity streams one activity's FIT file into memory under the download
@@ -193,8 +197,18 @@ func (s *service) downloadFITActivity(
 }
 
 // newFITData renders the bounded result of one analysed file.
-func newFITData(activityID int64, size int, activity api.FITActivity, records bool) FITData {
-	summary := api.AnalyzeFIT(activity)
+//
+// ctx reaches the analysis rather than stopping at the download. The analysis is the
+// stage whose cost the file sets rather than the request — every session and lap is
+// summarized against the whole retained sample stream — so a caller's deadline that did
+// not reach it would bound the transfer and then wait out the arithmetic.
+func newFITData(
+	ctx context.Context, activityID int64, size int, activity api.FITActivity, records bool,
+) (FITData, error) {
+	summary, err := api.AnalyzeFIT(ctx, activity)
+	if err != nil {
+		return FITData{}, err
+	}
 	sessions, _ := boundedSegments(summary.Sessions, maxFITSessions)
 	laps, lapsTruncated := boundedSegments(summary.Laps, maxFITLaps)
 
@@ -221,7 +235,7 @@ func newFITData(activityID int64, size int, activity api.FITActivity, records bo
 	if records {
 		data.Records, data.RecordsTruncated = newFITRecordViews(activity.Records, maxFITSeriesRecords)
 	}
-	return data
+	return data, nil
 }
 
 // boundedSegments renders a session or lap list under its bound.

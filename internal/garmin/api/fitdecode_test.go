@@ -233,7 +233,11 @@ func TestParseFITStopsCollectingAtTheSpanBound(t *testing.T) {
 
 	// The analysis runs over the bounded collection, so it summarizes exactly the
 	// spans that survived the bound and no more.
-	if summary := api.AnalyzeFIT(activity); len(summary.Laps) != maxLaps {
+	summary, err := api.AnalyzeFIT(t.Context(), activity)
+	if err != nil {
+		t.Fatalf("AnalyzeFIT() = %v", err)
+	}
+	if len(summary.Laps) != maxLaps {
 		t.Errorf("the analysis produced %d lap segments, want the bounded %d",
 			len(summary.Laps), maxLaps)
 	}

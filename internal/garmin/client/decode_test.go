@@ -140,6 +140,82 @@ func TestNumberToleratesEveryShapeGarminUses(t *testing.T) {
 	}
 }
 
+// TestInt64ExactRefusesEveryIdentifierAFloatWouldInvent is the identifier half of the
+// numeric decoder, and it is deliberately not the same question as Float64.
+//
+// Int64 answers from the parsed float64, which is the right type for a measurement and
+// the wrong one for an identifier: it truncates, so an answer naming 123.9 becomes 123
+// and compares equal to a request for workout 123; and above 2^53 it cannot hold two
+// consecutive integers apart, so an identifier one away from the requested one compares
+// equal to it. Both of those turn "the answer names a different object" into "the answer
+// is the object you asked for", which is the check the workout update depends on.
+func TestInt64ExactRefusesEveryIdentifierAFloatWouldInvent(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		json  string
+		want  int64
+		exact bool
+	}{
+		"an integer":                      {`123`, 123, true},
+		"an integer as a numeric string":  {`"123"`, 123, true},
+		"an integer above 2^53":           {`9007199254740993`, 9007199254740993, true},
+		"an integer at the int64 ceiling": {`9223372036854775807`, 9223372036854775807, true},
+		"a fractional value":              {`123.9`, 0, false},
+		"a fractional value at .0":        {`123.0`, 0, false},
+		"an exponent form":                {`1.23e2`, 0, false},
+		"a value past the int64 range":    {`9223372036854775808`, 0, false},
+		"an absent field":                 {jsonNullLiteral, 0, false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var number client.Number
+			if err := json.Unmarshal([]byte(tc.json), &number); err != nil {
+				t.Fatalf("Unmarshal(%s) = %v, want nil", tc.json, err)
+			}
+			got, exact := number.Int64Exact()
+			if exact != tc.exact {
+				t.Fatalf("Int64Exact(%s) exactness = %v, want %v", tc.json, exact, tc.exact)
+			}
+			if exact && got != tc.want {
+				t.Errorf("Int64Exact(%s) = %d, want %d", tc.json, got, tc.want)
+			}
+		})
+	}
+
+	// The two shapes a float64 cannot tell apart, stated as the difference between the
+	// two accessors, so a regression that routed an identifier back through Int64 is
+	// visible here rather than only at a call site.
+	var fractional, big client.Number
+	if err := json.Unmarshal([]byte(`123.9`), &fractional); err != nil {
+		t.Fatalf("Unmarshal(123.9) = %v, want nil", err)
+	}
+	if truncated, _ := fractional.Int64(); truncated != 123 {
+		t.Errorf("Int64(123.9) = %d, want the truncation this test exists to refuse", truncated)
+	}
+	if err := json.Unmarshal([]byte(`9007199254740993`), &big); err != nil {
+		t.Fatalf("Unmarshal(2^53+1) = %v, want nil", err)
+	}
+	if rounded, _ := big.Int64(); rounded != 9007199254740992 {
+		t.Errorf("Int64(2^53+1) = %d, want the rounding this test exists to refuse", rounded)
+	}
+
+	// A Number built in code carries no literal and is answered from the float, under
+	// the same rule.
+	if _, exact := client.NewNumber(123.9).Int64Exact(); exact {
+		t.Error("Int64Exact() called a fractional in-code value an exact identifier")
+	}
+	if got, exact := client.NewNumber(123).Int64Exact(); !exact || got != 123 {
+		t.Errorf("Int64Exact() = (%d, %v) for an in-code whole number, want (123, true)",
+			got, exact)
+	}
+	if _, exact := client.NewNumber(1 << 54).Int64Exact(); exact {
+		t.Error("Int64Exact() called an in-code value past 2^53 an exact identifier")
+	}
+}
+
 func TestTextToleratesEveryShapeGarminUses(t *testing.T) {
 	t.Parallel()
 

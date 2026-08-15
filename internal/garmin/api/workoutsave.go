@@ -63,8 +63,11 @@ func (w *Workouts) Update(
 	if err != nil {
 		return SavedWorkout{}, err
 	}
-	if reported, present := saved.WorkoutID.Int64(); present {
-		if reported != id.Int64() {
+	// An identifier that is present and not an exact integer is a mismatch rather than
+	// an absence: the answer named something, and what it named is not the workout that
+	// was addressed. Only an answer naming no identifier at all is read back.
+	if saved.WorkoutID.IsSet() {
+		if reported, exact := saved.WorkoutID.Int64Exact(); !exact || reported != id.Int64() {
 			return SavedWorkout{}, mismatch(req, wrongWorkoutError())
 		}
 		return saved, nil
@@ -80,6 +83,12 @@ func (w *Workouts) Update(
 // request addressed would send every one of those at a workout the caller never asked
 // for — the maintainer's own, if Garmin ever answered a write with a cached or drifted
 // object. The identifier itself is not named: it is account data.
+//
+// Both comparisons that raise it read the answer through Number.Int64Exact rather than
+// Number.Int64, and the difference is the whole check. Int64 truncates a float64 the
+// payload was parsed into: an answer naming 123.9 would compare equal to a requested
+// 123, and above 2^53 two identifiers one apart compare equal in either direction. An
+// identifier is compared on the digits the payload carried or it is not compared at all.
 func wrongWorkoutError() error {
 	return fmt.Errorf("%w: the workout answer names a different workout than the request",
 		client.ErrMalformedPayload)
@@ -104,7 +113,7 @@ func (w *Workouts) readSaved(
 	if err != nil {
 		return SavedWorkout{}, err
 	}
-	if reported, present := stored.WorkoutID.Int64(); !present || reported != id.Int64() {
+	if reported, exact := stored.WorkoutID.Int64Exact(); !exact || reported != id.Int64() {
 		return SavedWorkout{}, mismatch(req, wrongWorkoutError())
 	}
 	return SavedWorkout{

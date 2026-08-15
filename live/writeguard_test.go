@@ -9,8 +9,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 
@@ -56,11 +56,11 @@ type mutation struct {
 //
 // Ownership is learned from Garmin rather than declared by a test. When a create
 // succeeds the guard reads the identifier out of the response body and then reads that
-// object back, admitting it only when the object carries the name the create sent —
-// which is why a tool that creates and then immediately mutates its own creation,
-// create_strength_training_activity does exactly that, passes without any test being
-// trusted to register anything, and why an identifier Garmin named for some other
-// object does not.
+// object back, admitting it only when the object reports that same identifier and
+// carries the name the create sent — which is why a tool that creates and then
+// immediately mutates its own creation, create_strength_training_activity does exactly
+// that, passes without any test being trusted to register anything, and why an
+// identifier Garmin named for some other object does not.
 type writeCaller struct {
 	inner client.Caller
 	owned *ownedObjects
@@ -105,8 +105,9 @@ func (c writeCaller) Do(
 //
 // The response body is read here and handed back verbatim, compressed or not, so the
 // request layer sees exactly what Garmin sent. The identifier in it is then read back:
-// the object at that identifier must carry the name this create sent. Nothing else is
-// evidence, and an identifier alone certainly is not — see ownCreated.
+// the object at that identifier must report that same identifier and must carry the name
+// this create sent. Nothing else is evidence, and an identifier alone certainly is not —
+// see ownCreated.
 //
 // Not owning is not an error on its own. A calendar create reports no identifier at
 // all, and a read-back that fails or disagrees leaves an object this suite may not
@@ -136,14 +137,18 @@ func (c writeCaller) adopt(
 	if !found || sent == "" {
 		return resp, nil
 	}
-	stored, err := c.storedName(ctx, principal, kind, id, req)
+	stored, storedID, err := c.storedObject(ctx, principal, kind, id, req)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "live: a created %s could not be read back, so it is not "+
-			"owned and will not be touched: %v\n", kind, err)
+		suiteLogger().Warn(
+			"live: a created object could not be read back, so it is not owned and will not "+
+				"be touched",
+			slog.String("kind", kind.String()), slog.String("reason", safeError(err)))
 		return resp, nil
 	}
 
-	c.owned.ownCreated(kind, createdObject{id: id, sent: sent, stored: stored})
+	c.owned.ownCreated(kind, createdObject{
+		id: id, sent: sent, stored: stored, storedID: storedID,
+	})
 	return resp, nil
 }
 

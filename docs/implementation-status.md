@@ -37,7 +37,7 @@ the tag changes nothing.
 | `internal/cryptostore` | 89.9% | |
 | `internal/garmin/api` | 89.9% | 89.9% |
 | `internal/garmin/auth` | 67.3% | 88.2% |
-| `internal/garmin/client` | 94.3% | 94.6% |
+| `internal/garmin/client` | 94.4% | 94.6% |
 | `internal/garmin/protocol` | 96.7% | |
 | `internal/identity` | 97.7% | |
 | `internal/loginweb` | 82.6% | |
@@ -654,6 +654,81 @@ following run's sweeper removed nothing, which is what proves it. The account
 still holds exactly the pre-existing activity and workout it started with — the
 FIT cross-check, the session-coverage invariant, the nine activity-scoped tools
 and the derived-argument tests all selected them in the same run and passed.
+
+### A third adversarial review found six more, and all six are fixed
+
+The review cleared three areas outright — the read guard, the coordinate scrub and
+the two file splits — and they are untouched. What it found:
+
+- **The ownership read-back checked the name and not the identifier.** A generated
+  name carries a one-second run stamp and a per-run counter, so two runs starting
+  inside the same second render byte-identical names: a stale or drifted create
+  identifier naming the *other* run's object satisfied a name-only comparison. The
+  fixture that let this pass omitted the identifier from the read-back entirely, so
+  no test could tell the two apart. The read-back now returns the identifier as
+  well as the name, `ownCreated` requires the fetched object to report the
+  identifier being adopted, and the fixture carries one — with a case whose
+  read-back names a *different* object under the right name, which fails without
+  the check.
+- **The sweeper could delete a concurrent run's objects.** Names carry whole
+  seconds and the cut-off carried nanoseconds, so a run starting later in the same
+  second read a live run's stamp as strictly earlier and swept it. The cut-off is
+  now truncated to the resolution the name carries, so two runs in one second
+  compare equal and equal is not earlier. Two further holes in the same parser: it
+  accepted integer spellings `strconv.FormatInt` cannot produce (`+1`, zero
+  padding), which are now refused by round-tripping every numeric field; and the
+  stamp floor sat at the midnight *before* the write half existed, admitting almost
+  fifteen hours of seconds no run of it ever stamped. The floor is now the author
+  instant of the commit that introduced the write half, and the test asserts
+  equality rather than a range, so loosening it fails.
+- **The FIT affordability assertion priced one pass and the analysis makes five.**
+  `deriveSegment` walks a span's records through `distanceOf`, `ascentOf`, the
+  accumulator loop, `powerSeries` and `dynamicsOf`. The honest worst case is
+  therefore **66,300,000 record visits** — 221 spans (20 sessions, 200 laps, the
+  whole-activity segment) walked 5 times over 60,000 records — plus **19,094,400**
+  per-second series elements in normalized power, each costing a fourth power. It
+  was measured end to end at **0.85 s of CPU** on the development machine, roughly
+  a third of it the series. Both figures are now asserted at exactly the current
+  product, so any widening of any bound fails; the reviewed-not-enforced status of
+  the walk count is written into the test rather than implied. The bounds were
+  **not** lowered: 0.85 s is proportionate to a call that first streams a 12 MB
+  device file, and it is now interruptible — `AnalyzeFIT` takes a
+  `context.Context`, checks it between every whole-activity stage and before every
+  span, and reports a cancelled caller as itself. The reviewer's "roughly 152 MB of
+  power-series allocation" is right as a *cumulative* figure and is not a memory
+  figure: the series are built and dropped one span at a time, so peak residency is
+  one 86,400-element buffer, about 691 KB.
+- **The workout identifier comparison was not exact.** `client.Number` parses
+  through `ParseFloat`, so `Int64()` truncated: an answer naming `123.9` compared
+  equal to a requested `123`, and at 2^53 two identifiers one apart compared equal
+  in either direction. `Number` now keeps the payload's own spelling and
+  `Int64Exact` answers from it, refusing a fractional literal, an exponent form and
+  anything outside the int64 range rather than rounding into a neighbouring object.
+  `Update`, its 204 read-back and the live sweeper's delete target all use it.
+- **Two calendar absences do not prove a deletion, and now say so.** The record
+  paths were already correct — they require the tool layer's own not-found advice,
+  and a rate limit or a 401 does not count. The calendar has **no authoritative
+  not-found**: the GraphQL gateway answers a day with the entries it holds, and an
+  entry that never replicated is indistinguishable from one that was deleted.
+  Repetition raises the number of replicas that must all have missed it and cannot
+  rule out one lagging replica answering every read. The proof is now a value
+  carrying its own strength — three agreeing reads for the calendar against two for
+  a record — and the code states the residual plainly instead of implying
+  certainty. What actually guarantees the calendar is clean is the removal of the
+  workout template the entry points at, which *is* proven authoritatively and which
+  every scheduling test performs.
+- **A raw transport error was printed with `fmt.Fprintf`.** A `*url.Error` carries
+  the request URL, and for this suite that URL is a Garmin object path. Every
+  diagnostic in `live/` now goes through one structured `slog` logger to stderr,
+  and every error through `safeError`, which renders a `*client.APIError` with the
+  request layer's own redacting renderer, names a cancelled context as itself, and
+  reduces everything else to the Go type of the deepest error in the chain.
+- **Four package-level mutables.** Three were `time.Date` values that cannot be
+  constants; each is now a function. The fourth, `theWriteSuite`, cannot move —
+  `go test` gives a suite one non-test entry point and hands a test nothing but its
+  own `*testing.T` — so it and `live_test.go`'s three start-up handles are now
+  recorded as the two named exceptions in AGENTS.md's own rule rather than left
+  silently violating it.
 
 ### The write half earned its keep too: two shipped tools were broken
 
