@@ -43,6 +43,7 @@ the tag changes nothing.
 | `internal/loginweb` | 82.6% | |
 | `internal/mcplog` | 98.5% | |
 | `internal/mcpserver` | 89.0% | |
+| `internal/notices` | 89.3% | |
 | `internal/oauthserver` | 92.4% | |
 | `internal/oauthstore` | 84.6% | |
 | `internal/policy` | 91.7% | |

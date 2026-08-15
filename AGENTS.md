@@ -32,6 +32,7 @@ date.
 | Path | What is there | Coverage |
 |------|---------------|----------|
 | `cmd/garmin-mcp/main.go` | Thin `main`: passes the ldflags-injected `version` and `commit` into `cmd.Execute` and calls `os.Exit` with the returned code | n/a |
+| `cmd/notices/main.go` | Thin `main` for the notices generator: flags, then `notices.Generate`. A maintenance tool, never linked into `garmin-mcp` | n/a |
 | `internal/cmd` | Cobra tree and the composition root. `serve` (stdio and streamable-http), `auth`, `doctor` and `version` do real work; `tools list` and `migrate` are still declared gaps | 74.3% |
 | `internal/config` | `Config`, deterministic four-layer precedence, `_FILE` secret variants, full lexical validation, redacted output, and the operator OAuth client registry | 90.8% |
 | `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, and the login response classifier (JSON and widget HTML). No I/O | 96.7% |
@@ -51,6 +52,7 @@ date.
 | `internal/tokenlink` | `Store`, the adapter that makes a `*store.FileStore` satisfy `auth.TokenStore` by converting between the two packages' `TokenSet` types | 80.0% |
 | `internal/loginweb` | The browser login flow in two profiles: the one-shot loopback profile and the remote profile with the `__Host-` cookie, HSTS, disclosure page, independent CSRF token, and server-held MFA continuation | 82.6% |
 | `internal/mcplog` | Structured `slog` logging with the allowlisted field set, level mapping, and the stderr sink that refuses stdout | 98.5% |
+| `internal/notices` | The `THIRD_PARTY_NOTICES.md` generator: the linked module set unioned over the six released targets, the curated SPDX and licence-file registry, verbatim licence copying, and the freshness test that fails on a stale notices file | 89.3% |
 | `internal/ratelimit` | The per-principal limiter and its handler middleware | 95.7% |
 | `internal/testkit` | Scripted fake Garmin service, fake clock, fixtures, transport guard | 96.8% |
 | `e2e` | Build tag `e2e`. `cli_test.go` builds the binary and drives it as a subprocess: version output, clean stdout on the stdio path, unknown command | n/a |
@@ -162,6 +164,7 @@ compile.
 
 ```
 cmd/garmin-mcp/          main package only                                    exists
+cmd/notices/             main package only: the notices generator             exists
 internal/
   cmd/                   Cobra commands and the composition root              exists (tools list and migrate still fail)
   config/                parsing, precedence, validation, redacted output      exists
@@ -182,6 +185,7 @@ internal/
   cryptostore/           versioned envelope encryption and key rotation        exists
   securefile/            shared filesystem hardening for every secret file     exists
   tokenlink/             store-to-auth TokenSet adapter                        exists
+  notices/               THIRD_PARTY_NOTICES.md generator and freshness test  exists
   policy/                scopes, write/destructive gates, limits               exists
   observability/         redacted logging, metrics, tracing hooks              planned (logging lives in mcplog; no metrics, no tracing)
   testkit/               fake Garmin, fake clock, fixtures, test keys          exists
@@ -194,7 +198,8 @@ docs/adr/                consequential design records                          e
 
 File discipline, in force now:
 
-- All real code lives under `internal/`. `cmd/garmin-mcp/` holds only `main`.
+- All real code lives under `internal/`. `cmd/garmin-mcp/` and `cmd/notices/`
+  hold only `main`.
 - Every non-trivial `.go` file has a sibling `_test.go` in the same package.
 - Files under 400 lines, functions under 50 lines, nesting depth under 5.
   Extract helpers before you cross those limits.

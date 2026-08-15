@@ -13,7 +13,10 @@ Licence texts for Go modules are copied from the module cache
 one that belongs to the pinned version. Upstream compatibility-reference
 licences are copied from the pinned commits named below.
 
-Nothing here is a summary. Where a text is reproduced it is byte-for-byte.
+Nothing here is a summary. Where a text is reproduced it is byte-for-byte,
+with one exception that carries no terms: a run of blank lines at the very
+end of a file is collapsed to a single newline so the closing code fence
+sits on its own line.
 
 ## Upstream compatibility references
 
