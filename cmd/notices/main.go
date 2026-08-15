@@ -16,6 +16,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/tamcore/garmin-mcp/internal/notices"
@@ -25,14 +26,29 @@ import (
 const noticesFile = "THIRD_PARTY_NOTICES.md"
 
 func main() {
-	out := flag.String("o", noticesFile, "output file, or - for stdout")
-	dir := flag.String("C", ".", "module root to resolve the dependency set from")
-	flag.Parse()
+	os.Exit(execute(context.Background(), os.Args[1:], os.Stderr))
+}
 
-	if err := run(context.Background(), *dir, *out); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+// execute parses the arguments and reports the process exit status, the way
+// cmd/garmin-mcp splits Execute from main. Keeping os.Exit in main and nothing
+// else means every branch below is reachable from a test.
+func execute(ctx context.Context, args []string, stderr io.Writer) int {
+	flags := flag.NewFlagSet("notices", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	out := flags.String("o", noticesFile, "output file, or - for stdout")
+	dir := flags.String("C", ".", "module root to resolve the dependency set from")
+
+	if err := flags.Parse(args); err != nil {
+		return 2
 	}
+
+	if err := run(ctx, *dir, *out); err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+
+		return 1
+	}
+
+	return 0
 }
 
 // run generates the notices and writes them. Every failure is fatal by design:
