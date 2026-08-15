@@ -117,6 +117,49 @@ func readActivityDetailDomain(t *testing.T, h harness) {
 	}
 }
 
+// writeScript scripts the whole write flow one strength session performs: create
+// the activity, replace its sets, read the sets back, and read the activity back.
+func writeScript() testkit.Script {
+	return strengthCreateScript(`{"activityId":18446744}`).
+		With(client.PathWorkoutPrefix, testkit.JSON(http.StatusOK,
+			`{"workoutId":18446744,"workoutName":"Easy Run"}`)).
+		With(client.PathWorkoutSchedule+"/18446744", testkit.JSON(http.StatusOK, `{"id":5150}`))
+}
+
+// TestFakeServiceWholeWriteSliceAgainstOneAccount drives the write domains end to
+// end against the scripted fake, including the verification reads.
+func TestFakeServiceWholeWriteSliceAgainstOneAccount(t *testing.T) {
+	h := newHarness(t, writeScript(), client.Limits{})
+
+	created, err := newStrengthWrites(t, h).Create(t.Context(), h.session, strengthActivity())
+	if err != nil {
+		t.Fatalf("Create() = %v", err)
+	}
+	if created.Sets.Sets.Len() != 1 {
+		t.Errorf("%d verified sets, want 1", created.Sets.Sets.Len())
+	}
+
+	workouts := newWorkouts(t, h)
+	saved, err := workouts.Upload(t.Context(), h.session, mustWorkoutDocument(t))
+	if err != nil {
+		t.Fatalf("Upload() = %v", err)
+	}
+	workoutID, err := saved.ID()
+	if err != nil {
+		t.Fatalf("ID() = %v", err)
+	}
+	if _, err := workouts.Schedule(t.Context(), h.session, workoutID,
+		mustDate(t, testCalendarDate)); err != nil {
+		t.Fatalf("Schedule() = %v", err)
+	}
+
+	for _, request := range h.server.Requests() {
+		if request.Header.Get("Authorization") != "" {
+			t.Error("a request carried an Authorization header: the caller owns the token")
+		}
+	}
+}
+
 func TestFakeServiceRateLimitReachesTheDomainCallerIntact(t *testing.T) {
 	script := testkit.NewScript().With(client.PathDevices, testkit.RateLimited(4))
 	h := newHarness(t, script, client.Limits{})

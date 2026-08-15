@@ -65,6 +65,8 @@ func (c Config) validateStdio() []error {
 		{key: keyTLSKeyFile, set: c.TLSKeyFile != ""},
 		{key: keyTrustedProxyCIDRs, set: len(c.TrustedProxyCIDRs) > 0},
 		{key: keyAllowInsecureHTTP, set: c.AllowInsecureHTTP},
+		{key: keyAllowedOrigins, set: len(c.AllowedOrigins) > 0},
+		{key: keyOAuthClients, set: len(c.OAuthClients) > 0},
 	}
 
 	var errs []error

@@ -52,6 +52,15 @@ var (
 	// disabled.
 	ErrClientNotFound = errors.New("store: oauth client not found")
 
+	// ErrClientDisabled means the OAuth client exists but an operator switched it
+	// off. It is distinct from ErrClientNotFound on purpose, and only the
+	// reconciliation path ever reports it: every request-facing lookup still
+	// answers ErrClientNotFound, so a disabled client stays indistinguishable from
+	// an unknown one to anything that could be asked by a client. A reconciliation
+	// reports it rather than re-enabling the row, so a restart cannot undo the
+	// operator's decision.
+	ErrClientDisabled = errors.New("store: oauth client is disabled")
+
 	// ErrRedirectURIMismatch means the presented redirect URI is not one of the
 	// client's registered URIs. Matching is exact: no prefix rule, no wildcard.
 	ErrRedirectURIMismatch = errors.New("store: redirect uri is not registered for the client")

@@ -39,9 +39,69 @@ const (
 	// SegmentTypedSplits is the per-activity typed-splits segment, whose payload
 	// shape varies by activity type. Source: get_activity_typed_splits.
 	SegmentTypedSplits = "typedsplits"
-	// SegmentExerciseSets is the per-activity strength-set segment.
-	// Source: get_activity_exercise_sets.
+	// SegmentExerciseSets is the per-activity strength-set segment. It is read by
+	// get_activity_exercise_sets and replaced by set_activity_exercise_sets.
 	SegmentExerciseSets = "exerciseSets"
+	// SegmentSplits is the per-activity split collection.
+	// Source: get_activity_splits.
+	SegmentSplits = "splits"
+	// SegmentSplitSummaries is the per-activity split summary collection.
+	// Source: get_activity_split_summaries.
+	SegmentSplitSummaries = "split_summaries"
+	// SegmentWeather is the per-activity weather record.
+	// Source: get_activity_weather.
+	SegmentWeather = "weather"
+	// SegmentHRInZones is the per-activity heart-rate time-in-zones record.
+	// Source: get_activity_hr_in_timezones.
+	SegmentHRInZones = "hrTimeInZones"
+	// SegmentPowerInZones is the per-activity power time-in-zones record.
+	// Source: get_activity_power_in_timezones.
+	SegmentPowerInZones = "powerTimeInZones"
+
+	// PathActivityTypes is the activity-type catalog.
+	// Source: garmin_connect_activity_types.
+	PathActivityTypes = "/activity-service/activity/activityTypes"
+	// PathActivityEventTypes is the event-type catalog. Source: the
+	// connectapi("/activity-service/activity/eventTypes") read of
+	// set_activity_event_type.
+	PathActivityEventTypes = "/activity-service/activity/eventTypes"
+	// PathPersonalRecords precedes the display name in the personal-record path.
+	// Source: garmin_connect_personal_record_url.
+	PathPersonalRecords = "/personalrecord-service/personalrecord/prs"
+	// PathGearFilter is the gear list, filtered by activityId or userProfilePk.
+	// Source: garmin_connect_gear.
+	PathGearFilter = "/gear-service/gear/filterGear"
+	// PathGearPrefix precedes the link and unlink segments of a gear write.
+	// Source: garmin_connect_gear_baseurl.
+	PathGearPrefix = "/gear-service/gear"
+	// PathWorkouts is the paginated workout library.
+	// Source: f"{garmin_workouts}/workouts".
+	PathWorkouts = "/workout-service/workouts"
+	// PathWorkoutPrefix precedes a workout id in the per-workout paths.
+	// Source: f"{garmin_workouts}/workout".
+	PathWorkoutPrefix = "/workout-service/workout"
+	// PathWorkoutFITPrefix precedes a workout id in the FIT download path.
+	// Source: download_workout.
+	PathWorkoutFITPrefix = "/workout-service/workout/FIT"
+	// PathWorkoutSchedule precedes a workout id when scheduling and a scheduled
+	// workout id when unscheduling. Source: garmin_workouts_schedule_url.
+	PathWorkoutSchedule = "/workout-service/schedule"
+
+	// PathActivityOriginalDownload precedes an activity id in the original
+	// (zipped FIT) download path. Source: garmin_connect_fit_download.
+	PathActivityOriginalDownload = "/download-service/files/activity"
+	// PathActivityTCXDownload precedes an activity id in the TCX export path.
+	// Source: garmin_connect_tcx_download.
+	PathActivityTCXDownload = "/download-service/export/tcx/activity"
+	// PathActivityGPXDownload precedes an activity id in the GPX export path.
+	// Source: garmin_connect_gpx_download.
+	PathActivityGPXDownload = "/download-service/export/gpx/activity"
+	// PathActivityKMLDownload precedes an activity id in the KML export path.
+	// Source: garmin_connect_kml_download.
+	PathActivityKMLDownload = "/download-service/export/kml/activity"
+	// PathActivityCSVDownload precedes an activity id in the CSV export path.
+	// Source: garmin_connect_csv_download.
+	PathActivityCSVDownload = "/download-service/export/csv/activity"
 )
 
 // Query parameter names Garmin's API tier expects. Source: the params dicts of
@@ -56,6 +116,7 @@ const (
 	QueryCalendarDate          = "calendarDate"
 	QueryDate                  = "date"
 	QueryNonSleepBufferMinutes = "nonSleepBufferMinutes"
+	QueryActivityID            = "activityId"
 )
 
 // Endpoint is a sanitized endpoint label for logs, metrics and errors.
@@ -81,6 +142,24 @@ const (
 	EndpointDevices             = Endpoint("connectapi.device.registered_devices")
 	EndpointActivityTypedSplits = Endpoint("connectapi.activity.typed_splits")
 	EndpointActivityExerciseSet = Endpoint("connectapi.activity.exercise_sets")
+
+	EndpointActivity               = Endpoint("connectapi.activity.summary")
+	EndpointActivityTypes          = Endpoint("connectapi.activity.types")
+	EndpointActivityEventTypes     = Endpoint("connectapi.activity.event_types")
+	EndpointActivitySplits         = Endpoint("connectapi.activity.splits")
+	EndpointActivitySplitSummaries = Endpoint("connectapi.activity.split_summaries")
+	EndpointActivityWeather        = Endpoint("connectapi.activity.weather")
+	EndpointActivityHRInZones      = Endpoint("connectapi.activity.hr_in_zones")
+	EndpointActivityPowerInZones   = Endpoint("connectapi.activity.power_in_zones")
+	EndpointActivityDownload       = Endpoint("connectapi.download.activity_file")
+	EndpointGearFilter             = Endpoint("connectapi.gear.filter")
+	EndpointGearLink               = Endpoint("connectapi.gear.link")
+	EndpointGearUnlink             = Endpoint("connectapi.gear.unlink")
+	EndpointPersonalRecords        = Endpoint("connectapi.personalrecord.prs")
+	EndpointWorkoutList            = Endpoint("connectapi.workout.list")
+	EndpointWorkout                = Endpoint("connectapi.workout.item")
+	EndpointWorkoutDownload        = Endpoint("connectapi.workout.download")
+	EndpointWorkoutSchedule        = Endpoint("connectapi.workout.schedule")
 )
 
 var knownEndpoints = [...]Endpoint{
@@ -93,6 +172,23 @@ var knownEndpoints = [...]Endpoint{
 	EndpointDevices,
 	EndpointActivityTypedSplits,
 	EndpointActivityExerciseSet,
+	EndpointActivity,
+	EndpointActivityTypes,
+	EndpointActivityEventTypes,
+	EndpointActivitySplits,
+	EndpointActivitySplitSummaries,
+	EndpointActivityWeather,
+	EndpointActivityHRInZones,
+	EndpointActivityPowerInZones,
+	EndpointActivityDownload,
+	EndpointGearFilter,
+	EndpointGearLink,
+	EndpointGearUnlink,
+	EndpointPersonalRecords,
+	EndpointWorkoutList,
+	EndpointWorkout,
+	EndpointWorkoutDownload,
+	EndpointWorkoutSchedule,
 }
 
 // labelUnknown is what an unrecognized label renders as, matching protocol.
@@ -143,6 +239,38 @@ const (
 	OpListDevices             = Op("list_devices")
 	OpGetActivityTypedSplits  = Op("get_activity_typed_splits")
 	OpGetActivityExerciseSets = Op("get_activity_exercise_sets")
+
+	OpGetActivity               = Op("get_activity")
+	OpGetActivityTypes          = Op("get_activity_types")
+	OpGetActivityEventTypes     = Op("get_activity_event_types")
+	OpGetActivitySplits         = Op("get_activity_splits")
+	OpGetActivitySplitSummaries = Op("get_activity_split_summaries")
+	OpGetActivityWeather        = Op("get_activity_weather")
+	OpGetActivityHRInZones      = Op("get_activity_hr_in_zones")
+	OpGetActivityPowerInZones   = Op("get_activity_power_in_zones")
+	OpGetActivityGear           = Op("get_activity_gear")
+	OpGetPersonalRecords        = Op("get_personal_records")
+	OpDownloadActivityFile      = Op("download_activity_file")
+	OpSetActivityName           = Op("set_activity_name")
+	OpSetActivityType           = Op("set_activity_type")
+	OpSetActivityEventType      = Op("set_activity_event_type")
+	OpSetActivityDescription    = Op("set_activity_description")
+	OpSetActivityFeel           = Op("set_activity_feel")
+	OpSetPerceivedEffort        = Op("set_perceived_effort")
+	OpSetActivityExerciseSets   = Op("set_activity_exercise_sets")
+	OpAddGearToActivity         = Op("add_gear_to_activity")
+	OpRemoveGearFromActivity    = Op("remove_gear_from_activity")
+	OpDeleteActivity            = Op("delete_activity")
+	OpCreateManualActivity      = Op("create_manual_activity")
+	OpCreateStrengthActivity    = Op("create_strength_training_activity")
+	OpListWorkouts              = Op("list_workouts")
+	OpGetWorkout                = Op("get_workout_by_id")
+	OpUploadWorkout             = Op("upload_workout")
+	OpUpdateWorkout             = Op("update_workout")
+	OpDeleteWorkout             = Op("delete_workout")
+	OpScheduleWorkout           = Op("schedule_workout")
+	OpUnscheduleWorkout         = Op("unschedule_workout")
+	OpDownloadWorkout           = Op("download_workout")
 )
 
 var knownOps = [...]Op{
@@ -156,6 +284,37 @@ var knownOps = [...]Op{
 	OpListDevices,
 	OpGetActivityTypedSplits,
 	OpGetActivityExerciseSets,
+	OpGetActivity,
+	OpGetActivityTypes,
+	OpGetActivityEventTypes,
+	OpGetActivitySplits,
+	OpGetActivitySplitSummaries,
+	OpGetActivityWeather,
+	OpGetActivityHRInZones,
+	OpGetActivityPowerInZones,
+	OpGetActivityGear,
+	OpGetPersonalRecords,
+	OpDownloadActivityFile,
+	OpSetActivityName,
+	OpSetActivityType,
+	OpSetActivityEventType,
+	OpSetActivityDescription,
+	OpSetActivityFeel,
+	OpSetPerceivedEffort,
+	OpSetActivityExerciseSets,
+	OpAddGearToActivity,
+	OpRemoveGearFromActivity,
+	OpDeleteActivity,
+	OpCreateManualActivity,
+	OpCreateStrengthActivity,
+	OpListWorkouts,
+	OpGetWorkout,
+	OpUploadWorkout,
+	OpUpdateWorkout,
+	OpDeleteWorkout,
+	OpScheduleWorkout,
+	OpUnscheduleWorkout,
+	OpDownloadWorkout,
 }
 
 // credentialOps are the protocol operations that carry a password or a one-time

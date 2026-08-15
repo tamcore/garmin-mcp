@@ -14,7 +14,9 @@
 //
 // # Endpoints in this slice
 //
-// Read-only, all of them. Source: python-garminconnect 0.3.10.
+// Source: python-garminconnect 0.3.10, plus the two unmerged upstream proposals
+// named below. The reads are first; the writes follow with their declared
+// effects.
 //
 //	Profile.Social               /userprofile-service/socialProfile                flat object
 //	Profile.Settings             /userprofile-service/userprofile/user-settings     nested object
@@ -27,6 +29,61 @@
 //	Devices.List                 /device-service/deviceregistration/devices         plain array
 //	ActivityDetails.TypedSplits  /activity-service/activity/{id}/typedsplits        union-shaped
 //	ActivityDetails.ExerciseSets /activity-service/activity/{id}/exerciseSets       nested unions
+//	ActivityDetails.Summary      /activity-service/activity/{id}                    one activity
+//	ActivityDetails.Splits       /activity-service/activity/{id}/splits             union-shaped
+//	ActivityDetails.SplitSummaries  .../split_summaries                             array or object
+//	ActivityDetails.Weather      /activity-service/activity/{id}/weather            location
+//	ActivityDetails.HRInZones    /activity-service/activity/{id}/hrTimeInZones      health
+//	ActivityDetails.PowerInZones /activity-service/activity/{id}/powerTimeInZones   health
+//	ActivityDetails.Types        /activity-service/activity/activityTypes           catalog
+//	ActivityDetails.EventTypes   /activity-service/activity/eventTypes              catalog
+//	Profile.ProfileSettings      /userprofile-service/userprofile/settings          identity
+//	Profile.UnitSystem           derived from Settings                              preference
+//	Profile.FullName             derived from Social                                identity
+//	Profile.PersonalRecords      /personalrecord-service/personalrecord/prs/{name}  health
+//	Gear.ForActivity             /gear-service/gear/filterGear?activityId           device
+//	Workouts.List                /workout-service/workouts                          paginated
+//	Workouts.Get                 /workout-service/workout/{id}                      one workout
+//	ActivityFiles.Download       /download-service/...                              streamed
+//	Workouts.Download            /workout-service/workout/FIT/{id}                  streamed
+//
+// The writes, each with the effect the retry predicate reads:
+//
+//	ActivityWrites.SetName            PUT  /activity-service/activity/{id}   idempotent
+//	ActivityWrites.SetType            PUT  same                              idempotent
+//	ActivityWrites.SetEventType       PUT  same                              idempotent
+//	ActivityWrites.SetDescription     PUT  same                              idempotent
+//	ActivityWrites.SetFeel            PUT  same, summaryDTO                  idempotent
+//	ActivityWrites.SetPerceivedEffort PUT  same, summaryDTO                  idempotent
+//	ActivityWrites.Delete             DEL  same                              delete
+//	ActivityWrites.CreateManual       POST /activity-service/activity        unsafe
+//	Gear.Add, Gear.Remove             PUT  /gear-service/gear/{link,unlink}  idempotent
+//	Workouts.Upload                   POST /workout-service/workout          unsafe
+//	Workouts.Update                   PUT  /workout-service/workout/{id}     idempotent
+//	Workouts.Delete                   DEL  same                              delete
+//	Workouts.Schedule                 POST /workout-service/schedule/{id}    unsafe
+//	Workouts.Unschedule               DEL  same, scheduled id                delete
+//	StrengthWrites.ReplaceSets        PUT  .../exerciseSets, then verified   idempotent
+//	StrengthWrites.Create             POST create, sets, then verified       unsafe
+//
+// # Writes
+//
+// A write takes a strict typed request model validated at the boundary, and a
+// read keeps the tolerant decoding: the two directions are not symmetric, because
+// a caller's mistake must be refused before it reaches Garmin while Garmin's
+// schema drift must not fail an otherwise useful response.
+//
+// Two writes verify what they saved, which is the behavior the upstream
+// proposals describe. ReplaceSets re-reads the set list and compares it set by
+// set, and Create re-reads both the set list and the activity's own identifier. A
+// mismatch is an error: reporting success for a session Garmin did not store the
+// way it was written is the failure the check exists to prevent.
+//
+// ExerciseTypes is a compiled-in catalog rather than a fetched one, because
+// Garmin publishes it on the web tier this package does not address. It is a
+// documented subset of the FIT enum: the category set is closed and validated,
+// the name set is not mirrored and an unlisted name is accepted after a lexical
+// check.
 //
 // A date is always Garmin's YYYY-MM-DD calendar form, validated as a client.Date
 // before it reaches a query string. A display name is a validated client.DisplayName,
@@ -62,13 +119,28 @@
 // their own leak tests. They stay JSON-marshalable, because the tool layer returns
 // them to an authorized caller.
 //
+// # Not ported from upstream
+//
+//   - The download tool's output_dir argument, the persisted download directory
+//     and the "{activity_id}.{ext}" file it writes. A tool argument must not
+//     choose a filesystem location, so a download streams into a sink the caller
+//     supplies and this package opens no file.
+//   - Upstream's whole-body buffering of a download. The bytes are streamed under
+//     both the wire and the decompressed bound instead.
+//   - The _is_already_scheduled pre-check upstream's MCP layer runs before
+//     scheduling a workout. It fails open, so it is duplicate avoidance and not
+//     idempotency; Schedule is therefore an unsafe write that is never retried,
+//     and the pre-check belongs to the tool layer that can report what it found.
+//   - Upstream's unbounded reads. Every list here is paginated or bounded, and a
+//     caller-supplied body has a size bound of its own.
+//
 // # Documented gaps
 //
-//   - Writes and destructive endpoints. Only reads are implemented in this slice.
-//     set_activity_name, the workout and gear endpoints, the nutrition and
-//     body-composition writes and every delete stay for the write slice.
-//   - Downloads. FIT, GPX, TCX and CSV activity files, and their own size bounds,
-//     belong to the download slice.
+//   - The nutrition, body-composition and hydration writes, the course endpoints
+//     and the GraphQL-backed calendar reads (get_scheduled_workouts,
+//     get_training_plan_workouts, schedule_week), which need a GraphQL request
+//     shape this package does not build.
+//   - Activity and course file upload, which needs multipart encoding.
 //   - The remaining 0.3.10 read endpoints — body battery, HRV, stress, training
 //     readiness, badges, challenges, gear, goals, workouts, courses, nutrition — which
 //     the parity backlog tracks. The four payload styles they use are all covered by

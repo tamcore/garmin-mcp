@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -20,11 +21,13 @@ import (
 // or the reverse — is the one outcome that must be impossible.
 
 // Revocation reason codes. They are constants rather than caller text, so the column
-// can never carry a token, an email or a free-form message from a request.
+// can never carry a token, an email or a free-form message from a request. The
+// vocabulary is exported by revocationfeed.go, because a caller has to name one and
+// a consumer of the feed reads them.
 const (
-	reasonRefreshReuse   = "refresh_token_reuse"
-	reasonConsentRevoked = "consent_revoked"
-	reasonGarminUnlinked = "garmin_unlinked"
+	reasonRefreshReuse   = ReasonRefreshReuse
+	reasonConsentRevoked = ReasonConsentRevoked
+	reasonGarminUnlinked = ReasonGarminUnlinked
 )
 
 // maxReasonLength bounds a reason code.
@@ -68,19 +71,61 @@ func (s *SQLiteStore) RevokeTokenFamily(ctx context.Context, familyID, reason st
 		return RevocationResult{}, err
 	}
 
-	var result RevocationResult
+	var (
+		result RevocationResult
+		event  RevocationEvent
+	)
 	err := s.inTx(ctx, func(tx *sql.Tx) error {
-		if err := requireFamilyExists(ctx, tx, familyID); err != nil {
+		owner, err := familyOwner(ctx, tx, familyID)
+		if err != nil {
 			return err
 		}
 		revoked, err := s.revokeFamilyIn(ctx, tx, familyID, reason)
-		result = revoked
+		result, event = revoked, owner.event(reason)
 		return err
 	})
 	if err != nil {
 		return RevocationResult{}, err
 	}
+	s.publishRevocation(event)
 	return result, nil
+}
+
+// familyOwnership is the tuple a family revocation is announced under.
+type familyOwnership struct {
+	familyID    string
+	principalID string
+	clientID    string
+}
+
+// event projects the ownership onto the announcement for one reason code.
+func (f familyOwnership) event(reason string) RevocationEvent {
+	return RevocationEvent{
+		PrincipalID: f.principalID,
+		ClientID:    f.clientID,
+		FamilyID:    f.familyID,
+		Reason:      reason,
+	}
+}
+
+// familyOwner reads the principal and client a family belongs to, and reports
+// ErrTokenNotFound for a family id nobody recognizes.
+//
+// The read is inside the revoking transaction on purpose: it is both the existence
+// check and the source of the announcement, so the two cannot disagree.
+func familyOwner(ctx context.Context, tx *sql.Tx, familyID string) (familyOwnership, error) {
+	owner := familyOwnership{familyID: familyID}
+	err := tx.QueryRowContext(ctx,
+		`SELECT principal_id, client_id FROM token_families WHERE id = ?`, familyID).
+		Scan(&owner.principalID, &owner.clientID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return familyOwnership{}, fmt.Errorf("store: token family %s is unknown: %w",
+			familyID, ErrTokenNotFound)
+	case err != nil:
+		return familyOwnership{}, fmt.Errorf("store: read token family: %w", err)
+	}
+	return owner, nil
 }
 
 // checkReasonCode requires a short lowercase snake-case code.
@@ -104,19 +149,6 @@ func checkReasonCode(reason string) error {
 			return fmt.Errorf("store: revocation reason %q is not a lowercase snake-case code: %w",
 				reason, ErrInvalidArgument)
 		}
-	}
-	return nil
-}
-
-func requireFamilyExists(ctx context.Context, tx *sql.Tx, familyID string) error {
-	var count int
-	err := tx.QueryRowContext(ctx,
-		`SELECT count(*) FROM token_families WHERE id = ?`, familyID).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("store: read token family: %w", err)
-	}
-	if count == 0 {
-		return fmt.Errorf("store: token family %s is unknown: %w", familyID, ErrTokenNotFound)
 	}
 	return nil
 }
@@ -161,6 +193,11 @@ func (s *SQLiteStore) RevokeConsent(ctx context.Context, principalID, clientID s
 	if err != nil {
 		return RevocationResult{}, err
 	}
+	s.publishRevocation(RevocationEvent{
+		PrincipalID: principalID,
+		ClientID:    clientID,
+		Reason:      reasonConsentRevoked,
+	})
 	return result, nil
 }
 

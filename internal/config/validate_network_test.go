@@ -20,6 +20,7 @@ func validHTTPConfig() Config {
 	cfg.PublicURL = "http://127.0.0.1:8180"
 	cfg.DatabasePath = databasePath
 	cfg.MasterKeyPath = masterKeyPath
+	cfg.OAuthClients = []OAuthClient{publicClient()}
 	return cfg
 }
 

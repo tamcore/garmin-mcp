@@ -18,19 +18,45 @@ type Result struct {
 	secrets *resultSecrets
 }
 
-// resultSecrets is the sealed content of a Result. The transaction capability is a
-// bearer credential, so it sits behind a pointer; see secretString.
+// resultSecrets is the sealed content of a Result. The transaction capability and
+// the Garmin account both sit behind pointers; see secretString.
 type resultSecrets struct {
 	state                State
 	strategy             StrategyName
 	transactionID        *secretString
 	mfaMethod            string
 	mfaDeliveryUncertain bool
+	accountID            *secretString
+	displayName          *secretString
 }
 
-// authenticatedResult reports a completed login.
-func authenticatedResult(strategy StrategyName) Result {
-	return Result{secrets: &resultSecrets{state: StateAuthenticated, strategy: strategy}}
+// garminAccount is the identity Garmin reported for a session this package
+// validated.
+//
+// The account id is not a credential, but it is a stable, guessable,
+// account-scoped identifier — the value an attacker would want in order to
+// correlate users — so it is treated exactly like one on the way out: sealed,
+// reported only as presence, and reachable only through the accessor a caller
+// asked for deliberately. internal/store keeps it the same way, as a keyed HMAC
+// and an AEAD envelope, never in the clear.
+type garminAccount struct {
+	// accountID is Garmin's stable account identifier, or "" when the profile
+	// named none.
+	accountID string
+
+	// displayName is what Garmin reports as the account's name. It is unverified
+	// remote text, so a caller must escape it before rendering.
+	displayName string
+}
+
+// authenticatedResult reports a completed login for the account Garmin confirmed.
+func authenticatedResult(strategy StrategyName, account garminAccount) Result {
+	return Result{secrets: &resultSecrets{
+		state:       StateAuthenticated,
+		strategy:    strategy,
+		accountID:   sealSecret(account.accountID),
+		displayName: sealSecret(account.displayName),
+	}}
 }
 
 // mfaPendingResult reports a login waiting for a one-time code.
@@ -77,6 +103,20 @@ func (r Result) MFAMethod() string { return r.s().mfaMethod }
 // delivery is not confirmed.
 func (r Result) MFADeliveryUncertain() bool { return r.s().mfaDeliveryUncertain }
 
+// GarminAccountID is Garmin's stable identifier for the account this login
+// authenticated, or "" when the login did not complete.
+//
+// It is the value a multi-user deployment keys a principal on, because an email is
+// a login handle that its owner can change and that two people can dispute. It must
+// not be logged, and a caller that stores it must store a keyed HMAC or an
+// encrypted association rather than the identifier itself.
+func (r Result) GarminAccountID() string { return revealSecret(r.s().accountID) }
+
+// GarminDisplayName is what Garmin reports as the account's name, or "" when the
+// login did not complete or Garmin named none. It is unverified remote text, so a
+// caller must escape it before rendering.
+func (r Result) GarminDisplayName() string { return revealSecret(r.s().displayName) }
+
 // redactedResult is the only shape a Result is ever rendered in.
 type redactedResult struct {
 	Type           string `json:"type"`
@@ -84,6 +124,7 @@ type redactedResult struct {
 	Strategy       string `json:"strategy"`
 	MFAMethod      string `json:"mfaMethod,omitempty"`
 	HasTransaction bool   `json:"transactionPresent"`
+	HasAccount     bool   `json:"garminAccountPresent"`
 }
 
 func (r Result) redacted() redactedResult {
@@ -94,6 +135,7 @@ func (r Result) redacted() redactedResult {
 		Strategy:       secrets.strategy.String(),
 		MFAMethod:      knownMFAMethod(secrets.mfaMethod),
 		HasTransaction: secrets.transactionID != nil,
+		HasAccount:     secrets.accountID != nil,
 	}
 }
 
@@ -103,7 +145,8 @@ func (r Result) String() string {
 	return "auth.Result{state:" + red.State +
 		" strategy:" + red.Strategy +
 		" mfaMethod:" + quoteLabel(red.MFAMethod) +
-		" transaction:" + presence(red.HasTransaction) + "}"
+		" transaction:" + presence(red.HasTransaction) +
+		" garminAccount:" + presence(red.HasAccount) + "}"
 }
 
 // GoString satisfies the %#v verb with the same redacted rendering.
@@ -121,5 +164,6 @@ func (r Result) LogValue() slog.Value {
 		slog.String("strategy", red.Strategy),
 		slog.String("mfaMethod", red.MFAMethod),
 		slog.Bool("transactionPresent", red.HasTransaction),
+		slog.Bool("garminAccountPresent", red.HasAccount),
 	)
 }

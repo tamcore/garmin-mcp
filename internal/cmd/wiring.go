@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/tamcore/garmin-mcp/internal/config"
-	"github.com/tamcore/garmin-mcp/internal/garmin/api"
 	"github.com/tamcore/garmin-mcp/internal/garmin/auth"
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
@@ -17,7 +16,6 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/policy"
 	"github.com/tamcore/garmin-mcp/internal/ratelimit"
 	"github.com/tamcore/garmin-mcp/internal/store"
-	"github.com/tamcore/garmin-mcp/internal/tokenlink"
 )
 
 // wiring carries what the composition root cannot derive from configuration. A nil
@@ -81,11 +79,28 @@ type dependencies struct {
 	logger *mcplog.Logger
 	events *slog.Logger
 
-	principal  identity.Principal
-	principals *identity.StdioResolver
+	// mode is the deployment shape the policy is built for.
+	mode policy.Mode
 
+	// principal is the single account a local process is bound to. It is the
+	// zero value remotely, where a principal is a property of a request rather
+	// than of the process.
+	principal  identity.Principal
+	principals identity.Resolver
+
+	// files is the single-user encrypted file store, and is nil remotely, where
+	// the multi-user SQLite store holds the same records.
 	files  *store.FileStore
-	tokens *tokenlink.Store
+	tokens auth.TokenStore
+
+	// staging holds the token set of a login whose principal does not exist yet.
+	// It is nil for stdio, where the account is bound to the process and there is
+	// nothing to discover.
+	staging *stagedTokens
+
+	// scopes reports what the caller of a request was granted. It is nil for
+	// stdio, which grants none.
+	scopes policy.ScopeSource
 
 	tokenGate    *auth.TokenGate
 	tokenConfigs tokenConfigs
@@ -104,20 +119,40 @@ type dependencies struct {
 	version    string
 }
 
-// newDependencies assembles everything a command needs from an already-validated
+// shape is what differs between the two deployment shapes.
+//
+// Everything else — the loggers, the Garmin layers, the tool set, the policy, the
+// limiter — is assembled identically by [newGraph], so the two modes cannot drift
+// apart in the parts they are meant to share. Nothing in a shape is a default:
+// each field is supplied by the mode's own composition root, which is what keeps a
+// remote deployment from silently falling back on a process-bound account.
+type shape struct {
+	// mode is the deployment shape the policy is built for.
+	mode policy.Mode
+	// principals resolves the principal of a request.
+	principals identity.Resolver
+	// tokens persists the per-principal Garmin DI token set.
+	tokens auth.TokenStore
+	// scopes reports the caller's granted OAuth scopes. Nil grants none.
+	scopes policy.ScopeSource
+	// staging holds a login's token set until its principal exists. It is set for
+	// remote only, where the account is discovered from the credentials.
+	staging *stagedTokens
+	// files is the single-user file store, set for stdio only.
+	files *store.FileStore
+	// principal is the bound local account, set for stdio only.
+	principal identity.Principal
+}
+
+// newDependencies assembles the local stdio graph from an already-validated
 // configuration.
 //
 // The order is deliberate. Key material and the token store come first, because a
 // missing key or an unsafe permission must be reported before anything else is
 // built. The principal is bound next, so no store is touched for an unresolved
-// account. The Authenticator and the Refresher come last, and both are built from
-// one [tokenConfigs] value carrying one shared [auth.TokenGate].
+// account.
 func newDependencies(cfg config.Config, w *wiring) (*dependencies, error) {
 	paths, err := resolveStatePaths(cfg)
-	if err != nil {
-		return nil, err
-	}
-	logger, events, err := newLoggers(cfg, w.logs())
 	if err != nil {
 		return nil, err
 	}
@@ -130,15 +165,40 @@ func newDependencies(cfg config.Config, w *wiring) (*dependencies, error) {
 		return nil, err
 	}
 
+	return newGraph(cfg, w, paths, shape{
+		mode:       policy.ModeLocal,
+		principals: principals,
+		tokens:     tokens,
+		files:      files,
+		principal:  principal,
+	})
+}
+
+// newGraph assembles everything both modes share.
+//
+// The Authenticator and the Refresher come last, and both are built from one
+// [tokenConfigs] value carrying one shared [auth.TokenGate], whichever mode asked
+// for the graph.
+func newGraph(
+	cfg config.Config, w *wiring, paths statePaths, s shape,
+) (*dependencies, error) {
+	logger, events, err := newLoggers(cfg, w.logs())
+	if err != nil {
+		return nil, err
+	}
+
 	deps := &dependencies{
 		cfg:        cfg,
 		paths:      paths,
 		logger:     logger,
 		events:     events,
-		principal:  principal,
-		principals: principals,
-		files:      files,
-		tokens:     tokens,
+		mode:       s.mode,
+		principal:  s.principal,
+		principals: s.principals,
+		files:      s.files,
+		tokens:     s.tokens,
+		staging:    s.staging,
+		scopes:     s.scopes,
 		httpClient: newHTTPClient(cfg),
 		version:    w.version(),
 	}
@@ -206,113 +266,6 @@ func (d *dependencies) buildGarmin() error {
 	d.refresher = refresher
 	d.rest = rest
 	return nil
-}
-
-// buildToolsAndPolicy invokes the tool factory and builds the policy from the tier
-// lists it reported, intersected with the operator's enablement and name lists.
-func (d *dependencies) buildToolsAndPolicy(factory ToolFactory) error {
-	set, err := d.contributeTools(factory)
-	if err != nil {
-		return err
-	}
-
-	readOnly, write, destructive := set.tierNames()
-	gate, err := policy.New(policy.Config{
-		Mode:              policy.ModeLocal,
-		ReadOnlyTools:     readOnly,
-		WriteTools:        write,
-		DestructiveTools:  destructive,
-		EnableWrite:       d.cfg.EnableWriteTools,
-		EnableDestructive: d.cfg.EnableDestructiveTools,
-		Allowlist:         d.cfg.ToolAllowlist,
-		Denylist:          d.cfg.ToolDenylist,
-	}, nil)
-	if err != nil {
-		return fmt.Errorf("building the tool policy: %w", err)
-	}
-
-	d.tools = set
-	d.policy = gate
-	return nil
-}
-
-// contributeTools asks the factory for its tool set. A nil factory contributes
-// nothing, which is a supported deployment rather than an error.
-func (d *dependencies) contributeTools(factory ToolFactory) (ToolSet, error) {
-	if factory == nil {
-		return ToolSet{}, nil
-	}
-
-	toolDeps, err := d.toolDeps()
-	if err != nil {
-		return ToolSet{}, err
-	}
-	set, err := factory(toolDeps)
-	if err != nil {
-		return ToolSet{}, fmt.Errorf("building the tool set: %w", err)
-	}
-	return set, nil
-}
-
-// toolDeps builds the domain clients a tool package works through. Every one of
-// them shares the single request layer, so limits, retries, and error
-// classification are identical across domains.
-func (d *dependencies) toolDeps() (ToolDeps, error) {
-	activities, err := api.NewActivities(d.rest)
-	if err != nil {
-		return ToolDeps{}, fmt.Errorf("building the activities client: %w", err)
-	}
-	details, err := api.NewActivityDetails(d.rest)
-	if err != nil {
-		return ToolDeps{}, fmt.Errorf("building the activity details client: %w", err)
-	}
-	devices, err := api.NewDevices(d.rest)
-	if err != nil {
-		return ToolDeps{}, fmt.Errorf("building the devices client: %w", err)
-	}
-	profile, err := api.NewProfile(d.rest)
-	if err != nil {
-		return ToolDeps{}, fmt.Errorf("building the profile client: %w", err)
-	}
-	wellness, err := api.NewWellness(d.rest)
-	if err != nil {
-		return ToolDeps{}, fmt.Errorf("building the wellness client: %w", err)
-	}
-
-	return ToolDeps{
-		Client:          d.rest,
-		Caller:          d.refresher,
-		Activities:      activities,
-		ActivityDetails: details,
-		Devices:         devices,
-		Profile:         profile,
-		Wellness:        wellness,
-	}, nil
-}
-
-// buildLimiter builds the per-principal rate limiter from the configured budgets.
-func (d *dependencies) buildLimiter() error {
-	limiter, err := ratelimit.New(ratelimit.Config{
-		ReadPerMinute:  d.cfg.ReadRateLimitPerMinute,
-		ReadBurst:      burstFor(d.cfg.ReadRateLimitPerMinute, ratelimit.DefaultReadBurst),
-		WritePerMinute: d.cfg.WriteRateLimitPerMinute,
-		WriteBurst:     burstFor(d.cfg.WriteRateLimitPerMinute, ratelimit.DefaultWriteBurst),
-		MaxPrincipals:  ratelimit.DefaultMaxPrincipals,
-	}, nil)
-	if err != nil {
-		return fmt.Errorf("building the per-principal rate limiter: %w", err)
-	}
-	d.limiter = limiter
-	return nil
-}
-
-// burstFor keeps the instantaneous allowance at or below the sustained budget, so
-// an operator who lowered a rate does not keep the shipped burst.
-func burstFor(perMinute, def int) int {
-	if perMinute < def {
-		return perMinute
-	}
-	return def
 }
 
 // close releases what the graph opened. The file store holds no descriptor between

@@ -13,11 +13,17 @@ import (
 	"testing"
 
 	"github.com/tamcore/garmin-mcp/internal/mcpserver"
+	"github.com/tamcore/garmin-mcp/internal/policy"
 	"github.com/tamcore/garmin-mcp/internal/tools"
 )
 
 // manifestPath is the pinned contract this package must not drift from.
 const manifestPath = "../../compat/tools.json"
+
+// graphQLCalendarGap is why the three calendar tools are unregistered: all of them
+// read the workout calendar through Garmin's GraphQL tier, which the API layer under
+// this package does not build a request shape for.
+const graphQLCalendarGap = "needs the GraphQL calendar read the API layer does not build"
 
 // manifestTool is the subset of a manifest entry this test enforces.
 type manifestTool struct {
@@ -26,6 +32,7 @@ type manifestTool struct {
 	Effect      string         `json:"effect"`
 	Sensitivity string         `json:"sensitivity"`
 	Scope       string         `json:"scope"`
+	Idempotency string         `json:"idempotency"`
 }
 
 type manifest struct {
@@ -51,14 +58,58 @@ func loadManifest(t *testing.T) map[string]manifestTool {
 	return byName
 }
 
-func TestEveryRegisteredToolNameExistsInTheManifest(t *testing.T) {
+// additionsBeyondTheManifest are the tools this slice registers that the pinned
+// manifest does not describe, each with the reason it exists.
+//
+// The manifest is a snapshot of one upstream commit. Three of these come from the two
+// unmerged upstream proposals this project treats as in scope, one is the workout
+// update they depend on, and delete_activity exists because the pinned surface exposes
+// no activity delete at all while python-garminconnect does. Naming them here is what
+// keeps the drift test honest: any other unlisted name is still a failure.
+func additionsBeyondTheManifest() map[string]string {
+	return map[string]string{
+		"update_workout":                         "unmerged upstream proposal: in-place workout update",
+		"get_exercise_types":                     "unmerged upstream proposal: strength catalog read",
+		"set_activity_strength_exercise_sets":    "unmerged upstream proposal: verified set replace",
+		tools.ToolCreateStrengthTrainingActivity: "unmerged upstream proposal: verified strength create",
+		"delete_activity":                        "python-garminconnect delete_activity; absent from the pinned surface",
+	}
+}
+
+// schemaDeviations are the declared departures from the manifest's input schema, each
+// with the reason. A deviation that is not listed here fails the drift test.
+func schemaDeviations() map[string]map[string]string {
+	return map[string]map[string]string{
+		"download_activity_file": {
+			"output_dir": "a tool argument must not choose a server filesystem path; " +
+				"the bytes are returned as an embedded MCP resource instead",
+		},
+	}
+}
+
+func TestEveryRegisteredToolNameExistsInTheManifestOrIsADeclaredAddition(t *testing.T) {
 	t.Parallel()
 
 	entries := loadManifest(t)
+	additions := additionsBeyondTheManifest()
 	for name := range tools.Contracts() {
-		if _, ok := entries[name]; !ok {
-			t.Errorf("tool %q is registered but absent from %s: the wire name must be the "+
-				"upstream compatibility name", name, manifestPath)
+		if _, ok := entries[name]; ok {
+			continue
+		}
+		if _, declared := additions[name]; !declared {
+			t.Errorf("tool %q is registered but absent from %s and is not a declared "+
+				"addition: the wire name must be the upstream compatibility name", name, manifestPath)
+		}
+	}
+}
+
+func TestEveryDeclaredAdditionIsRegistered(t *testing.T) {
+	t.Parallel()
+
+	contracts := tools.Contracts()
+	for name, reason := range additionsBeyondTheManifest() {
+		if _, ok := contracts[name]; !ok {
+			t.Errorf("%q is declared as an addition (%s) but is not registered", name, reason)
 		}
 	}
 }
@@ -73,7 +124,7 @@ func TestDeclaredInputSchemasMatchTheManifest(t *testing.T) {
 
 			entry, ok := entries[name]
 			if !ok {
-				t.Fatalf("no manifest entry for %q", name)
+				return
 			}
 			assertSchemaAgrees(t, name, contract.Schema.JSON(), entry.InputSchema)
 		})
@@ -89,6 +140,9 @@ func assertSchemaAgrees(t *testing.T, tool string, declared, wanted map[string]a
 
 	declaredProps := properties(declared)
 	wantedProps := properties(wanted)
+	for name := range schemaDeviations()[tool] {
+		delete(wantedProps, name)
+	}
 
 	declaredNames := slices.Sorted(maps.Keys(declaredProps))
 	wantedNames := slices.Sorted(maps.Keys(wantedProps))
@@ -116,8 +170,11 @@ func assertPropertyAgrees(t *testing.T, tool, property string, declared, wanted 
 	if got, want := typesOf(declared), typesOf(wanted); !slices.Equal(got, want) {
 		t.Errorf("%s.%s: type drifted: declared %v, manifest %v", tool, property, got, want)
 	}
+	// A manifest default of null states that the argument has no value when it is
+	// absent, which is exactly what declaring no default means. Only a real default
+	// has to be reproduced.
 	wantedDefault, stated := wanted["default"]
-	if !stated {
+	if !stated || wantedDefault == nil {
 		return
 	}
 	declaredDefault, present := declared["default"]
@@ -159,13 +216,55 @@ func TestDeclaredSchemasMatchTheSchemasOnTheWire(t *testing.T) {
 	}
 }
 
-func TestEveryRegisteredToolIsReadOnlyInTheManifest(t *testing.T) {
+// tierEffects maps a policy tier onto the manifest effect that tier must carry.
+//
+// external-side-effect is accepted for the write tier: the manifest gives
+// download_activity_file that effect because upstream writes a file to disk, and this
+// server does not, so the strongest honest classification here is a write.
+func tierEffects() map[policy.Tier][]string {
+	return map[policy.Tier][]string{
+		policy.TierReadOnly:    {"read-only"},
+		policy.TierWrite:       {"write", "external-side-effect"},
+		policy.TierDestructive: {"destructive"},
+	}
+}
+
+func TestEveryRegisteredToolsTierMatchesTheManifestEffect(t *testing.T) {
 	t.Parallel()
 
 	entries := loadManifest(t)
-	for name := range tools.Contracts() {
-		if got := entries[name].Effect; got != "read-only" {
-			t.Errorf("%s: manifest effect = %q, but this slice registers it as read-only", name, got)
+	effects := tierEffects()
+	for name, contract := range tools.Contracts() {
+		entry, ok := entries[name]
+		if !ok {
+			continue
+		}
+		if want := effects[contract.Spec.Tier]; !slices.Contains(want, entry.Effect) {
+			t.Errorf("%s: manifest effect = %q, but this slice registers it in the %v tier, "+
+				"which requires one of %v", name, entry.Effect, contract.Spec.Tier, want)
+		}
+	}
+}
+
+// TestEveryRegisteredToolsIdempotentHintMatchesTheManifest pins the hint against the
+// manifest's classification rather than against upstream's description.
+//
+// The two disagree on purpose for the scheduling tools: upstream's docstring says
+// "Idempotent", and the manifest records non-idempotent because the pre-check that
+// claim rests on fails open. The classification is the one that is true.
+func TestEveryRegisteredToolsIdempotentHintMatchesTheManifest(t *testing.T) {
+	t.Parallel()
+
+	entries := loadManifest(t)
+	for name, contract := range tools.Contracts() {
+		entry, ok := entries[name]
+		if !ok || entry.Idempotency == "unknown" {
+			continue
+		}
+		want := entry.Idempotency == "idempotent"
+		if got := contract.Spec.Annotations.Idempotent; got != want {
+			t.Errorf("%s: idempotent hint = %t, manifest idempotency = %q",
+				name, got, entry.Idempotency)
 		}
 	}
 }
@@ -175,8 +274,34 @@ func TestEveryRegisteredToolLogsTheManifestSensitivityDomain(t *testing.T) {
 
 	entries := loadManifest(t)
 	for name, contract := range tools.Contracts() {
-		if got, want := contract.Spec.Category, entries[name].Sensitivity; got != want {
+		entry, ok := entries[name]
+		if !ok {
+			continue
+		}
+		if got, want := contract.Spec.Category, entry.Sensitivity; got != want {
 			t.Errorf("%s: log category = %q, manifest sensitivity = %q", name, got, want)
+		}
+	}
+}
+
+// TestNoManifestToolIsRegisteredWithoutTheEndpointItNeeds pins the tools this slice
+// deliberately leaves unregistered, so the parity manifest keeps telling the truth.
+func TestNoManifestToolIsRegisteredWithoutTheEndpointItNeeds(t *testing.T) {
+	t.Parallel()
+
+	unregistered := map[string]string{
+		"get_scheduled_workouts":     graphQLCalendarGap,
+		"get_training_plan_workouts": graphQLCalendarGap,
+		"schedule_week":              graphQLCalendarGap,
+		"get_activity_fit_data":      "needs FIT parsing this server does not do",
+		"set_fit_download_dir":       "would persist a caller-supplied server filesystem path",
+	}
+
+	contracts := tools.Contracts()
+	for name, reason := range unregistered {
+		if _, ok := contracts[name]; ok {
+			t.Errorf("%s is registered, but it is recorded as unimplemented because it %s",
+				name, reason)
 		}
 	}
 }

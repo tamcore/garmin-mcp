@@ -46,14 +46,14 @@ func TestSensitiveResultsReportShapeToALogSink(t *testing.T) {
 	}{
 		"sleep data": {
 			value: tools.SleepData{
-				Date:             "2026-01-31",
+				Date:             testCalendarDate,
 				SleepTimeSeconds: float64Ptr(27000),
 			},
 			secrets: []string{"27000"},
 		},
 		"daily summary": {
 			value: tools.DailySummary{
-				Date:             "2026-01-31",
+				Date:             testCalendarDate,
 				TotalSteps:       &steps,
 				RestingHeartRate: &heartRate,
 			},
@@ -88,6 +88,95 @@ func TestSensitiveResultsReportShapeToALogSink(t *testing.T) {
 				Location: new("Nowhere"),
 			},
 			secrets: []string{testFullName, "Nowhere"},
+		},
+		"profile settings": {
+			value: tools.ProfileSettingsResult{
+				FullName:  new(testFullName),
+				Location:  new("Nowhere"),
+				BirthDate: new("1990-01-01"),
+			},
+			secrets: []string{testFullName, "Nowhere", "1990-01-01"},
+		},
+		"personal records": {
+			value: tools.PersonalRecordList{Records: []tools.PersonalRecord{{
+				ActivityName: new("Synthetic 5k"),
+				Value:        float64Ptr(1500),
+			}}},
+			secrets: []string{"Synthetic 5k", "1500"},
+		},
+		"split summaries": {
+			value: tools.SplitSummaryList{Summaries: []tools.SplitSummary{{
+				Calories: float64Ptr(320),
+			}}},
+			secrets: []string{"320"},
+		},
+		"time in zones": {
+			value: tools.ZoneList{Zones: []tools.ZoneBucket{{
+				SecondsIn: float64Ptr(600), HighBoundary: float64Ptr(117),
+			}}},
+			secrets: []string{"600", "117"},
+		},
+		"activity weather": {
+			value: tools.ActivityWeather{
+				Temperature: float64Ptr(10), WindSpeed: float64Ptr(11),
+				TemperatureUnit: "C",
+			},
+			secrets: []string{"11"},
+		},
+		"workout list": {
+			value: tools.WorkoutList{Workouts: []tools.WorkoutEntry{{
+				WorkoutID: 550001, Name: new("Easy run"),
+			}}},
+			secrets: []string{"550001", "Easy run"},
+		},
+		"workout detail": {
+			value: tools.WorkoutDetail{
+				WorkoutID: 550001, Name: new("Easy run"), Segments: []any{"step"},
+			},
+			secrets: []string{"550001", "Easy run", "step"},
+		},
+		"saved workout": {
+			value:   tools.SavedWorkoutResult{WorkoutID: 550009, Name: savedWorkoutName},
+			secrets: []string{"550009", savedWorkoutName},
+		},
+		"activity update": {
+			value:   tools.ActivityUpdate{ActivityID: 987654321, Updated: "feel", Status: 200},
+			secrets: []string{"987654321"},
+		},
+		"created activity": {
+			value:   tools.CreatedActivityResult{ActivityID: 987654321},
+			secrets: []string{"987654321"},
+		},
+		"deletion": {
+			value:   tools.DeletionResult{ID: 987654321, Deleted: true, Status: 204},
+			secrets: []string{"987654321"},
+		},
+		"schedule": {
+			value: tools.ScheduleResult{
+				WorkoutID: 550001, CalendarDate: testCalendarDate, Status: 200,
+			},
+			secrets: []string{"550001", testCalendarDate},
+		},
+		"batch": {
+			value: tools.BatchResult{Outcomes: []tools.BatchOutcome{{
+				ID: 550001, Applied: true,
+			}}, Requested: 1, Applied: 1},
+			secrets: []string{"550001"},
+		},
+		"downloaded file": {
+			value: tools.DownloadedFile{
+				ID: 987654321, Format: "fit", Bytes: 8, URI: "garmin://activity/987654321.fit",
+			},
+			secrets: []string{"987654321"},
+		},
+		"created strength activity": {
+			value: tools.CreatedStrengthActivityResult{
+				ActivityID: 987654321,
+				Sets: tools.ExerciseSetList{Sets: []tools.ExerciseSet{{
+					Weight: float64Ptr(40000),
+				}}, Count: 1},
+			},
+			secrets: []string{"987654321", "40000"},
 		},
 	}
 

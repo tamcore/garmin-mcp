@@ -68,6 +68,10 @@ type SQLiteStore struct {
 	keys   indexKeys
 	now    func() time.Time
 	schema int
+
+	// revocations receives an event after every revocation cascade commits. Nil
+	// means nobody is listening, which is the single-user shape.
+	revocations RevocationSink
 }
 
 // SQLiteConfig configures a SQLiteStore. Every field is explicit: nothing here is
@@ -92,6 +96,12 @@ type SQLiteConfig struct {
 	// Now is the clock. Nil selects time.Now. It exists so expiry is tested by
 	// moving time rather than by sleeping.
 	Now func() time.Time
+
+	// Revocations receives an event after each revocation cascade commits, so a
+	// live session can be closed rather than surviving until its next request. Nil
+	// means nobody listens, which is the supported single-user shape. The sink is
+	// called on the goroutine that revoked and must not block.
+	Revocations RevocationSink
 }
 
 // OpenSQLite opens, migrates and returns the store.
@@ -120,6 +130,7 @@ func OpenSQLite(ctx context.Context, cfg SQLiteConfig) (*SQLiteStore, error) {
 	if err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
+	opened.revocations = cfg.Revocations
 	return opened, nil
 }
 

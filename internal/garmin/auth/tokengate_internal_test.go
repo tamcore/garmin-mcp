@@ -69,7 +69,8 @@ func TestTokenGateSerializesALoginAgainstTheRefreshPath(t *testing.T) {
 
 	loginDone := make(chan error, 1)
 	go func() {
-		loginDone <- authenticator.storeTicketTokens(t.Context(), gatePrincipal, gateTicket, gateService)
+		_, err := authenticator.storeTicketTokens(t.Context(), gatePrincipal, gateTicket, gateService)
+		loginDone <- err
 	}()
 	awaitGateWaiters(t, gate, gatePrincipal, 2)
 

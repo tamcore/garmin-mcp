@@ -135,7 +135,16 @@ func TestLoadReadsEveryTypedSetting(t *testing.T) {
 		"tool-allowlist: [" + toolActivities + ", " + toolSleep + "]",
 		"max-request-bytes: 2048",
 		"read-rate-limit: 42",
+		"session-timeout: 90s",
+		"allowed-origins: [" + testOrigin + "]",
 		"log-format: " + formatJSON,
+		"oauth-clients:",
+		"  - id: " + testClientID,
+		"    name: " + testClientName,
+		"    redirect-uris: [" + testRedirectURI + "]",
+		"    scopes: [" + testScope + "]",
+		"    resources: [http://127.0.0.1:9001/mcp]",
+		"    public: true",
 	}, "\n")+"\n")
 
 	cfg, err := Load(LoadOptions{ConfigFile: file})
@@ -166,6 +175,41 @@ func TestLoadReadsEveryTypedSetting(t *testing.T) {
 	}
 	if cfg.LogFormat != formatJSON {
 		t.Errorf("LogFormat = %q, want json", cfg.LogFormat)
+	}
+	if cfg.SessionTimeout != 90*time.Second {
+		t.Errorf("SessionTimeout = %v, want 90s", cfg.SessionTimeout)
+	}
+	if len(cfg.AllowedOrigins) != 1 || cfg.AllowedOrigins[0] != testOrigin {
+		t.Errorf("AllowedOrigins = %v, want one entry", cfg.AllowedOrigins)
+	}
+	assertOneRegisteredClient(t, cfg)
+}
+
+// assertOneRegisteredClient checks the registry the configuration file declared,
+// field by field, because a partially read registration is a client silently
+// missing a redirect URI rather than a visible failure.
+func assertOneRegisteredClient(t *testing.T, cfg Config) {
+	t.Helper()
+
+	if len(cfg.OAuthClients) != 1 {
+		t.Fatalf("OAuthClients has %d entries, want 1", len(cfg.OAuthClients))
+	}
+	client := cfg.OAuthClients[0]
+	switch {
+	case client.ID != testClientID:
+		t.Errorf("client ID = %q, want %q", client.ID, testClientID)
+	case client.Name != testClientName:
+		t.Errorf("client name = %q, want %q", client.Name, testClientName)
+	case len(client.RedirectURIs) != 1 || client.RedirectURIs[0] != testRedirectURI:
+		t.Errorf("client redirect URIs = %v", client.RedirectURIs)
+	case len(client.Scopes) != 1 || client.Scopes[0] != testScope:
+		t.Errorf("client scopes = %v", client.Scopes)
+	case len(client.Resources) != 1:
+		t.Errorf("client resources = %v", client.Resources)
+	case !client.Public:
+		t.Error("client is confidential, want public")
+	case client.SecretHash.IsSet():
+		t.Error("a public client carries a secret digest")
 	}
 }
 

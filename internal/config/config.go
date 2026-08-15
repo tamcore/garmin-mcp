@@ -91,6 +91,8 @@ const (
 	DefaultMaxResponseBytes int64 = 8 << 20
 	// DefaultRequestTimeout bounds one outbound Garmin call.
 	DefaultRequestTimeout = 30 * time.Second
+	// DefaultSessionTimeout closes an idle Streamable HTTP session.
+	DefaultSessionTimeout = 30 * time.Minute
 	// DefaultReadRateLimitPerMinute bounds read tools per principal.
 	DefaultReadRateLimitPerMinute = 120
 	// DefaultWriteRateLimitPerMinute bounds write tools per principal.
@@ -117,6 +119,12 @@ const (
 	MinRequestTimeout = time.Second
 	// MaxRequestTimeout is the largest accepted outbound request timeout.
 	MaxRequestTimeout = 10 * time.Minute
+	// MinSessionTimeout is the smallest accepted idle-session bound.
+	MinSessionTimeout = 30 * time.Second
+	// MaxSessionTimeout is the largest accepted idle-session bound. A session
+	// that outlives an access token is a session identifier doing the work of a
+	// credential, which is exactly what the transport refuses to allow.
+	MaxSessionTimeout = 24 * time.Hour
 	// MaxRateLimitPerMinute is the largest accepted per-principal rate limit.
 	MaxRateLimitPerMinute = 100_000
 	// MaxToolNameLen bounds a configured tool name.
@@ -146,6 +154,10 @@ type Config struct {
 	// TrustedProxyCIDRs lists the networks whose forwarded headers may be
 	// trusted. Empty means no forwarded header is trusted.
 	TrustedProxyCIDRs []string
+	// AllowedOrigins is the browser Origin allowlist for the Streamable HTTP
+	// endpoint. Empty denies every request that carries an Origin, which is CORS
+	// denied by default; a standards-compliant non-browser client sends none.
+	AllowedOrigins []string
 	// AllowInsecureHTTP is the explicit development override that permits a
 	// cleartext non-loopback origin. It defaults to false and must stay false
 	// in production.
@@ -179,6 +191,10 @@ type Config struct {
 	// explicitly insecure compatibility override, permitted only in stdio mode.
 	GarminTokens Secret
 
+	// OAuthClients is the operator-registered OAuth client registry. A remote
+	// deployment requires at least one entry; no vendor client is ever defaulted.
+	OAuthClients []OAuthClient
+
 	// Region is the validated Garmin account region. It can only be produced by
 	// the protocol package's domain validation, so an unvalidated host cannot
 	// reach URL construction.
@@ -202,6 +218,9 @@ type Config struct {
 	MaxResponseBytes int64
 	// RequestTimeout bounds one outbound Garmin call.
 	RequestTimeout time.Duration
+	// SessionTimeout closes an idle Streamable HTTP session. It bounds how long
+	// a session identifier stays addressable, and it is unused in stdio mode.
+	SessionTimeout time.Duration
 	// ReadRateLimitPerMinute bounds read tool calls per principal per minute.
 	ReadRateLimitPerMinute int
 	// WriteRateLimitPerMinute bounds write tool calls per principal per minute.
@@ -226,6 +245,7 @@ func Default() Config {
 		MaxRequestBytes:         DefaultMaxRequestBytes,
 		MaxResponseBytes:        DefaultMaxResponseBytes,
 		RequestTimeout:          DefaultRequestTimeout,
+		SessionTimeout:          DefaultSessionTimeout,
 		ReadRateLimitPerMinute:  DefaultReadRateLimitPerMinute,
 		WriteRateLimitPerMinute: DefaultWriteRateLimitPerMinute,
 		LogLevel:                DefaultLogLevel,
@@ -250,6 +270,8 @@ func defaultRegion() protocol.ValidatedDomain {
 func (c Config) Clone() Config {
 	out := c
 	out.TrustedProxyCIDRs = copyStrings(c.TrustedProxyCIDRs)
+	out.AllowedOrigins = copyStrings(c.AllowedOrigins)
+	out.OAuthClients = cloneClients(c.OAuthClients)
 	out.ToolAllowlist = copyStrings(c.ToolAllowlist)
 	out.ToolDenylist = copyStrings(c.ToolDenylist)
 	return out

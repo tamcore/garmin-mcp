@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
@@ -156,17 +157,52 @@ func tokenSetFrom(payload diTokenResponse, fallbackClientID string) TokenSet {
 	return NewTokenSet(payload.AccessToken, payload.RefreshToken, clientID, expiresAt)
 }
 
+// socialProfileResponse is the part of the API-tier profile this package reads.
+//
+// Decoding is tolerant on purpose, exactly as it is for the token response: Garmin
+// adds fields, and an unknown one must not fail a session that is otherwise valid.
+// The id is a json.Number because Garmin reports it as a number today and a string
+// is an equally legal spelling of the same identifier.
+type socialProfileResponse struct {
+	ProfileID   json.Number `json:"profileId"`
+	DisplayName string      `json:"displayName"`
+}
+
+// account projects the decoded profile onto the identity a caller may key on.
+//
+// The numeric profile id is the stable account identifier and is preferred.
+// Garmin's displayName is a stable per-account handle as well, so it is the
+// fallback when a response carries no profile id; a profile with neither yields the
+// zero account, and it is the caller that decides whether it can proceed without
+// one.
+func (p socialProfileResponse) account() garminAccount {
+	id := strings.TrimSpace(p.ProfileID.String())
+	if id == "" {
+		id = strings.TrimSpace(p.DisplayName)
+	}
+	return garminAccount{accountID: id, displayName: p.DisplayName}
+}
+
 // validateSession proves the API tier accepts a candidate session before it is
-// stored.
+// stored, and reports the account the API tier says that session belongs to.
 //
 // The verdict distinguishes a rejection from a temporary failure: 401 and 403
 // mean the token is not accepted for this account or region, and anything else
 // non-2xx is inconclusive. A caller must not read a temporary failure as a
 // rejection. Source: Client._verify_token and upstream issue #369.
-func (c tokenClient) validateSession(ctx context.Context, set TokenSet) error {
+//
+// The identity comes from this response and from nowhere else. It is the one
+// account claim in the whole login that a Garmin-authenticated call produced, so it
+// is the only one a deployment may key isolation on — and reading it here costs no
+// extra request, because the body is already on the wire.
+//
+// A body that does not decode is not a rejection: the session was accepted, so the
+// account is reported as absent and the login stands. The decoder error is
+// deliberately dropped rather than wrapped, because it would quote the body.
+func (c tokenClient) validateSession(ctx context.Context, set TokenSet) (garminAccount, error) {
 	sess, err := newSession(c.doer)
 	if err != nil {
-		return err
+		return garminAccount{}, err
 	}
 
 	header := protocol.NativeAPIHeaders()
@@ -175,9 +211,18 @@ func (c tokenClient) validateSession(ctx context.Context, set TokenSet) error {
 
 	raw, err := sess.get(ctx, c.hosts.SocialProfileURL(), header)
 	if err != nil {
-		return transportError(protocol.OpValidateSession, protocol.EndpointSocialProfile, err)
+		return garminAccount{}, transportError(protocol.OpValidateSession,
+			protocol.EndpointSocialProfile, err)
 	}
 
 	class := protocol.ClassifySessionValidation(c.response(raw))
-	return class.Err(protocol.OpValidateSession, protocol.EndpointSocialProfile, nil)
+	if err := class.Err(protocol.OpValidateSession, protocol.EndpointSocialProfile, nil); err != nil {
+		return garminAccount{}, err
+	}
+
+	var profile socialProfileResponse
+	if err := json.Unmarshal(raw.body, &profile); err != nil {
+		return garminAccount{}, nil
+	}
+	return profile.account(), nil
 }

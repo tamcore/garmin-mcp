@@ -26,6 +26,33 @@ var (
 	// supply. The error never echoes the material.
 	ErrUnsupportedKeyMaterial = errors.New("unsupported encryption key material")
 
+	// ErrInsecureDeployment reports a remote deployment this build refuses to
+	// serve, such as a cleartext public URL. It is separate from the
+	// configuration package's own refusals because it is decided by the
+	// subsystems being assembled — the authorization server will not name a
+	// cleartext issuer, and the transport will not serve a cleartext public bind
+	// — rather than by the lexical checks that ran before anything was opened.
+	ErrInsecureDeployment = errors.New("the remote deployment is not safe to serve")
+
+	// ErrUnregisteredClient reports a configured OAuth client that has no
+	// registration in the database.
+	//
+	// A client registration lives in two places on purpose: the database holds
+	// the identity and the exact redirect URIs, and configuration holds the OAuth
+	// policy the database has no column for. An authorization transaction
+	// references the database row, so a client that exists only in configuration
+	// can authorize nobody.
+	ErrUnregisteredClient = errors.New("the configured OAuth client is not registered in the database")
+
+	// ErrNoGarminAccount reports a login Garmin accepted but attributed to no
+	// account.
+	//
+	// A remote deployment keys its isolation on the Garmin account, so without one
+	// there is nothing to key on. Falling back to the email would key isolation on
+	// exactly the value that must never be the boundary, so the login is refused
+	// instead and no principal is created.
+	ErrNoGarminAccount = errors.New("the Garmin login named no account to isolate on")
+
 	// ErrUnsafeDeployment reports that a diagnostic check found something that
 	// exists and must not be used, such as key material another local account can
 	// read. The report names each finding; this sentinel is what makes the

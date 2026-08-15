@@ -59,45 +59,66 @@ func (s *SQLiteStore) RotateRefreshToken(ctx context.Context, rotation RefreshRo
 		return AccessGrant{}, err
 	}
 
-	var issued AccessGrant
+	var (
+		issued AccessGrant
+		reused familyOwnership
+	)
 	err = s.inTx(ctx, func(tx *sql.Tx) error {
-		grant, err := s.applyRotation(ctx, tx, presentedHash, rotation)
-		issued = grant
+		grant, revoked, err := s.applyRotation(ctx, tx, presentedHash, rotation)
+		issued, reused = grant, revoked
 		return err
 	})
 	if err != nil {
+		// A replay is the one path where a failed call still changed state: the
+		// family is revoked and committed, so it is announced even though an error
+		// is returned. Every other failure rolled back and announces nothing.
+		s.publishRevocation(reused.event(reasonRefreshReuse))
 		return AccessGrant{}, err
 	}
 	return issued, nil
 }
 
 // applyRotation is the transactional body of RotateRefreshToken.
+// The second result names the family a replay revoked, and is the zero value on
+// every other path. It is what the caller announces once the commit is known to
+// have happened.
 func (s *SQLiteStore) applyRotation(ctx context.Context, tx *sql.Tx, presentedHash string,
 	rotation RefreshRotation,
-) (AccessGrant, error) {
+) (AccessGrant, familyOwnership, error) {
 	stored, err := readToken(ctx, tx, presentedHash, tokenKindRefresh)
 	if err != nil {
-		return AccessGrant{}, err
+		return AccessGrant{}, familyOwnership{}, err
 	}
 	if stored.consumed {
-		return AccessGrant{}, s.revokeOnReuse(ctx, tx, stored.familyID)
+		owner, err := s.revokeOnReuse(ctx, tx, stored.familyID)
+		return AccessGrant{}, owner, err
 	}
 	if err := s.checkUsable(stored); err != nil {
-		return AccessGrant{}, err
+		return AccessGrant{}, familyOwnership{}, err
 	}
-	return s.issueNextGeneration(ctx, tx, stored, presentedHash, rotation)
+	grant, err := s.issueNextGeneration(ctx, tx, stored, presentedHash, rotation)
+	return grant, familyOwnership{}, err
 }
 
 // revokeOnReuse revokes the family of a replayed refresh token and commits, so the
 // revocation survives the error this returns.
-func (s *SQLiteStore) revokeOnReuse(ctx context.Context, tx *sql.Tx, familyID string) error {
+//
+// The owner is read before the revocation and returned with the error, because the
+// announcement must name the same family the transaction just took down.
+func (s *SQLiteStore) revokeOnReuse(ctx context.Context, tx *sql.Tx, familyID string,
+) (familyOwnership, error) {
+	owner, err := familyOwner(ctx, tx, familyID)
+	if err != nil {
+		return familyOwnership{}, err
+	}
 	if _, err := s.revokeFamilyIn(ctx, tx, familyID, reasonRefreshReuse); err != nil {
-		return err
+		return familyOwnership{}, err
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("store: commit reuse revocation: %w", err)
+		return familyOwnership{}, fmt.Errorf("store: commit reuse revocation: %w", err)
 	}
-	return fmt.Errorf("store: refresh token of family %s was already rotated, family revoked: %w",
+	return owner, fmt.Errorf(
+		"store: refresh token of family %s was already rotated, family revoked: %w",
 		familyID, ErrRefreshTokenReuse)
 }
 

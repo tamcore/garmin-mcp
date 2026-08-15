@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/tamcore/garmin-mcp/internal/cmd"
+	"github.com/tamcore/garmin-mcp/internal/config"
 )
 
 // initializeFrame is one MCP initialize request, newline-delimited as the stdio
@@ -219,9 +220,12 @@ func TestServeStdioCreatesTheStoreAndKeyOwnerOnly(t *testing.T) {
 	}
 }
 
-// TestServeStreamableHTTPStillReportsTheMissingTransport keeps the M2 boundary
-// honest: the remote transport is not implemented, and it must say so.
-func TestServeStreamableHTTPStillReportsTheMissingTransport(t *testing.T) {
+// TestServeStreamableHTTPRefusesADeploymentWithNoClient covers the remote
+// transport's own start-up refusal, and covers it through the command rather than
+// through the composition root: a deployment that registers no OAuth client can
+// authorize nobody, so it fails before a listener is opened, and it says so
+// without writing to the frame stream.
+func TestServeStreamableHTTPRefusesADeploymentWithNoClient(t *testing.T) {
 	clearGarminEnv(t)
 	stateDir(t)
 
@@ -230,8 +234,8 @@ func TestServeStreamableHTTPStillReportsTheMissingTransport(t *testing.T) {
 		"--database-path=/srv/garmin-mcp/state.db",
 		"--master-key-file=/srv/garmin-mcp/master.key")
 
-	if !errors.Is(err, cmd.ErrNotImplemented) {
-		t.Errorf("error %v does not match cmd.ErrNotImplemented", err)
+	if !errors.Is(err, config.ErrMissingSetting) {
+		t.Errorf("error %v does not match config.ErrMissingSetting", err)
 	}
 	if stdout != "" {
 		t.Errorf("stdout = %q, want empty", stdout)

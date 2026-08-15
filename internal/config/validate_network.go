@@ -28,6 +28,9 @@ func (c Config) validateHTTP() []error {
 	errs = append(errs, c.validateTLSPair()...)
 	errs = append(errs, c.validateProxyTrust()...)
 	errs = append(errs, c.validateRemoteState()...)
+	errs = append(errs, c.validateRegistry()...)
+	errs = append(errs, c.validateAllowedOrigins()...)
+	errs = append(errs, c.validateSessionTimeout()...)
 	return errs
 }
 

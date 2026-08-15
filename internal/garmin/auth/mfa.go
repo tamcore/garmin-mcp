@@ -109,12 +109,13 @@ func (a *Authenticator) CompleteMFA(
 	if err := attempt.Claim(); err != nil {
 		return failedResult(pending.Strategy()), err
 	}
-	if err := a.completeLogin(ctx, principal, class, pending.ServiceURL()); err != nil {
+	account, err := a.completeLogin(ctx, principal, class, pending.ServiceURL())
+	if err != nil {
 		// The capability is consumed, so this login cannot be resumed: the caller
 		// must start a new one rather than replay the code.
 		return failedResult(pending.Strategy()), err
 	}
-	return authenticatedResult(pending.Strategy()), nil
+	return authenticatedResult(pending.Strategy(), account), nil
 }
 
 // submitCode seeds a fresh session with the pending SSO cookies and verifies the

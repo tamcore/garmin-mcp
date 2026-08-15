@@ -14,6 +14,7 @@ const (
 	categoryHealth   = "health"
 	categoryLocation = "location"
 	categoryDevice   = "device"
+	categoryOrdinary = "ordinary"
 )
 
 // noArguments is the input type of every tool that takes no argument.
@@ -33,6 +34,39 @@ func readOnlyAnnotations() mcpserver.Annotations {
 	return mcpserver.Annotations{
 		ReadOnly:    true,
 		Destructive: false,
+		Idempotent:  true,
+		OpenWorld:   true,
+	}
+}
+
+// writeAnnotations declares all four MCP hints for the write tier.
+//
+// idempotent is passed explicitly rather than defaulted, because it is the one hint
+// that differs between two writes of the same tier: an absolute-value PUT converges
+// and a create does not. It is the manifest's idempotency classification, which for
+// the scheduling tools is "non-idempotent" even though upstream's own description
+// claims otherwise — that pre-check fails open, so it is duplicate avoidance and not
+// a guarantee, and this server does not repeat the claim.
+func writeAnnotations(idempotent bool) mcpserver.Annotations {
+	return mcpserver.Annotations{
+		ReadOnly:    false,
+		Destructive: false,
+		Idempotent:  idempotent,
+		OpenWorld:   true,
+	}
+}
+
+// destructiveAnnotations declares all four MCP hints for the destructive tier.
+//
+// Destructive is true, which is what puts the call through the server's confirmation
+// middleware: a tool that failed to declare it would be executed without ever asking.
+// Idempotent is true for every destructive tool on this surface, because every one of
+// them is a removal and a second removal of the same record converges on the same end
+// state; the hint is still written out rather than left to a default.
+func destructiveAnnotations() mcpserver.Annotations {
+	return mcpserver.Annotations{
+		ReadOnly:    false,
+		Destructive: true,
 		Idempotent:  true,
 		OpenWorld:   true,
 	}
@@ -60,7 +94,79 @@ func readOnlyRegistrations() []registration {
 		{getDevicesContract, registerGetDevices},
 		{getActivityTypedSplitsContract, registerGetActivityTypedSplits},
 		{getActivityExerciseSetsContract, registerGetActivityExerciseSets},
+		{getUserProfileSettingsContract, registerGetUserProfileSettings},
+		{getPersonalRecordContract, registerGetPersonalRecord},
+		{getActivitySplitsContract, registerGetActivitySplits},
+		{getActivitySplitSummariesContract, registerGetActivitySplitSummaries},
+		{getActivityHRInZonesContract, registerGetActivityHRInZones},
+		{getActivityPowerInZonesContract, registerGetActivityPowerInZones},
+		{getActivityWeatherContract, registerGetActivityWeather},
+		{getExerciseTypesContract, registerGetExerciseTypes},
+		{getWorkoutsContract, registerGetWorkouts},
+		{getWorkoutByIDContract, registerGetWorkoutByID},
+		{downloadWorkoutContract, registerDownloadWorkout},
 	}
+}
+
+// writeRegistrations lists the write tools in registration order.
+//
+// Every one of them is refused at call time today: the write tier needs both operator
+// enablement and a granted write scope, and no scope is issued anywhere in this
+// repository yet. They are registered anyway, so the policy has a tool to refuse and
+// the start-up tier validation covers them.
+func writeRegistrations() []registration {
+	return []registration{
+		{setActivityNameContract, registerSetActivityName},
+		{setActivityTypeContract, registerSetActivityType},
+		{setActivityEventTypeContract, registerSetActivityEventType},
+		{setActivityDescriptionContract, registerSetActivityDescription},
+		{setActivityFeelContract, registerSetActivityFeel},
+		{setPerceivedEffortContract, registerSetPerceivedEffort},
+		{addGearToActivityContract, registerAddGearToActivity},
+		{removeGearFromActivityContract, registerRemoveGearFromActivity},
+		{createManualActivityContract, registerCreateManualActivity},
+		{setActivityStrengthExerciseSetsContract, registerSetActivityStrengthExerciseSets},
+		{createStrengthTrainingActivityContract, registerCreateStrengthTrainingActivity},
+		{uploadWorkoutContract, registerUploadWorkout},
+		{uploadWorkoutsContract, registerUploadWorkouts},
+		{updateWorkoutContract, registerUpdateWorkout},
+		{scheduleWorkoutContract, registerScheduleWorkout},
+		{scheduleWorkoutsContract, registerScheduleWorkouts},
+		{createWalkRunWorkoutContract, registerCreateWalkRunWorkout},
+		{createRunWorkoutContract, registerCreateRunWorkout},
+		{createZ2WalkWorkoutContract, registerCreateZ2WalkWorkout},
+		{createStrengthWorkoutContract, registerCreateStrengthWorkout},
+		{downloadActivityFileContract, registerDownloadActivityFile},
+	}
+}
+
+// destructiveRegistrations lists the destructive tools in registration order.
+//
+// Each one declares itself destructive, which is what routes it through the server's
+// confirmation middleware. That middleware fails closed: a client that cannot be
+// asked, a user who declines and a wait that elapses all refuse the call.
+func destructiveRegistrations() []registration {
+	return []registration{
+		{deleteActivityContract, registerDeleteActivity},
+		{deleteWorkoutContract, registerDeleteWorkout},
+		{deleteWorkoutsContract, registerDeleteWorkouts},
+		{unscheduleWorkoutContract, registerUnscheduleWorkout},
+		{unscheduleWorkoutsContract, registerUnscheduleWorkouts},
+	}
+}
+
+// allRegistrations lists every tool this package registers, in tier order.
+func allRegistrations() []registration {
+	return slices.Concat(readOnlyRegistrations(), writeRegistrations(), destructiveRegistrations())
+}
+
+// namesOf renders the wire names of a registration list.
+func namesOf(registrations []registration) []string {
+	names := make([]string, 0, len(registrations))
+	for _, entry := range registrations {
+		names = append(names, entry.contract().Spec.Name)
+	}
+	return names
 }
 
 // Contracts returns every registered tool's declared contract, keyed by wire name.
@@ -68,7 +174,7 @@ func readOnlyRegistrations() []registration {
 // It is the input to the contract test, which compares these schemas with
 // compat/tools.json. The returned map is a fresh copy.
 func Contracts() map[string]Contract {
-	registrations := readOnlyRegistrations()
+	registrations := allRegistrations()
 	contracts := make(map[string]Contract, len(registrations))
 	for _, entry := range registrations {
 		contract := entry.contract()
@@ -85,25 +191,18 @@ func Contracts() map[string]Contract {
 // root adds the same name, so the two lists overlap by exactly one entry and the
 // root removes the duplicate.
 func ReadOnlyTools() []string {
-	registrations := readOnlyRegistrations()
-	names := make([]string, 0, len(registrations)+1)
-	names = append(names, mcpserver.ServerInfoToolName)
-	for _, entry := range registrations {
-		names = append(names, entry.contract().Spec.Name)
-	}
-	return names
+	return append([]string{mcpserver.ServerInfoToolName}, namesOf(readOnlyRegistrations())...)
 }
 
 // WriteTools names every tool in the write tier.
 //
-// It is empty today because this slice registers no write tool. The list exists
-// anyway, and is validated against the registered set at start-up, so the first write
-// tool cannot be added with a typo that silently never matches.
-func WriteTools() []string { return nil }
+// The list is validated against the registered set at start-up in both directions, so
+// a name here that is not registered, and a registered write tool missing from here,
+// both fail the server before it serves a call.
+func WriteTools() []string { return namesOf(writeRegistrations()) }
 
-// DestructiveTools names every tool in the destructive tier. It is empty today, for
-// the same reason WriteTools is.
-func DestructiveTools() []string { return nil }
+// DestructiveTools names every tool in the destructive tier.
+func DestructiveTools() []string { return namesOf(destructiveRegistrations()) }
 
 // tierLists are the three explicit name lists, injected so the start-up validation
 // can be tested with a deliberate typo.
@@ -154,9 +253,8 @@ func (r *Registrar) RegisterTools(registry *mcpserver.Registry) error {
 
 // RegisterAll registers the whole tool surface on registry, in explicit tier order.
 //
-// The order is read-only, then write, then destructive. Only the first tier has
-// members today; the other two are still named in the wiring, so the shape does not
-// change when the first write tool arrives.
+// The order is read-only, then write, then destructive, so a reader of the wiring
+// sees the surface grouped by the effect it has on the account.
 func RegisterAll(registry *mcpserver.Registry, deps Deps) error {
 	registrar, err := New(deps)
 	if err != nil {
@@ -170,12 +268,21 @@ func registerAll(registry *mcpserver.Registry, svc *service, lists tierLists) er
 	if registry == nil {
 		return fmt.Errorf("no registry: %w", ErrMissingDependency)
 	}
-	for _, entry := range readOnlyRegistrations() {
-		if err := entry.register(registry, svc); err != nil {
-			return fmt.Errorf("registering a read-only tool: %w", err)
+	tiers := []struct {
+		label         string
+		registrations []registration
+	}{
+		{"read-only", readOnlyRegistrations()},
+		{"write", writeRegistrations()},
+		{"destructive", destructiveRegistrations()},
+	}
+	for _, tier := range tiers {
+		for _, entry := range tier.registrations {
+			if err := entry.register(registry, svc); err != nil {
+				return fmt.Errorf("registering a %s tool: %w", tier.label, err)
+			}
 		}
 	}
-	// The write and destructive tiers register nothing yet.
 	return validateTierLists(registry.Names(), lists)
 }
 

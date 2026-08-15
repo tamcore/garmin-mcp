@@ -20,6 +20,11 @@ type (
 	strippedPending     auth.Pending
 )
 
+// A Result is stripped in result_internal_test.go instead: its secret-bearing
+// content — the MFA capability and the confirmed Garmin account — can only be
+// produced inside the package, and the stripping path fmt takes is the same one
+// either way.
+
 // strippedForms are the verbs a stripped alias is rendered under. %s and %q reach
 // fmt's badVerb path, which re-prints the value at depth zero and therefore
 // dereferences the pointer to the sealed content.

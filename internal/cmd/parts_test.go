@@ -101,7 +101,7 @@ func TestTheToolSeamAcceptsAFakeRegistry(t *testing.T) {
 		t.Errorf("the write tier list did not reach the policy: tier=%v ok=%v", tier, ok)
 	}
 
-	server, err := mcpserver.New(deps.serverDeps())
+	server, err := mcpserver.New(deps.serverDeps(serverInstructions))
 	if err != nil {
 		t.Fatalf("mcpserver.New returned error: %v", err)
 	}

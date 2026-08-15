@@ -44,7 +44,7 @@ func TestProfileSocialDecodesAFlatObject(t *testing.T) {
 	if got.ProfileID == nil || *got.ProfileID != 900001 {
 		t.Errorf("ProfileID = %v, want 900001", got.ProfileID)
 	}
-	if got.FullName == nil || *got.FullName != "Fake Tester" {
+	if got.FullName == nil || *got.FullName != fakeFullName {
 		t.Errorf("FullName = %v, want the decoded value", got.FullName)
 	}
 	if got.Payload().Len() != len(socialProfileBody) {

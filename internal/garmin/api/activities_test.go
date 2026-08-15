@@ -56,7 +56,7 @@ func TestActivitiesListDecodesAPaginatedArray(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPage() = %v", err)
 	}
-	activityType, err := api.ParseActivityType("running")
+	activityType, err := api.ParseActivityType(typeKeyRunning)
 	if err != nil {
 		t.Fatalf("ParseActivityType() = %v", err)
 	}
@@ -104,7 +104,7 @@ func assertListQuery(t *testing.T, query url.Values) {
 	if query.Get(client.QueryStart) != "0" || query.Get(client.QueryLimit) != "20" {
 		t.Errorf("pagination = %q/%q, want 0/20", query.Get(client.QueryStart), query.Get(client.QueryLimit))
 	}
-	if query.Get(client.QueryActivityType) != "running" {
+	if query.Get(client.QueryActivityType) != typeKeyRunning {
 		t.Errorf("activityType = %q, want running", query.Get(client.QueryActivityType))
 	}
 }
@@ -223,7 +223,7 @@ func TestActivitiesListByDateBoundsTheDateWindow(t *testing.T) {
 func TestParseActivityTypeAndSortOrderValidateTheirInput(t *testing.T) {
 	t.Parallel()
 
-	for _, value := range []string{"running", "fitness_equipment", "multi_sport"} {
+	for _, value := range []string{typeKeyRunning, "fitness_equipment", "multi_sport"} {
 		if _, err := api.ParseActivityType(value); err != nil {
 			t.Errorf("ParseActivityType(%q) = %v, want nil", value, err)
 		}

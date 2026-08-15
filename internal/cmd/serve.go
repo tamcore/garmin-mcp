@@ -49,9 +49,8 @@ func NewServeCommand(opts Options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if cfg.Transport != config.TransportStdio {
-				return notImplemented("garmin-mcp serve",
-					"the MCP "+string(cfg.Transport)+" server")
+			if cfg.Transport == config.TransportStreamableHTTP {
+				return runRemote(cmd.Context(), cfg, opts)
 			}
 			return runStdio(cmd.Context(), cfg, opts)
 		},
@@ -79,7 +78,7 @@ func runStdio(ctx context.Context, cfg config.Config, opts Options) error {
 		return err
 	}
 
-	server, err := mcpserver.New(deps.serverDeps())
+	server, err := mcpserver.New(deps.serverDeps(serverInstructions))
 	if err != nil {
 		return fmt.Errorf("assembling the MCP server: %w", err)
 	}
@@ -92,7 +91,11 @@ func runStdio(ctx context.Context, cfg config.Config, opts Options) error {
 }
 
 // serverDeps projects the assembled graph onto the MCP server's dependency set.
-func (d *dependencies) serverDeps() mcpserver.Deps {
+//
+// The instructions are a parameter because they are the one thing that differs
+// between the two shapes: a local process serves one bound account, and a remote
+// one serves the account each caller's authorization linked.
+func (d *dependencies) serverDeps(instructions string) mcpserver.Deps {
 	return mcpserver.Deps{
 		Info: mcpserver.Info{
 			Name:    serverName,
@@ -104,7 +107,7 @@ func (d *dependencies) serverDeps() mcpserver.Deps {
 		Limiter:      d.limiter,
 		Principals:   d.principals,
 		Registrars:   d.tools.registrars(),
-		Instructions: serverInstructions,
+		Instructions: instructions,
 	}
 }
 

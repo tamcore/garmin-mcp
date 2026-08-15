@@ -42,6 +42,10 @@ func (s *SQLiteStore) UnlinkGarminAccount(ctx context.Context, principalID strin
 	if err != nil {
 		return RevocationResult{}, err
 	}
+	s.publishRevocation(RevocationEvent{
+		PrincipalID: principalID,
+		Reason:      reasonGarminUnlinked,
+	})
 	return result, nil
 }
 

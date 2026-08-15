@@ -15,7 +15,7 @@ import (
 // logNeedles are the values a log line must never contain: identity, location and
 // health measurements from the synthetic fixtures.
 var logNeedles = []string{
-	fakeDisplayName, "Fake Tester", deviceSerialSentinel,
+	fakeDisplayName, fakeFullName, deviceSerialSentinel,
 	"48.1", "11.5", "8342", "27000", "5400", "BENCH_PRESS", "Morning Run",
 }
 

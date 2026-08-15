@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -78,6 +80,39 @@ func TestDiagnosisLoggedThroughSlogCarriesNoSecret(t *testing.T) {
 	for _, material := range []string{leakKeyMaterial, "sentinel-di-token", "sentinel-refresh"} {
 		if strings.Contains(sink.String(), material) {
 			t.Errorf("the log record leaked %q: %s", material, sink.String())
+		}
+	}
+}
+
+// TestRemoteDiagnosisCarriesNoClientSecret covers the registry half of the report.
+// A client's secret digest is the value an attacker would want in order to test a
+// guessed secret offline, so it must not reach the report under any rendering,
+// including the one an alias-stripped value gives a reflective logger.
+func TestRemoteDiagnosisCarriesNoClientSecret(t *testing.T) {
+	const digest = "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8"
+
+	cfg := remoteConfig(t)
+	digestPath := filepath.Join(cfg.StateDir, "client.sha256")
+	if err := os.WriteFile(digestPath, []byte(digest), 0o600); err != nil {
+		t.Fatalf("write the digest file: %v", err)
+	}
+	cfg.OAuthClients[0].Public = false
+	cfg.OAuthClients[0].SecretHashPath = digestPath
+
+	report, err := diagnose(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("diagnose returned error: %v", err)
+	}
+	if !strings.Contains(report.render(), cfg.OAuthClients[0].ID) {
+		t.Error("the report does not name the registered client, so it says nothing useful")
+	}
+
+	stripped := strippedReport(report)
+	for _, verb := range []string{"%v", "%+v", "%s", "%#v"} {
+		for _, value := range []any{report, stripped, &stripped, report.render()} {
+			if rendered := fmt.Sprintf(verb, value); strings.Contains(rendered, digest) {
+				t.Errorf("a %s rendering leaked the client secret digest: %s", verb, rendered)
+			}
 		}
 	}
 }

@@ -19,11 +19,20 @@ func (d diagnosis) render() string {
 	b.WriteString("garmin-mcp doctor\n\n")
 	writeLine(&b, "transport", d.Transport)
 	writeLine(&b, "region", d.Region)
-	writeLine(&b, "principal", d.PrincipalID+" ("+boundLabel(d.PrincipalBound)+")")
+	if !d.Remote {
+		// A remote deployment binds no account in configuration: every principal
+		// arrives with a request, so reporting one here would name a setting
+		// nothing reads.
+		writeLine(&b, "principal", d.PrincipalID+" ("+boundLabel(d.PrincipalBound)+")")
+	}
 	writeLine(&b, "state directory", d.StateDir)
 	writeCheck(&b, "encryption key", d.KeyFile, d.KeyState, d.KeyDetail)
-	writeCheck(&b, "token store", d.TokenDir, d.StoreState, d.StoreDetail)
-	writeCheck(&b, "garmin tokens", "", d.TokensState, d.TokensDetail)
+	if d.Remote {
+		d.writeRemoteSection(&b)
+	} else {
+		writeCheck(&b, "token store", d.TokenDir, d.StoreState, d.StoreDetail)
+		writeCheck(&b, "garmin tokens", "", d.TokensState, d.TokensDetail)
+	}
 
 	b.WriteString("\ntool tiers:\n")
 	writeLine(&b, "  read-only", "always registered")

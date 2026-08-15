@@ -17,8 +17,9 @@ import (
 // a mapping, this checks that the whole surface works together over the transport,
 // the middleware chain and the request layer.
 func TestWholeReadOnlyToolSurfaceAgainstOneFakeAccount(t *testing.T) {
-	h := newHarness(t, readScript())
+	h := newHarness(t, wholeReadScript())
 
+	activity := map[string]any{argActivityID: testActivityID}
 	calls := []struct {
 		tool string
 		args map[string]any
@@ -26,6 +27,8 @@ func TestWholeReadOnlyToolSurfaceAgainstOneFakeAccount(t *testing.T) {
 		{tools.ToolGetUserProfile, nil},
 		{tools.ToolGetFullName, nil},
 		{tools.ToolGetUnitSystem, nil},
+		{tools.ToolGetUserProfileSettings, nil},
+		{tools.ToolGetPersonalRecord, nil},
 		{tools.ToolGetActivities, map[string]any{argLimit: 2}},
 		{tools.ToolGetActivitiesByDate, map[string]any{
 			argStartDate: windowStart, argEndDate: testCalendarDate,
@@ -33,8 +36,17 @@ func TestWholeReadOnlyToolSurfaceAgainstOneFakeAccount(t *testing.T) {
 		{tools.ToolGetSleepData, map[string]any{argDate: testCalendarDate}},
 		{tools.ToolGetUserSummary, map[string]any{argDate: testCalendarDate}},
 		{tools.ToolGetDevices, nil},
-		{tools.ToolGetActivityTypedSplits, map[string]any{argActivityID: testActivityID}},
-		{tools.ToolGetActivityExerciseSets, map[string]any{argActivityID: testActivityID}},
+		{tools.ToolGetActivityTypedSplits, activity},
+		{tools.ToolGetActivityExerciseSets, activity},
+		{tools.ToolGetActivitySplits, activity},
+		{tools.ToolGetActivitySplitSummaries, activity},
+		{tools.ToolGetActivityHRInZones, activity},
+		{tools.ToolGetActivityPowerInZones, activity},
+		{tools.ToolGetActivityWeather, activity},
+		{tools.ToolGetExerciseTypes, nil},
+		{tools.ToolGetWorkouts, nil},
+		{tools.ToolGetWorkoutByID, map[string]any{argWorkoutID: testWorkoutID}},
+		{tools.ToolDownloadWorkout, map[string]any{argWorkoutID: 550001}},
 	}
 
 	for _, call := range calls {
@@ -45,17 +57,39 @@ func TestWholeReadOnlyToolSurfaceAgainstOneFakeAccount(t *testing.T) {
 		})
 	}
 
-	assertNoCredentialLeftThisProcess(t, h)
+	assertNoCredentialLeftThisProcess(t, h, len(calls))
+}
+
+// wholeReadScript serves every endpoint the read-only surface reaches.
+func wholeReadScript() testkit.Script {
+	script := readScript()
+	for path, behavior := range map[string]testkit.Behavior{
+		client.PathUserProfileSettings:                     testkit.JSON(http.StatusOK, profileSettingsBody),
+		client.PathPersonalRecords + "/" + testDisplayName: testkit.JSON(http.StatusOK, personalRecordsBody),
+		activityDetailPath(client.SegmentSplits):           testkit.JSON(http.StatusOK, `{"lapDTOs":[`+splitEntry+`]}`),
+		activityDetailPath(client.SegmentSplitSummaries):   testkit.JSON(http.StatusOK, splitSummariesBody),
+		activityDetailPath(client.SegmentHRInZones):        testkit.JSON(http.StatusOK, hrZonesBody),
+		activityDetailPath(client.SegmentPowerInZones):     testkit.JSON(http.StatusOK, powerZonesBody),
+		activityDetailPath(client.SegmentWeather):          testkit.JSON(http.StatusOK, weatherBody),
+		client.PathWorkouts:                                testkit.JSON(http.StatusOK, workoutListBody),
+		workoutPath(testWorkoutID):                         testkit.JSON(http.StatusOK, workoutDetailBody),
+		client.PathWorkoutFITPrefix + "/" + testWorkoutID:  {Status: http.StatusOK, Body: workoutFITBody},
+	} {
+		script = script.With(path, behavior)
+	}
+	return script.With(client.PathUserSettings,
+		repeat(testkit.JSON(http.StatusOK, settingsBody), 4)...)
 }
 
 // assertNoCredentialLeftThisProcess pins the boundary: this package never attaches a
 // token. The caller owns the credential, and in these tests there is none.
-func assertNoCredentialLeftThisProcess(t *testing.T, h harness) {
+func assertNoCredentialLeftThisProcess(t *testing.T, h harness, calls int) {
 	t.Helper()
 
 	recorded := h.fake.Requests()
-	if len(recorded) < len(wantToolNames) {
-		t.Fatalf("the fake received %d requests, want at least one per tool", len(recorded))
+	if len(recorded) < calls-1 {
+		t.Fatalf("the fake received %d requests for %d calls, want at least one each",
+			len(recorded), calls)
 	}
 	for _, request := range recorded {
 		if request.Header.Get("Authorization") != "" {

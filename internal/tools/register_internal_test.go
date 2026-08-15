@@ -51,7 +51,12 @@ func startServer(t *testing.T, deps Deps, lists tierLists) error {
 	if err != nil {
 		t.Fatalf("identity.NewStdioResolver() = %v", err)
 	}
-	pol, err := policy.New(policy.Config{Mode: policy.ModeLocal, ReadOnlyTools: lists.readOnly}, nil)
+	pol, err := policy.New(policy.Config{
+		Mode:             policy.ModeLocal,
+		ReadOnlyTools:    lists.readOnly,
+		WriteTools:       lists.write,
+		DestructiveTools: lists.destructive,
+	}, nil)
 	if err != nil {
 		t.Fatalf("policy.New() = %v", err)
 	}

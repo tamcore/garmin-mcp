@@ -126,8 +126,8 @@ func TestGetActivityExerciseSetsReturnsTheStrengthSets(t *testing.T) {
 		t.Fatalf("%d sets, want 1", len(sets))
 	}
 	first, _ := sets[0].(map[string]any)
-	if first["set_type"] != "ACTIVE" {
-		t.Errorf("set_type = %v, want %q", first["set_type"], "ACTIVE")
+	if first["set_type"] != setKindActive {
+		t.Errorf("set_type = %v, want %q", first["set_type"], setKindActive)
 	}
 	if exercises, _ := first["exercises"].([]any); len(exercises) != 1 {
 		t.Errorf("%d exercises, want 1", len(exercises))

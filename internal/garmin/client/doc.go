@@ -89,13 +89,19 @@
 // query parameter is encoded by this package. DisplayName is identity material and
 // follows the repository redaction convention.
 //
+// # File downloads
+//
+// Download streams a file response into a caller-supplied io.Writer instead of
+// buffering it into a Payload, because an activity or workout file is the one
+// Garmin response that is not a small JSON document. Both bounds still apply —
+// MaxResponseBytes to the wire bytes, MaxDecompressedBytes to the bytes handed to
+// the sink — and an overrun is reported rather than truncated. The transfer is
+// attempted exactly once: the sink already holds the failed attempt's bytes, so a
+// retry could only corrupt it. This package never opens, creates or names a file.
+//
 // # Documented gaps
 //
-//   - Writes and destructive operations. Effect, the strict models and the retry
-//     prohibitions are in place, but no write is performed by this slice.
-//   - File transfer. FileTransfer changes the Accept header and the classification
-//     of a rejected payload; FIT, GPX, TCX and CSV download handling, and their own
-//     size bounds, belong to the download slice.
+//   - Multipart upload, which activity and course file import need.
 //   - The JWT_WEB cookie fallback and any non-DI authentication, which stay with
 //     internal/garmin/auth.
 //   - Per-endpoint response caching and per-principal rate limiting, which belong to

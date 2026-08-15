@@ -47,6 +47,16 @@ func (s *SQLiteStore) RevokeConsentFor(ctx context.Context, key ConsentKey,
 	if err != nil {
 		return RevocationResult{}, err
 	}
+	// The announcement is keyed on the principal and the client, not on the
+	// resource: the transport's selector has no resource, so a narrower event
+	// cannot be expressed. Announcing the pair closes more sessions than the grant
+	// covered, which is the safe direction — a closed session reconnects on a token
+	// that is still valid, while a session that should have closed does not.
+	s.publishRevocation(RevocationEvent{
+		PrincipalID: key.PrincipalID,
+		ClientID:    key.ClientID,
+		Reason:      reasonConsentRevoked,
+	})
 	return result, nil
 }
 
@@ -166,6 +176,10 @@ func (s *SQLiteStore) RevokePrincipalTokens(ctx context.Context, principalID str
 	if err != nil {
 		return RevocationResult{}, err
 	}
+	s.publishRevocation(RevocationEvent{
+		PrincipalID: principalID,
+		Reason:      reasonConsentRevoked,
+	})
 	return result, nil
 }
 

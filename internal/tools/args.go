@@ -92,40 +92,48 @@ func parseActivityTypeFilter(value string) (api.ActivityType, error) {
 // and a decimal string — and nothing else. Only a validated client.ID ever reaches a
 // URL path, so an identifier can carry no path separator and no traversal segment.
 func parseActivityIdentifier(value any) (client.ID, error) {
+	return parseIdentifier("activity_id", value)
+}
+
+// parseIdentifier is parseActivityIdentifier for any identifier argument. field names
+// the argument, so the refusal says which one was wrong without quoting what arrived.
+func parseIdentifier(field string, value any) (client.ID, error) {
 	switch typed := value.(type) {
 	case nil:
-		return client.ID{}, invalidArgument("activity_id is required")
+		return client.ID{}, invalidArgument(field + " is required")
 	case string:
-		return identifierFromText(typed)
+		return identifierFromText(field, typed)
 	case json.Number:
-		return identifierFromText(typed.String())
+		return identifierFromText(field, typed.String())
 	case float64:
-		return identifierFromNumber(typed)
+		return identifierFromNumber(field, typed)
+	case int64:
+		return identifierFromNumber(field, float64(typed))
 	default:
 		return client.ID{}, invalidArgument(
-			"activity_id must be a positive integer, as a JSON number or as a decimal string")
+			field + " must be a positive integer, as a JSON number or as a decimal string")
 	}
 }
 
-func identifierFromText(value string) (client.ID, error) {
+func identifierFromText(field, value string) (client.ID, error) {
 	if len(value) > maxIdentifierArgumentLen {
-		return client.ID{}, invalidArgument("activity_id is too long to be a Garmin identifier")
+		return client.ID{}, invalidArgument(field + " is too long to be a Garmin identifier")
 	}
 	id, err := client.ParseID(value)
 	if err != nil {
 		return client.ID{}, invalidArgument(
-			"activity_id must be decimal digits naming a positive activity")
+			field + " must be decimal digits naming a positive record")
 	}
 	return id, nil
 }
 
-func identifierFromNumber(value float64) (client.ID, error) {
+func identifierFromNumber(field string, value float64) (client.ID, error) {
 	if value != math.Trunc(value) || value <= 0 || value > math.MaxInt64 {
-		return client.ID{}, invalidArgument("activity_id must be a positive whole number")
+		return client.ID{}, invalidArgument(field + " must be a positive whole number")
 	}
 	id, err := client.NewID(int64(value))
 	if err != nil {
-		return client.ID{}, invalidArgument("activity_id must be a positive whole number")
+		return client.ID{}, invalidArgument(field + " must be a positive whole number")
 	}
 	return id, nil
 }
@@ -230,7 +238,7 @@ func optionalText(text client.Text) *string {
 // typeKeyOf reads the type key out of the two shapes Garmin sends for an activity or
 // event type: a nested object, and a bare key.
 func typeKeyOf(raw json.RawMessage) *string {
-	if len(raw) == 0 || string(raw) == "null" {
+	if len(raw) == 0 || string(raw) == jsonNull {
 		return nil
 	}
 

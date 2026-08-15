@@ -23,6 +23,9 @@ const (
 	keyBindAddress            = "bind-address"
 	keyPublicURL              = "public-url"
 	keyTrustedProxyCIDRs      = "trusted-proxy-cidrs"
+	keyAllowedOrigins         = "allowed-origins"
+	keySessionTimeout         = "session-timeout"
+	keyOAuthClients           = "oauth-clients"
 	keyAllowInsecureHTTP      = "allow-insecure-http"
 	keyTLSCertFile            = "tls-cert-file"
 	keyTLSKeyFile             = "tls-key-file"
@@ -47,6 +50,22 @@ const (
 	keyLogFormat              = "log-format"
 )
 
+// The keys inside one entry of the OAuth client registry. They are sub-keys of
+// [keyOAuthClients] rather than settings of their own, because a registry is a
+// list of records and neither a flag nor an environment variable can spell one
+// record's field. The "-file" companion carries the secret digest, which is the
+// only way a confidential client may supply it in remote mode.
+const (
+	keyClientID             = "id"
+	keyClientName           = "name"
+	keyClientRedirectURIs   = "redirect-uris"
+	keyClientScopes         = "scopes"
+	keyClientResources      = "resources"
+	keyClientPublic         = "public"
+	keyClientSecretHash     = "secret-hash"
+	keyClientSecretHashFile = keyClientSecretHash + fileSuffix
+)
+
 // settingKind selects how a setting is registered as a flag and read back.
 type settingKind uint8
 
@@ -57,6 +76,9 @@ const (
 	kindInt64
 	kindDuration
 	kindStringSlice
+	// kindClientList is the OAuth client registry: a list of records rather than
+	// a scalar. It has no flag, because a command line cannot spell a record.
+	kindClientList
 )
 
 // setting describes one configuration knob on every layer at once.
@@ -104,6 +126,18 @@ var settingTable = [...]setting{
 	{
 		key: keyTrustedProxyCIDRs, flag: keyTrustedProxyCIDRs, kind: kindStringSlice, def: []string{},
 		usage: "networks whose forwarded headers may be trusted; empty trusts none",
+	},
+	{
+		key: keyAllowedOrigins, flag: keyAllowedOrigins, kind: kindStringSlice, def: []string{},
+		usage: "browser origins allowed to reach the MCP endpoint; empty denies every request carrying one",
+	},
+	{
+		key: keySessionTimeout, flag: keySessionTimeout, kind: kindDuration, def: DefaultSessionTimeout,
+		usage: "how long an idle Streamable HTTP session stays addressable",
+	},
+	{
+		key: keyOAuthClients, kind: kindClientList, def: nil,
+		usage: "operator-registered OAuth clients; a configuration-file list or a JSON document",
 	},
 	{
 		key: keyAllowInsecureHTTP, flag: keyAllowInsecureHTTP, kind: kindBool, def: false,

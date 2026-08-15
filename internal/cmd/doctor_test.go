@@ -33,6 +33,104 @@ func runDoctor(t *testing.T, args ...string) (stdout, stderr string, code int) {
 	return out.String(), errOut.String(), code
 }
 
+// remoteDoctorEnv points doctor at a synthetic remote deployment and returns the
+// database path it created. The database file is empty: doctor reports its mode
+// and never opens it, because a diagnostic that opened a database would migrate
+// the very thing it was asked to inspect.
+func remoteDoctorEnv(t *testing.T) string {
+	t.Helper()
+
+	dir := stateDir(t)
+	database := filepath.Join(dir, "state.db")
+	if err := os.WriteFile(database, nil, 0o600); err != nil {
+		t.Fatalf("create the database file: %v", err)
+	}
+
+	t.Setenv("GARMIN_MCP_TRANSPORT", "streamable-http")
+	t.Setenv("GARMIN_MCP_PUBLIC_URL", "https://mcp.example.test/mcp")
+	t.Setenv("GARMIN_MCP_BIND_ADDRESS", "127.0.0.1:8443")
+	t.Setenv("GARMIN_MCP_DATABASE_PATH", database)
+	t.Setenv("GARMIN_MCP_MASTER_KEY_FILE", filepath.Join(dir, "keys", "key-v1.json"))
+	t.Setenv("GARMIN_MCP_TLS_CERT_FILE", filepath.Join(dir, "tls.crt"))
+	t.Setenv("GARMIN_MCP_TLS_KEY_FILE", filepath.Join(dir, "tls.key"))
+	t.Setenv("GARMIN_MCP_OAUTH_CLIENTS", `[{"id":"example-client",`+
+		`"name":"Example MCP client",`+
+		`"redirect-uris":["https://client.example.test/callback"],`+
+		`"scopes":["garmin:read"],`+
+		`"resources":["https://mcp.example.test/mcp"],`+
+		`"public":true}]`)
+	return database
+}
+
+// TestDoctorReportsTheRemoteDeployment covers the remote half of the report: an
+// operator learns the transport, the canonical public URL, whether TLS is
+// terminated here, where the database is and whether another local account can
+// read it, and which clients are registered — and learns none of their secrets.
+func TestDoctorReportsTheRemoteDeployment(t *testing.T) {
+	clearGarminEnv(t)
+	database := remoteDoctorEnv(t)
+
+	stdout, stderr, code := runDoctor(t)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("stderr = %q, want empty: the report is the result", stderr)
+	}
+
+	for _, want := range []string{
+		"streamable-http",
+		"https://mcp.example.test/mcp",
+		"tls",
+		database,
+		"owner-only",
+		"example-client",
+		"read-only",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("report does not mention %q:\n%s", want, stdout)
+		}
+	}
+}
+
+// TestDoctorReportsAnAbsentDatabase keeps a fresh deployment from reading as a
+// broken one: the database does not exist until the first serve run, and that is
+// informational rather than a failure.
+func TestDoctorReportsAnAbsentDatabase(t *testing.T) {
+	clearGarminEnv(t)
+	database := remoteDoctorEnv(t)
+	if err := os.Remove(database); err != nil {
+		t.Fatalf("remove the database file: %v", err)
+	}
+
+	stdout, _, code := runDoctor(t)
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0 for a deployment that has not started yet", code)
+	}
+	if !strings.Contains(stdout, "absent") {
+		t.Errorf("report does not say the database is absent:\n%s", stdout)
+	}
+}
+
+// TestDoctorReportsAWorldReadableDatabase is the check that has teeth: a database
+// another local account can read holds every principal's encrypted tokens, and the
+// command must fail rather than report a healthy deployment.
+func TestDoctorReportsAWorldReadableDatabase(t *testing.T) {
+	clearGarminEnv(t)
+	database := remoteDoctorEnv(t)
+	if err := os.Chmod(database, 0o644); err != nil {
+		t.Fatalf("relax the database mode: %v", err)
+	}
+
+	stdout, _, code := runDoctor(t)
+	if code == 0 {
+		t.Error("exit code = 0 for a database another local account can read")
+	}
+	if !strings.Contains(stdout, "not owner-only") {
+		t.Errorf("report does not name the unsafe database:\n%s", stdout)
+	}
+}
+
 // TestDoctorReportsTheEffectiveDeploymentOnStdout is the behavior: doctor answers
 // the questions an operator has before starting a server — which transport, which
 // principal, where the key and the store are, and which tool tiers are enabled —

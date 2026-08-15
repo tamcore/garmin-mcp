@@ -69,14 +69,14 @@ func TestServeParsesAndValidatesBeforeReportingTheGap(t *testing.T) {
 		sentinel error
 	}{
 		{
-			name: "streamable http validates and reports the missing server",
+			name: "streamable http without a registered client is refused",
 			args: []string{
 				cmdServe, "--transport=streamable-http",
 				"--public-url=http://127.0.0.1:8180",
 				"--database-path=/var/lib/garmin-mcp/state.db",
 				"--master-key-file=/var/lib/garmin-mcp/master.key",
 			},
-			sentinel: cmd.ErrNotImplemented,
+			sentinel: config.ErrMissingSetting,
 		},
 		{
 			name:     "unknown transport is rejected",

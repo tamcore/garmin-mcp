@@ -33,6 +33,14 @@ const (
 	stateUnsafe state = "unsafe"
 )
 
+// The two verdicts every mode check shares. They are constants because the key
+// file, the token directory, and the database are judged by the same rule, and an
+// operator grepping a report should find one wording rather than three.
+const (
+	detailOwnerOnly = "present, owner-only"
+	detailReadable  = "present but not owner-only; another local account can read it"
+)
+
 // diagnosis is the complete doctor report.
 //
 // Every field is a string or a bool, and the effective configuration is carried
@@ -64,6 +72,25 @@ type diagnosis struct {
 	TokensState  state
 	TokensDetail string
 
+	// Remote reports whether this is a Streamable HTTP deployment, which decides
+	// which half of the report applies: a remote deployment has no single bound
+	// account and no single-user token file, and a local one has no database, no
+	// public URL, and no client registry.
+	Remote bool
+	// PublicURL is the canonical origin clients are told to use.
+	PublicURL string
+	// TLSConfigured reports whether this process terminates TLS itself. False
+	// means a trusted proxy does, which is a supported shape.
+	TLSConfigured bool
+	// DatabasePath is the multi-user store, and DatabaseState and DatabaseDetail
+	// describe what was found there.
+	DatabasePath   string
+	DatabaseState  state
+	DatabaseDetail string
+	// ClientIDs are the registered OAuth client identifiers. No other part of a
+	// registration is reported, and a secret digest never is.
+	ClientIDs []string
+
 	// WriteEnabled and DestructiveEnabled are the operator half of the tier gate.
 	WriteEnabled       bool
 	DestructiveEnabled bool
@@ -75,7 +102,8 @@ type diagnosis struct {
 // failed reports whether any check found something that exists and must not be
 // used. An absent key or an unlinked account is not a failure.
 func (d diagnosis) failed() bool {
-	return d.KeyState == stateUnsafe || d.StoreState == stateUnsafe || d.TokensState == stateUnsafe
+	return d.KeyState == stateUnsafe || d.StoreState == stateUnsafe ||
+		d.TokensState == stateUnsafe || d.DatabaseState == stateUnsafe
 }
 
 // NewDoctorCommand reports deployment diagnostics: transport, principal binding,
@@ -132,6 +160,7 @@ func diagnose(ctx context.Context, cfg config.Config) (diagnosis, error) {
 		StateDir:           paths.root,
 		KeyFile:            paths.keyFile(),
 		TokenDir:           paths.tokens,
+		Remote:             cfg.Transport == config.TransportStreamableHTTP,
 		WriteEnabled:       cfg.EnableWriteTools,
 		DestructiveEnabled: cfg.EnableDestructiveTools,
 		ConfigLine:         cfg.String(),
@@ -139,6 +168,10 @@ func diagnose(ctx context.Context, cfg config.Config) (diagnosis, error) {
 
 	key, keyUsable := report.checkKey(cfg, paths)
 	report.checkStore(paths)
+	if report.Remote {
+		report.checkRemote(cfg)
+		return report, nil
+	}
 	report.checkTokens(ctx, cfg, paths, key, keyUsable)
 	return report, nil
 }
@@ -163,14 +196,14 @@ func (d *diagnosis) checkKey(cfg config.Config, paths statePaths) (cryptostore.K
 	key, err := cryptostore.LoadKey(paths.keys, keyVersion)
 	switch {
 	case err == nil:
-		d.KeyState, d.KeyDetail = stateOK, "present, owner-only"
+		d.KeyState, d.KeyDetail = stateOK, detailOwnerOnly
 		return key, true
 	case errors.Is(err, cryptostore.ErrKeyNotFound):
 		d.KeyState = stateAbsent
 		d.KeyDetail = "absent; it is created on the first serve or auth run"
 	case errors.Is(err, cryptostore.ErrInsecureKeyPermissions):
 		d.KeyState = stateUnsafe
-		d.KeyDetail = "present but not owner-only; another local account can read it"
+		d.KeyDetail = detailReadable
 	default:
 		d.KeyState = stateUnsafe
 		d.KeyDetail = "present but unusable: " + sanitizedCause(err)
@@ -194,9 +227,9 @@ func (d *diagnosis) checkStore(paths statePaths) {
 		d.StoreDetail = "present but is not a directory"
 	case info.Mode().Perm()&0o077 != 0:
 		d.StoreState = stateUnsafe
-		d.StoreDetail = "present but not owner-only; another local account can read it"
+		d.StoreDetail = detailReadable
 	default:
-		d.StoreState, d.StoreDetail = stateOK, "present, owner-only"
+		d.StoreState, d.StoreDetail = stateOK, detailOwnerOnly
 	}
 }
 

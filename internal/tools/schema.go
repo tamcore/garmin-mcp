@@ -11,6 +11,38 @@ import (
 const (
 	typeString  = "string"
 	typeInteger = "integer"
+	typeNumber  = "number"
+	typeBoolean = "boolean"
+	typeArray   = "array"
+	typeObject  = "object"
+)
+
+// JSON Schema keywords this package emits. They are named once so a nested item
+// schema, which is written as plain data, cannot misspell what the property renderer
+// emits.
+const (
+	keyType                 = "type"
+	keyProperties           = "properties"
+	keyRequired             = "required"
+	keyAdditionalProperties = "additionalProperties"
+	keyDescription          = "description"
+	keyFormat               = "format"
+	keyPattern              = "pattern"
+	keyMinimum              = "minimum"
+	keyMaximum              = "maximum"
+	keyMaxLength            = "maxLength"
+	keyMinItems             = "minItems"
+	keyMaxItems             = "maxItems"
+	keyItems                = "items"
+	keyEnum                 = "enum"
+	keyDefault              = "default"
+)
+
+// JSON Schema formats and patterns this package declares.
+const (
+	formatDate          = "date"
+	formatDateTime      = "date-time"
+	patternCalendarDate = `^\d{4}-\d{2}-\d{2}$`
 )
 
 // A Property is one strict input property of a tool.
@@ -42,6 +74,17 @@ type Property struct {
 
 	// MaxLength bounds a string argument. Nil means unbounded.
 	MaxLength *int
+
+	// MinItems and MaxItems bound an array argument. Nil means unbounded.
+	MinItems *int
+	MaxItems *int
+
+	// Items is the declared element schema of an array argument. Nil declares no
+	// element schema, which is what the manifest states for the batch tools.
+	Items map[string]any
+
+	// Enum is the closed set of accepted values. Nil means the value is open.
+	Enum []any
 
 	// Default is the value the tool applies when the argument is absent. Nil means
 	// the argument has no default.
@@ -87,24 +130,24 @@ func (s Schema) JSON() map[string]any {
 		properties[property.Name] = property.json()
 	}
 	return map[string]any{
-		"type":                 "object",
-		"properties":           properties,
-		"required":             s.Required(),
-		"additionalProperties": false,
+		keyType:                 typeObject,
+		keyProperties:           properties,
+		keyRequired:             s.Required(),
+		keyAdditionalProperties: false,
 	}
 }
 
 // json renders one property. A single type renders as "type"; several render as
 // "anyOf", matching the manifest.
 func (p Property) json() map[string]any {
-	out := map[string]any{"description": p.Description}
+	out := map[string]any{keyDescription: p.Description}
 	switch {
 	case len(p.Types) == 1:
-		out["type"] = p.Types[0]
+		out[keyType] = p.Types[0]
 	case len(p.Types) > 1:
 		variants := make([]any, 0, len(p.Types))
 		for _, name := range slices.Sorted(slices.Values(p.Types)) {
-			variants = append(variants, map[string]any{"type": name})
+			variants = append(variants, map[string]any{keyType: name})
 		}
 		out["anyOf"] = variants
 	}
@@ -115,22 +158,34 @@ func (p Property) json() map[string]any {
 // addConstraints adds every declared bound that is set.
 func (p Property) addConstraints(out map[string]any) {
 	if p.Format != "" {
-		out["format"] = p.Format
+		out[keyFormat] = p.Format
 	}
 	if p.Pattern != "" {
-		out["pattern"] = p.Pattern
+		out[keyPattern] = p.Pattern
 	}
 	if p.Minimum != nil {
-		out["minimum"] = *p.Minimum
+		out[keyMinimum] = *p.Minimum
 	}
 	if p.Maximum != nil {
-		out["maximum"] = *p.Maximum
+		out[keyMaximum] = *p.Maximum
 	}
 	if p.MaxLength != nil {
-		out["maxLength"] = *p.MaxLength
+		out[keyMaxLength] = *p.MaxLength
+	}
+	if p.MinItems != nil {
+		out[keyMinItems] = *p.MinItems
+	}
+	if p.MaxItems != nil {
+		out[keyMaxItems] = *p.MaxItems
+	}
+	if p.Items != nil {
+		out[keyItems] = maps.Clone(p.Items)
+	}
+	if len(p.Enum) > 0 {
+		out[keyEnum] = slices.Clone(p.Enum)
 	}
 	if p.Default != nil {
-		out["default"] = p.Default
+		out[keyDefault] = p.Default
 	}
 }
 

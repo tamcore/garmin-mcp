@@ -106,8 +106,8 @@ func dateProperty(name, description string) Property {
 		Name:        name,
 		Types:       []string{typeString},
 		Description: description + ", in YYYY-MM-DD form",
-		Format:      "date",
-		Pattern:     `^\d{4}-\d{2}-\d{2}$`,
+		Format:      formatDate,
+		Pattern:     patternCalendarDate,
 		MaxLength:   new(maxDateArgumentLen),
 		Required:    true,
 	}

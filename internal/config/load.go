@@ -123,6 +123,12 @@ func fromStore(store *viper.Viper) (Config, error) {
 	cfg = withState(cfg, store)
 	cfg = withPolicy(cfg, store)
 	cfg = withLimits(cfg, store)
+
+	clients, err := clientList(store)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.OAuthClients = clients
 	return cfg, nil
 }
 
@@ -141,6 +147,7 @@ func withNetwork(cfg Config, store *viper.Viper) Config {
 	out.BindAddress = strings.TrimSpace(store.GetString(keyBindAddress))
 	out.PublicURL = strings.TrimSpace(store.GetString(keyPublicURL))
 	out.TrustedProxyCIDRs = stringList(store, keyTrustedProxyCIDRs)
+	out.AllowedOrigins = stringList(store, keyAllowedOrigins)
 	out.AllowInsecureHTTP = store.GetBool(keyAllowInsecureHTTP)
 	out.TLSCertFile = strings.TrimSpace(store.GetString(keyTLSCertFile))
 	out.TLSKeyFile = strings.TrimSpace(store.GetString(keyTLSKeyFile))
@@ -179,6 +186,7 @@ func withLimits(cfg Config, store *viper.Viper) Config {
 	out.MaxRequestBytes = store.GetInt64(keyMaxRequestBytes)
 	out.MaxResponseBytes = store.GetInt64(keyMaxResponseBytes)
 	out.RequestTimeout = store.GetDuration(keyRequestTimeout)
+	out.SessionTimeout = store.GetDuration(keySessionTimeout)
 	out.ReadRateLimitPerMinute = store.GetInt(keyReadRateLimit)
 	out.WriteRateLimitPerMinute = store.GetInt(keyWriteRateLimit)
 	out.LogLevel = strings.ToLower(strings.TrimSpace(store.GetString(keyLogLevel)))

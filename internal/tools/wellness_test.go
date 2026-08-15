@@ -100,7 +100,7 @@ func TestWellnessToolsRefuseAMalformedOrMissingDate(t *testing.T) {
 		"wrong layout":   {argDate: "31-01-2026"},
 		"unreal date":    {argDate: "2026-02-30"},
 		"padded date":    {argDate: "2026-01-31   x"},
-		"path traversal": {argDate: "../../etc/passwd"},
+		"path traversal": {argDate: traversalAttempt},
 	}
 	for _, tool := range []string{tools.ToolGetSleepData, tools.ToolGetUserSummary} {
 		for name, args := range cases {

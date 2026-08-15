@@ -159,14 +159,15 @@ func (a *Authenticator) attemptStrategy(
 
 	switch step.class.Outcome() {
 	case protocol.OutcomeSuccess:
-		if err := a.completeLogin(ctx, principal, step.class, step.serviceURL); err != nil {
+		account, err := a.completeLogin(ctx, principal, step.class, step.serviceURL)
+		if err != nil {
 			// A rejected or unverifiable session says nothing about the
 			// password, so the next strategy still gets a turn. A failed
 			// persistence is different: no other strategy can fix the store, and
 			// a stale candidate must not be rewritten, so the chain ends.
 			return failedResult(strategy), err, errors.Is(err, ErrTokenPersistenceFailed)
 		}
-		return authenticatedResult(strategy), nil, true
+		return authenticatedResult(strategy, account), nil, true
 
 	case protocol.OutcomeMFARequired:
 		result, err := a.beginMFA(principal, strategy, step)
@@ -187,15 +188,18 @@ func (a *Authenticator) attemptStrategy(
 //
 // The whole sequence runs under the principal's token gate, so it cannot interleave
 // with a refresh of the same principal.
+//
+// It reports the account the API tier attributed the validated session to, which is
+// the only account claim in the login that a Garmin-authenticated call produced.
 func (a *Authenticator) completeLogin(
 	ctx context.Context,
 	principal string,
 	class protocol.Classification,
 	serviceURL string,
-) error {
+) (garminAccount, error) {
 	ticket := class.ServiceTicket()
 	if ticket == "" {
-		return ErrMissingServiceTicket
+		return garminAccount{}, ErrMissingServiceTicket
 	}
 
 	return a.storeTicketTokens(ctx, principal, ticket, serviceURL)
@@ -206,10 +210,10 @@ func (a *Authenticator) completeLogin(
 func (a *Authenticator) storeTicketTokens(
 	ctx context.Context,
 	principal, ticket, serviceURL string,
-) error {
+) (garminAccount, error) {
 	release, err := a.gate.acquire(ctx, principal)
 	if err != nil {
-		return fmt.Errorf("garmin auth: await the token gate: %w", err)
+		return garminAccount{}, fmt.Errorf("garmin auth: await the token gate: %w", err)
 	}
 	defer release()
 
@@ -226,20 +230,24 @@ func (a *Authenticator) storeTicketTokens(
 func (a *Authenticator) exchangeAndSave(
 	ctx context.Context,
 	principal, ticket, serviceURL string,
-) error {
+) (garminAccount, error) {
 	baseline, err := a.storedVersion(ctx, principal)
 	if err != nil {
-		return err
+		return garminAccount{}, err
 	}
 
 	set, err := a.tokens.exchangeTicket(ctx, ticket, serviceURL)
 	if err != nil {
-		return err
+		return garminAccount{}, err
 	}
-	if err := a.tokens.validateSession(ctx, set); err != nil {
-		return err
+	account, err := a.tokens.validateSession(ctx, set)
+	if err != nil {
+		return garminAccount{}, err
 	}
-	return a.saveTokens(ctx, principal, set, baseline)
+	if err := a.saveTokens(ctx, principal, set, baseline); err != nil {
+		return garminAccount{}, err
+	}
+	return account, nil
 }
 
 // saveTokens stores set with a compare-and-set against baseline, the version read

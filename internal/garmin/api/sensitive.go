@@ -163,3 +163,162 @@ func (e Exercise) LogValue() slog.Value {
 		slog.String("name", presence(e.Name.IsSet())),
 	)
 }
+
+// LogValue reports the outcome of a write, never the object it returned.
+func (w WriteResult) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "writeResult"),
+		slog.Int("status", w.Status),
+		slog.Any("payload", w.raw),
+	)
+}
+
+// LogValue reports whether a create returned an identifier, never which one.
+func (c CreatedActivity) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "createdActivity"),
+		slog.String("activityId", presence(c.ActivityID.IsSet())),
+		slog.Any("payload", c.raw),
+	)
+}
+
+// LogValue reports the shape of one activity record, never its measurements.
+func (a ActivitySummary) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "activitySummary"),
+		slog.String("activityId", presence(a.ActivityID.IsSet())),
+		slog.String("activityName", presence(a.ActivityName != nil)),
+		slog.String("summary", presence(len(a.Summary) > 0)),
+		slog.Any("payload", a.raw),
+	)
+}
+
+// LogValue reports the summary count, never the summaries.
+func (s SplitSummaries) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "splitSummaries"),
+		slog.Int("summaries", s.Summaries.Len()),
+		slog.Any("payload", s.raw),
+	)
+}
+
+// LogValue reports the shape of one split summary.
+func (s SplitSummary) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "splitSummary"),
+		slog.String("splitType", presence(s.SplitType.IsSet())),
+		slog.String("distance", presence(s.Distance.IsSet())),
+	)
+}
+
+// LogValue reports the shape of a weather record, never its coordinates.
+func (w Weather) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "weather"),
+		slog.String("temp", presence(w.Temp.IsSet())),
+		slog.String("position", presence(w.Latitude.IsSet() && w.Longitude.IsSet())),
+		slog.Any("payload", w.raw),
+	)
+}
+
+// LogValue reports the shape of one zone bucket, never the time in it.
+func (z ZoneBucket) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "zoneBucket"),
+		slog.String("zoneNumber", presence(z.ZoneNumber.IsSet())),
+		slog.String("secsInZone", presence(z.SecsInZone.IsSet())),
+	)
+}
+
+// LogValue reports the shape of one catalog row. A type key is not sensitive,
+// but the model is logged through the same discipline as every other.
+func (c CatalogEntry) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "catalogEntry"),
+		slog.String("typeId", presence(c.TypeID.IsSet())),
+		slog.String("typeKey", presence(c.TypeKey.IsSet())),
+	)
+}
+
+// LogValue reports the shape of one gear item, never the equipment it names.
+func (g GearItem) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "gearItem"),
+		slog.String("uuid", presence(g.UUID != nil)),
+		slog.String("displayName", presence(g.DisplayName != nil)),
+		slog.String("gearType", presence(g.GearTypeName != nil)),
+	)
+}
+
+// LogValue reports the shape of one workout entry, never the training in it.
+func (w WorkoutSummary) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "workoutSummary"),
+		slog.String("workoutId", presence(w.WorkoutID.IsSet())),
+		slog.String("workoutName", presence(w.WorkoutName != nil)),
+	)
+}
+
+// LogValue reports the shape of one workout, never its steps.
+func (w Workout) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "workout"),
+		slog.String("workoutId", presence(w.WorkoutID.IsSet())),
+		slog.String("workoutName", presence(w.WorkoutName != nil)),
+		slog.Int("segmentBytes", len(w.Segments)),
+		slog.Any("payload", w.raw),
+	)
+}
+
+// LogValue reports that a workout was saved, never what was saved.
+func (w SavedWorkout) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "savedWorkout"),
+		slog.String("workoutId", presence(w.WorkoutID.IsSet())),
+		slog.String("workoutName", presence(w.WorkoutName != nil)),
+		slog.Any("payload", w.raw),
+	)
+}
+
+// LogValue reports the shape of the profile settings, never the identity in it.
+func (p ProfileSettings) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "profileSettings"),
+		slog.String("displayName", presence(p.DisplayName != nil)),
+		slog.String("fullName", presence(p.FullName != nil)),
+		slog.String("location", presence(p.Location != nil)),
+		slog.Any("payload", p.raw),
+	)
+}
+
+// LogValue reports the shape of one personal record, never the performance.
+func (p PersonalRecord) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "personalRecord"),
+		slog.String("typeId", presence(p.TypeID.IsSet())),
+		slog.String("value", presence(p.Value.IsSet())),
+	)
+}
+
+// LogValue reports the shape of one strength set, never the repetitions or the
+// weight, which describe a person's body.
+func (s StrengthSet) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "strengthSet"),
+		slog.String("kind", string(s.Kind)),
+		slog.String("start", presence(!s.Start.IsZero())),
+		slog.String("repetitions", presence(s.Repetitions > 0)),
+		slog.String("weight", presence(s.WeightGrams > 0)),
+		slog.String("exercise", presence(s.ExerciseName != "")),
+	)
+}
+
+// LogValue reports that a strength activity was created and verified, never its
+// content.
+func (c CreatedStrengthActivity) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "createdStrengthActivity"),
+		slog.String("activityId", presence(!c.Activity.IsZero())),
+		slog.Int("sets", c.Sets.Sets.Len()),
+	)
+}

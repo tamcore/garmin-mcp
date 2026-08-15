@@ -20,6 +20,9 @@ type redactedConfig struct {
 	BindAddress            string   `json:"bindAddress,omitempty"`
 	PublicURL              string   `json:"publicURL,omitempty"`
 	TrustedProxyCIDRs      []string `json:"trustedProxyCIDRs,omitempty"`
+	AllowedOrigins         []string `json:"allowedOrigins,omitempty"`
+	OAuthClientIDs         []string `json:"oauthClientIDs,omitempty"`
+	SessionTimeout         string   `json:"sessionTimeout"`
 	AllowInsecureHTTP      bool     `json:"allowInsecureHTTP"`
 	TLSCertFile            string   `json:"tlsCertFile,omitempty"`
 	TLSKeyFile             string   `json:"tlsKeyFile,omitempty"`
@@ -57,6 +60,9 @@ func (c Config) redacted() redactedConfig {
 		BindAddress:            c.BindAddress,
 		PublicURL:              c.PublicURL,
 		TrustedProxyCIDRs:      copyStrings(c.TrustedProxyCIDRs),
+		AllowedOrigins:         copyStrings(c.AllowedOrigins),
+		OAuthClientIDs:         clientIDs(c.OAuthClients),
+		SessionTimeout:         c.SessionTimeout.String(),
 		AllowInsecureHTTP:      c.AllowInsecureHTTP,
 		TLSCertFile:            c.TLSCertFile,
 		TLSKeyFile:             c.TLSKeyFile,
@@ -96,6 +102,9 @@ func (r redactedConfig) pairs() []string {
 		"bindAddress:" + quoteValue(r.BindAddress),
 		"publicURL:" + quoteValue(r.PublicURL),
 		"trustedProxyCIDRs:" + strconv.Itoa(len(r.TrustedProxyCIDRs)),
+		"allowedOrigins:" + strconv.Itoa(len(r.AllowedOrigins)),
+		"oauthClients:" + strconv.Itoa(len(r.OAuthClientIDs)),
+		"sessionTimeout:" + r.SessionTimeout,
 		"allowInsecureHTTP:" + strconv.FormatBool(r.AllowInsecureHTTP),
 		"tlsCertFile:" + quoteValue(r.TLSCertFile),
 		"tlsKeyFile:" + quoteValue(r.TLSKeyFile),
@@ -142,6 +151,9 @@ func (c Config) LogValue() slog.Value {
 		slog.String("bindAddress", red.BindAddress),
 		slog.String("publicURL", red.PublicURL),
 		slog.Int("trustedProxyCIDRs", len(red.TrustedProxyCIDRs)),
+		slog.Int("allowedOrigins", len(red.AllowedOrigins)),
+		slog.Int("oauthClients", len(red.OAuthClientIDs)),
+		slog.String("sessionTimeout", red.SessionTimeout),
 		slog.Bool("allowInsecureHTTP", red.AllowInsecureHTTP),
 		slog.String("databasePath", red.DatabasePath),
 		slog.String("stateDir", red.StateDir),
@@ -158,6 +170,23 @@ func (c Config) LogValue() slog.Value {
 		slog.String("logFormat", red.LogFormat),
 		slog.String("configFile", red.ConfigFile),
 	)
+}
+
+// clientIDs reports the registered client identifiers.
+//
+// An identifier is operator-chosen configuration, not a credential, and an
+// operator diagnosing a rejected client needs to see which registrations are in
+// force. Nothing else about a registration is rendered: a redirect URI names a
+// third party, and the secret digest is material this package never prints.
+func clientIDs(clients []OAuthClient) []string {
+	if len(clients) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(clients))
+	for _, client := range clients {
+		out = append(out, client.ID)
+	}
+	return out
 }
 
 func quoteValue(value string) string {

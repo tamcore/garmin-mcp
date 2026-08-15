@@ -37,6 +37,18 @@ func NewTokenGate() *TokenGate {
 	return &TokenGate{entries: make(map[string]*gateEntry)}
 }
 
+// Acquire takes principal's slot and returns the release function, which the
+// caller must call.
+//
+// It exists for the one caller outside this package that also writes a principal's
+// token set: a composition root that persists a set a login produced has to queue
+// behind the same gate, or its write races the refresh this gate exists to
+// serialize against. It reports ctx.Err() when the context ends before the slot is
+// free, and the returned function is nil in that case.
+func (g *TokenGate) Acquire(ctx context.Context, principal string) (func(), error) {
+	return g.acquire(ctx, principal)
+}
+
 // acquire takes principal's slot and returns the release function. It reports
 // ctx.Err() when the context ends before the slot is free, and the returned
 // function is nil in that case.

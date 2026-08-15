@@ -47,7 +47,7 @@ type ExerciseSetList struct {
 // LogValue reports the set count, never a set.
 func (l ExerciseSetList) LogValue() slog.Value {
 	return shape("exerciseSetList",
-		slog.Int("sets", len(l.Sets)),
+		slog.Int(argNameSets, len(l.Sets)),
 		slog.Bool("truncated", l.Truncated),
 	)
 }

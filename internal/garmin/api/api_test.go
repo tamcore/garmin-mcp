@@ -16,7 +16,15 @@ import (
 const (
 	testPrincipal    = "principal-api-0001"
 	fakeDisplayName  = "fake-tester"
+	fakeFullName     = "Fake Tester"
 	testCalendarDate = "2026-01-31"
+
+	// Enumeration keys the fixtures reuse across the domain tests.
+	typeKeyRunning      = "running"
+	categorySquat       = "SQUAT"
+	categoryPushUp      = "PUSH_UP"
+	exerciseBackSquat   = "BACK_SQUAT"
+	categoryUnsupported = "NOT_A_CATEGORY"
 )
 
 // caller is the principal-scoped caller for the fake service. In production this is
