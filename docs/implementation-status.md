@@ -37,7 +37,7 @@ the tag changes nothing.
 | `internal/cryptostore` | 89.9% | |
 | `internal/garmin/api` | 89.9% | 89.9% |
 | `internal/garmin/auth` | 67.3% | 88.2% |
-| `internal/garmin/client` | 94.4% | 94.6% |
+| `internal/garmin/client` | 94.3% | 94.6% |
 | `internal/garmin/protocol` | 96.7% | |
 | `internal/identity` | 97.7% | |
 | `internal/loginweb` | 82.6% | |

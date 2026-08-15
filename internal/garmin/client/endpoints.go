@@ -1,6 +1,10 @@
 package client
 
-import "github.com/tamcore/garmin-mcp/internal/garmin/protocol"
+import (
+	"slices"
+
+	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
+)
 
 // API-tier paths. Source: the URL table built in GarminConnect.__init__ and the
 // per-method URLs in python-garminconnect 0.3.10, file garminconnect/__init__.py.
@@ -177,7 +181,8 @@ const (
 	EndpointGraphQL = Endpoint("connectapi.graphql.gateway")
 )
 
-var knownEndpoints = [...]Endpoint{
+// coreEndpoints are the labels declared here; endpoints_health.go declares the rest and joins both into knownEndpoints.
+var coreEndpoints = [...]Endpoint{
 	EndpointSocialProfile,
 	EndpointUserSettings,
 	EndpointUserProfileSettings,
@@ -221,12 +226,7 @@ func KnownEndpoints() []Endpoint {
 
 // IsKnown reports whether e is one of the package's Endpoint constants.
 func (e Endpoint) IsKnown() bool {
-	for _, known := range knownEndpoints {
-		if e == known {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(knownEndpoints, e)
 }
 
 // String returns the label, or "unknown" for a value that is not a package
@@ -295,7 +295,8 @@ const (
 	OpGetTrainingPlanWorkouts   = Op("get_training_plan_workouts")
 )
 
-var knownOps = [...]Op{
+// coreOps are the operations declared here; endpoints_health.go declares the rest and joins both into knownOps.
+var coreOps = [...]Op{
 	OpGetSocialProfile,
 	OpGetUserSettings,
 	OpGetUserProfileSettings,
@@ -367,10 +368,8 @@ func KnownOps() []Op {
 // IsKnown reports whether o is one of this package's Op constants or one of
 // protocol's.
 func (o Op) IsKnown() bool {
-	for _, known := range knownOps {
-		if o == known {
-			return true
-		}
+	if slices.Contains(knownOps, o) {
+		return true
 	}
 	return protocol.Op(o).IsKnown()
 }
