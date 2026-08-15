@@ -2,11 +2,11 @@
 
 ## Status
 
-**Partly implemented.** `internal/cryptostore` exists and `internal/store` uses
-it, so secrets are written to disk today and this ADR is no longer a decision
-taken ahead of the first one. The cryptography, the key file, and staged rotation
-have landed. Start-up refusal on bad key material, an operator-facing rotation
-driver, and store-level re-sealing are still open. See the two lists below.
+**Partly implemented.** `internal/cryptostore` exists and both stores use it, so
+secrets are written to disk today. The cryptography, the key file, staged
+rotation, and start-up refusal on bad key material have landed. An
+operator-facing rotation driver and store-level re-sealing are still open. See
+the two lists below.
 
 ## Context
 
@@ -49,14 +49,17 @@ and nothing else.
   report unavailable, which keeps `CGO_ENABLED=0` cross-compilation working. The
   owner-only key file is the only real backend.
 
+- **Start-up refusal on bad key material**, both halves. The lexical half is
+  `Config.validateRemoteState`, which requires a database path and a master key
+  for the streamable-http transport and refuses inline material there. The
+  runtime half is the composition root: `internal/cmd/components.go` and
+  `internal/cmd/remote.go` call `cryptostore.LoadOrCreateKey` before anything
+  serves, and `internal/cmd/doctor.go` loads the key and branches on
+  `ErrKeyNotFound` and `ErrInsecureKeyPermissions` so an operator gets a named
+  cause rather than a generic failure.
+
 ### Still open
 
-- **Start-up refusal on bad key material.** Only the lexical half is wired:
-  `Config.validateRemoteState` requires a database path and a master key for the
-  streamable-http transport and refuses inline material there. Nothing opens the
-  key at start-up, so `ErrKeyNotFound`, `ErrMalformedKey`,
-  `ErrInsecureKeyPermissions`, `ErrInsecureKeyPath` and `ErrInvalidKeyVersion` are
-  never observed by a command. `internal/cmd` imports only `internal/config`.
 - **An operator-facing rotation driver.** Rotation is a library capability with no
   command, no procedure, and no `docs/operations.md`.
 - **Store-level re-sealing.** `FileStore` holds exactly one key and re-seals

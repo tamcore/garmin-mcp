@@ -10,7 +10,30 @@ Machine-readable source of truth: [`compat/tools.json`](../compat/tools.json) an
 
 - **138** `@app.tool()` registrations under `src/garmin_mcp`.
 - **5** `@app.resource(...)` registrations, all in `src/garmin_mcp/workout_templates.py`.
-- Every tool and resource is currently `not-implemented` in this Go server.
+
+## Implementation status
+
+Measured against the registry in `internal/tools/register.go` on 2026-08-15.
+
+| | Count |
+| --- | --- |
+| Manifest tools implemented | **42** of 138 |
+| Manifest tools not implemented | 96 |
+| Manifest resources implemented | **0** of 5 |
+| Tools registered beyond the manifest | 5 |
+| Tools registered in total | 47, plus the server's own `server_info` |
+
+The 47 registered tools are 21 read-only, 21 write and 5 destructive. Read-only
+tools always register. Write and destructive tools register too, so the policy
+has a tool to refuse and the start-up tier validation covers them, and they are
+gated at call time on the intersection of operator enablement and a granted
+scope.
+
+Per-tool status is the `Status` column of [Tools](#tools) below. The Go handler
+for each implemented tool is in
+[Implemented tools and their Go handlers](#implemented-tools-and-their-go-handlers),
+and every deliberate difference from the upstream contract is in
+[Deliberate deviations](#deliberate-deviations).
 
 The upstream README still advertises "110+" tools at this commit. The strict source inventory above
 is the number that governs parity work; the README count is not used.
@@ -239,42 +262,53 @@ Rules that follow from the map:
 This table is the tool-to-scope map. `Scope` is the primary gate; tools that need more than that
 one scope are listed under [Tools requiring more than one scope](#tools-requiring-more-than-one-scope).
 
+`Status` is this server's state. **`Effect`, `Sensitivity`, `Scope` and `Idempotency` are the
+upstream manifest's classification**, not a description of this server's behavior, and three
+implemented rows deliberately differ:
+
+- `download_activity_file` is `external-side-effect` / `local:files:write` here and is registered in
+  the **write** tier by this server, which writes no file at all;
+- `schedule_workout` and `schedule_workouts` are `non-idempotent` in both, but this server also drops
+  the duplicate-avoidance pre-check, so they are less convergent than upstream.
+
+See [Deliberate deviations](#deliberate-deviations).
+
 | Tool | Status | Effect | Sensitivity | Scope | Idempotency | Upstream |
 | --- | --- | --- | --- | --- | --- | --- |
 | `add_body_composition` | not-implemented | write | health | `garmin:health:write` | non-idempotent | data_management.py:22 |
-| `add_gear_to_activity` | not-implemented | write | device | `garmin:devices:write` | idempotent | gear_management.py:157 |
+| `add_gear_to_activity` | **implemented** | write | device | `garmin:devices:write` | idempotent | gear_management.py:157 |
 | `add_hydration_data` | not-implemented | write | health | `garmin:health:write` | non-idempotent | data_management.py:98 |
 | `add_weigh_in` | not-implemented | write | health | `garmin:health:write` | non-idempotent | weight_management.py:156 |
 | `add_weigh_in_with_timestamps` | not-implemented | write | health | `garmin:health:write` | non-idempotent | weight_management.py:176 |
 | `count_activities` | not-implemented | read-only | ordinary | `garmin:activities:read` | idempotent | activity_management.py:812 |
 | `create_custom_food` | not-implemented | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:269 |
-| `create_manual_activity` | not-implemented | write | health | `garmin:activities:write` | non-idempotent | activity_management.py:892 |
-| `create_run_workout` | not-implemented | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:392 |
-| `create_strength_workout` | not-implemented | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:484 |
-| `create_walk_run_workout` | not-implemented | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:344 |
-| `create_z2_walk_workout` | not-implemented | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:447 |
+| `create_manual_activity` | **implemented** | write | health | `garmin:activities:write` | non-idempotent | activity_management.py:892 |
+| `create_run_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:392 |
+| `create_strength_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:484 |
+| `create_walk_run_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:344 |
+| `create_z2_walk_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:447 |
 | `delete_course` | not-implemented | destructive | location | `garmin:activities:destructive` | idempotent | courses.py:289 |
 | `delete_custom_food` | not-implemented | destructive | nutrition | `garmin:nutrition:destructive` | idempotent | nutrition.py:518 |
 | `delete_food_log` | not-implemented | destructive | nutrition | `garmin:nutrition:destructive` | idempotent | nutrition.py:720 |
 | `delete_weigh_ins` | not-implemented | destructive | health | `garmin:health:destructive` | idempotent | weight_management.py:136 |
-| `delete_workout` | not-implemented | destructive | health | `garmin:workouts:destructive` | idempotent | workouts.py:996 |
-| `delete_workouts` | not-implemented | destructive | health | `garmin:workouts:destructive` | idempotent | workouts.py:1023 |
-| `download_activity_file` | not-implemented | external-side-effect | location | `local:files:write` | idempotent | activity_analysis.py:1263 |
-| `download_workout` | not-implemented | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:768 |
-| `get_activities` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:830 |
-| `get_activities_by_date` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:50 |
+| `delete_workout` | **implemented** | destructive | health | `garmin:workouts:destructive` | idempotent | workouts.py:996 |
+| `delete_workouts` | **implemented** | destructive | health | `garmin:workouts:destructive` | idempotent | workouts.py:1023 |
+| `download_activity_file` | **implemented** | external-side-effect | location | `local:files:write` | idempotent | activity_analysis.py:1263 |
+| `download_workout` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:768 |
+| `get_activities` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:830 |
+| `get_activities_by_date` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:50 |
 | `get_activities_fordate` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:161 |
 | `get_activity` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:210 |
-| `get_activity_exercise_sets` | not-implemented | read-only | health | `garmin:activities:read` | idempotent | activity_management.py:795 |
+| `get_activity_exercise_sets` | **implemented** | read-only | health | `garmin:activities:read` | idempotent | activity_management.py:795 |
 | `get_activity_fit_data` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_analysis.py:1053 |
 | `get_activity_gear` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | activity_management.py:778 |
-| `get_activity_hr_in_timezones` | not-implemented | read-only | health | `garmin:activities:read` | idempotent | activity_management.py:741 |
-| `get_activity_power_in_timezones` | not-implemented | read-only | health | `garmin:activities:read` | idempotent | activity_management.py:758 |
-| `get_activity_split_summaries` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:638 |
-| `get_activity_splits` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:539 |
-| `get_activity_typed_splits` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:621 |
+| `get_activity_hr_in_timezones` | **implemented** | read-only | health | `garmin:activities:read` | idempotent | activity_management.py:741 |
+| `get_activity_power_in_timezones` | **implemented** | read-only | health | `garmin:activities:read` | idempotent | activity_management.py:758 |
+| `get_activity_split_summaries` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:638 |
+| `get_activity_splits` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:539 |
+| `get_activity_typed_splits` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:621 |
 | `get_activity_types` | not-implemented | read-only | ordinary | `garmin:activities:read` | idempotent | activity_management.py:942 |
-| `get_activity_weather` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:655 |
+| `get_activity_weather` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:655 |
 | `get_adhoc_challenges` | not-implemented | read-only | ordinary | `garmin:challenges:read` | idempotent | challenges.py:363 |
 | `get_all_day_events` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:687 |
 | `get_all_day_stress` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:671 |
@@ -294,12 +328,12 @@ one scope are listed under [Tools requiring more than one scope](#tools-requirin
 | `get_device_last_used` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:62 |
 | `get_device_settings` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:95 |
 | `get_device_solar_data` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:229 |
-| `get_devices` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:23 |
+| `get_devices` | **implemented** | read-only | device | `garmin:devices:read` | idempotent | devices.py:23 |
 | `get_earned_badges` | not-implemented | read-only | ordinary | `garmin:challenges:read` | idempotent | challenges.py:297 |
 | `get_endurance_score` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:274 |
 | `get_fitnessage_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:487 |
 | `get_floors` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:326 |
-| `get_full_name` | not-implemented | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:22 |
+| `get_full_name` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:22 |
 | `get_garmin_coach_workouts` | not-implemented | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1098 |
 | `get_gear` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | gear_management.py:42 |
 | `get_goals` | not-implemented | read-only | health | `garmin:health:read` | idempotent | challenges.py:237 |
@@ -319,7 +353,7 @@ one scope are listed under [Tools requiring more than one scope](#tools-requirin
 | `get_nutrition_daily_food_log` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:32 |
 | `get_nutrition_daily_meals` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:51 |
 | `get_nutrition_daily_settings` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:71 |
-| `get_personal_record` | not-implemented | read-only | health | `garmin:health:read` | idempotent | challenges.py:252 |
+| `get_personal_record` | **implemented** | read-only | health | `garmin:health:read` | idempotent | challenges.py:252 |
 | `get_power_duration_curve` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | activity_analysis.py:1150 |
 | `get_pregnancy_summary` | not-implemented | read-only | womens-health | `garmin:womens-health:read` | idempotent | womens_health.py:49 |
 | `get_primary_training_device` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:177 |
@@ -330,7 +364,7 @@ one scope are listed under [Tools requiring more than one scope](#tools-requirin
 | `get_respiration_trend` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:1227 |
 | `get_rhr_day` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:342 |
 | `get_scheduled_workouts` | not-implemented | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1059 |
-| `get_sleep_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:431 |
+| `get_sleep_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:431 |
 | `get_sleep_summary` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:450 |
 | `get_spo2_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:636 |
 | `get_stats` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:22 |
@@ -344,40 +378,40 @@ one scope are listed under [Tools requiring more than one scope](#tools-requirin
 | `get_training_plan_workouts` | not-implemented | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1132 |
 | `get_training_readiness` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:189 |
 | `get_training_status` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:566 |
-| `get_unit_system` | not-implemented | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:31 |
-| `get_user_profile` | not-implemented | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:40 |
-| `get_user_summary` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:99 |
-| `get_userprofile_settings` | not-implemented | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:51 |
+| `get_unit_system` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:31 |
+| `get_user_profile` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:40 |
+| `get_user_summary` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:99 |
+| `get_userprofile_settings` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:51 |
 | `get_vo2max_trend` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:1072 |
 | `get_weekly_intensity_minutes` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:811 |
 | `get_weekly_steps` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:722 |
 | `get_weekly_stress` | not-implemented | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:769 |
 | `get_weigh_ins` | not-implemented | read-only | health | `garmin:health:read` | idempotent | weight_management.py:22 |
-| `get_workout_by_id` | not-implemented | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:729 |
-| `get_workouts` | not-implemented | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:707 |
+| `get_workout_by_id` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:729 |
+| `get_workouts` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:707 |
 | `log_custom_food` | not-implemented | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:546 |
 | `log_food` | not-implemented | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:637 |
-| `remove_gear_from_activity` | not-implemented | write | device | `garmin:devices:write` | idempotent | gear_management.py:182 |
+| `remove_gear_from_activity` | **implemented** | write | device | `garmin:devices:write` | idempotent | gear_management.py:182 |
 | `request_reload` | not-implemented | write | health | `garmin:health:write` | idempotent | training.py:778 |
 | `schedule_week` | not-implemented | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:522 |
-| `schedule_workout` | not-implemented | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:1154 |
-| `schedule_workouts` | not-implemented | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:1212 |
+| `schedule_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:1154 |
+| `schedule_workouts` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:1212 |
 | `search_foods` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:144 |
-| `set_activity_description` | not-implemented | write | ordinary | `garmin:activities:write` | idempotent | activity_management.py:386 |
-| `set_activity_event_type` | not-implemented | write | ordinary | `garmin:activities:write` | idempotent | activity_management.py:416 |
-| `set_activity_feel` | not-implemented | write | health | `garmin:activities:write` | idempotent | activity_management.py:503 |
-| `set_activity_name` | not-implemented | write | ordinary | `garmin:activities:write` | idempotent | activity_management.py:313 |
-| `set_activity_type` | not-implemented | write | ordinary | `garmin:activities:write` | idempotent | activity_management.py:341 |
+| `set_activity_description` | **implemented** | write | ordinary | `garmin:activities:write` | idempotent | activity_management.py:386 |
+| `set_activity_event_type` | **implemented** | write | ordinary | `garmin:activities:write` | idempotent | activity_management.py:416 |
+| `set_activity_feel` | **implemented** | write | health | `garmin:activities:write` | idempotent | activity_management.py:503 |
+| `set_activity_name` | **implemented** | write | ordinary | `garmin:activities:write` | idempotent | activity_management.py:313 |
+| `set_activity_type` | **implemented** | write | ordinary | `garmin:activities:write` | idempotent | activity_management.py:341 |
 | `set_blood_pressure` | not-implemented | write | health | `garmin:health:write` | non-idempotent | data_management.py:75 |
 | `set_fit_download_dir` | not-implemented | external-side-effect | ordinary | `local:files:write` | idempotent | activity_analysis.py:1363 |
 | `set_nutrition_daily_settings` | not-implemented | write | nutrition | `garmin:nutrition:write` | idempotent | nutrition.py:90 |
-| `set_perceived_effort` | not-implemented | write | health | `garmin:activities:write` | idempotent | activity_management.py:467 |
-| `unschedule_workout` | not-implemented | destructive | health | `garmin:workouts:destructive` | idempotent | workouts.py:1345 |
-| `unschedule_workouts` | not-implemented | destructive | health | `garmin:workouts:destructive` | idempotent | workouts.py:1381 |
+| `set_perceived_effort` | **implemented** | write | health | `garmin:activities:write` | idempotent | activity_management.py:467 |
+| `unschedule_workout` | **implemented** | destructive | health | `garmin:workouts:destructive` | idempotent | workouts.py:1345 |
+| `unschedule_workouts` | **implemented** | destructive | health | `garmin:workouts:destructive` | idempotent | workouts.py:1381 |
 | `update_custom_food` | not-implemented | write | nutrition | `garmin:nutrition:write` | idempotent | nutrition.py:376 |
 | `upload_course` | not-implemented | write | location | `garmin:activities:write` | non-idempotent | courses.py:203 |
-| `upload_workout` | not-implemented | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:794 |
-| `upload_workouts` | not-implemented | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:933 |
+| `upload_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:794 |
+| `upload_workouts` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:933 |
 | `upsert_and_log` | not-implemented | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:745 |
 
 ### Tools requiring more than one scope
@@ -429,6 +463,196 @@ one scope are listed under [Tools requiring more than one scope](#tools-requirin
 | `upload_course` | `garmin:activities:write` | `garmin:activities:write`, `local:files:read` |
 | `upload_workout` | `garmin:workouts:write` | `garmin:health:write`, `garmin:workouts:write` |
 | `upload_workouts` | `garmin:workouts:write` | `garmin:health:write`, `garmin:workouts:write` |
+
+## Implemented tools and their Go handlers
+
+Every row is registered by `internal/tools/register.go` in tier order. Paths are
+relative to the repository root.
+
+### Read-only tier — 21 tools
+
+| Tool | Go registrar | File |
+| --- | --- | --- |
+| `get_user_profile` | `registerGetUserProfile` | `internal/tools/get_user_profile.go` |
+| `get_full_name` | `registerGetFullName` | `internal/tools/get_full_name.go` |
+| `get_unit_system` | `registerGetUnitSystem` | `internal/tools/get_unit_system.go` |
+| `get_userprofile_settings` | `registerGetUserProfileSettings` | `internal/tools/profilereads.go` |
+| `get_personal_record` | `registerGetPersonalRecord` | `internal/tools/profilereads.go` |
+| `get_activities` | `registerGetActivities` | `internal/tools/get_activities.go` |
+| `get_activities_by_date` | `registerGetActivitiesByDate` | `internal/tools/get_activities_by_date.go` |
+| `get_activity_splits` | `registerGetActivitySplits` | `internal/tools/analysis.go` |
+| `get_activity_split_summaries` | `registerGetActivitySplitSummaries` | `internal/tools/analysis.go` |
+| `get_activity_typed_splits` | `registerGetActivityTypedSplits` | `internal/tools/get_activity_typed_splits.go` |
+| `get_activity_hr_in_timezones` | `registerGetActivityHRInZones` | `internal/tools/analysis.go` |
+| `get_activity_power_in_timezones` | `registerGetActivityPowerInZones` | `internal/tools/analysis.go` |
+| `get_activity_weather` | `registerGetActivityWeather` | `internal/tools/get_activity_weather.go` |
+| `get_activity_exercise_sets` | `registerGetActivityExerciseSets` | `internal/tools/get_activity_exercise_sets.go` |
+| `get_sleep_data` | `registerGetSleepData` | `internal/tools/get_sleep_data.go` |
+| `get_user_summary` | `registerGetUserSummary` | `internal/tools/get_user_summary.go` |
+| `get_devices` | `registerGetDevices` | `internal/tools/get_devices.go` |
+| `get_workouts` | `registerGetWorkouts` | `internal/tools/workoutreads.go` |
+| `get_workout_by_id` | `registerGetWorkoutByID` | `internal/tools/workoutreads.go` |
+| `download_workout` | `registerDownloadWorkout` | `internal/tools/workoutreads.go` |
+| `get_exercise_types` † | `registerGetExerciseTypes` | `internal/tools/builders_strength.go` |
+
+### Write tier — 21 tools
+
+| Tool | Go registrar | File |
+| --- | --- | --- |
+| `set_activity_name` | `registerSetActivityName` | `internal/tools/activitywrites.go` |
+| `set_activity_type` | `registerSetActivityType` | `internal/tools/activitywrites.go` |
+| `set_activity_event_type` | `registerSetActivityEventType` | `internal/tools/activitywrites.go` |
+| `set_activity_description` | `registerSetActivityDescription` | `internal/tools/activitywrites.go` |
+| `set_activity_feel` | `registerSetActivityFeel` | `internal/tools/activitywrites.go` |
+| `set_perceived_effort` | `registerSetPerceivedEffort` | `internal/tools/activitywrites.go` |
+| `add_gear_to_activity` | `registerAddGearToActivity` | `internal/tools/gearwrites.go` |
+| `remove_gear_from_activity` | `registerRemoveGearFromActivity` | `internal/tools/gearwrites.go` |
+| `create_manual_activity` | `registerCreateManualActivity` | `internal/tools/activitylifecycle.go` |
+| `upload_workout` | `registerUploadWorkout` | `internal/tools/workoutwrites.go` |
+| `upload_workouts` | `registerUploadWorkouts` | `internal/tools/workoutwrites.go` |
+| `schedule_workout` | `registerScheduleWorkout` | `internal/tools/workoutschedule.go` |
+| `schedule_workouts` | `registerScheduleWorkouts` | `internal/tools/workoutschedule.go` |
+| `create_walk_run_workout` | `registerCreateWalkRunWorkout` | `internal/tools/builders_run.go` |
+| `create_run_workout` | `registerCreateRunWorkout` | `internal/tools/builders_run.go` |
+| `create_z2_walk_workout` | `registerCreateZ2WalkWorkout` | `internal/tools/builders_run.go` |
+| `create_strength_workout` | `registerCreateStrengthWorkout` | `internal/tools/builders_strength.go` |
+| `download_activity_file` ‡ | `registerDownloadActivityFile` | `internal/tools/downloads.go` |
+| `set_activity_strength_exercise_sets` † | `registerSetActivityStrengthExerciseSets` | `internal/tools/strengthwrites.go` |
+| `create_strength_training_activity` † | `registerCreateStrengthTrainingActivity` | `internal/tools/create_strength_training_activity.go` |
+| `update_workout` † | `registerUpdateWorkout` | `internal/tools/workoutwrites.go` |
+
+### Destructive tier — 5 tools
+
+| Tool | Go registrar | File |
+| --- | --- | --- |
+| `delete_workout` | `registerDeleteWorkout` | `internal/tools/workoutdelete.go` |
+| `delete_workouts` | `registerDeleteWorkouts` | `internal/tools/workoutdelete.go` |
+| `unschedule_workout` | `registerUnscheduleWorkout` | `internal/tools/workoutschedule.go` |
+| `unschedule_workouts` | `registerUnscheduleWorkouts` | `internal/tools/workoutschedule.go` |
+| `delete_activity` † | `registerDeleteActivity` | `internal/tools/activitylifecycle.go` |
+
+† Not in the pinned manifest. See
+[Tools beyond the pinned manifest](#tools-beyond-the-pinned-manifest).
+
+‡ Registered in the **write** tier although the manifest classifies it
+`external-side-effect`. See [Deliberate deviations](#deliberate-deviations).
+
+### Tools beyond the pinned manifest
+
+Five registered tools have no record in `compat/tools.json`, because they come
+from open upstream pull requests rather than the pinned commit. They are
+additions, not parity, and they are also entered in the ADR 0006 register. A
+contract snapshot test cannot compare them with the manifest, so each is covered
+by a documented-exclusion entry in `internal/tools/contract_test.go` instead.
+
+| Tool | Tier | What it does |
+| --- | --- | --- |
+| `update_workout` | write | Updates a workout in place. The body's `workoutId` is forced to the path id, so existing calendar schedules stay valid. |
+| `get_exercise_types` | read-only | Serves the compiled-in strength exercise catalog. |
+| `set_activity_strength_exercise_sets` | write | Replaces the exercise sets of a strength activity, then re-reads and compares them position by position. |
+| `create_strength_training_activity` | write | Creates a completed strength activity, replaces its sets, then re-reads the summary and checks the stored activity identifier. |
+| `delete_activity` | destructive | Deletes an activity. |
+
+## Deliberate deviations
+
+Every entry below is a knowing difference between this server and the pinned
+upstream contract. Each is mirrored in the ADR 0006 register and in
+`docs/implementation-status.md`. A reader who assumes parity from a tool name
+alone would be wrong about all of them.
+
+### `download_activity_file` writes nothing to a server path
+
+Upstream takes an `output_dir` argument, honours a `GARMIN_FIT_DOWNLOAD_DIR`
+environment variable and a directory persisted by `set_fit_download_dir`, and
+writes a file to the server filesystem.
+
+This server implements **none of that**. The tool accepts an activity id and a
+format and nothing else. No path is accepted from a caller, no environment
+variable is read, no directory is persisted, and no file is opened. The bytes are
+returned as a bounded embedded MCP resource under
+`garmin://activity/{id}.{format}`, and a payload over the bound is refused rather
+than truncated.
+
+Two consequences a client must know:
+
+- The manifest classifies the tool `external-side-effect` with the primary scope
+  `local:files:write`. This server registers it in the **write** tier, so it is
+  gated exactly like a Garmin write: operator enablement plus a granted write
+  scope. There is no local filesystem scope on this surface.
+- A caller that expected a path in the result gets content instead.
+
+Reason: a remote tool must never be able to write an arbitrary server filesystem
+path. Precedence rule: credential and tenant security above the pinned Taxuspt
+contract.
+
+### `set_fit_download_dir` is not registered
+
+Its whole purpose is to persist a caller-supplied server filesystem path. It is
+refused by design rather than stubbed, so a client discovers its absence at
+`tools/list` instead of at call time.
+
+### Scheduling has no duplicate avoidance, and says so
+
+Upstream calls `_is_already_scheduled(workout_id, calendar_date)` before it
+POSTs. That helper is a `workoutScheduleSummariesScalar` GraphQL calendar read.
+This server builds no GraphQL request, so the pre-check is **not ported** and
+`schedule_workout` and `schedule_workouts` are honestly non-idempotent: calling
+one twice creates two calendar entries.
+
+Because upstream's own pre-check ends in a bare `except Exception: return False`,
+it already fails open, so what is lost is best-effort de-duplication and not a
+guarantee. See [Scheduling is not idempotent](#scheduling-is-not-idempotent).
+
+The upstream docstrings for `schedule_workout` and `schedule_week` open with
+`Idempotent:`, and those docstrings are the descriptions MCP clients receive.
+**That sentence is absent from every description this server serves**, and a
+registration test asserts that no description contains it. The descriptions say
+the opposite instead — that repeating the call creates duplicate calendar
+entries — because this is the text an agent reads when it decides whether a retry
+is safe. The `idempotent` annotation hint is `false` for both tools.
+
+### `schedule_week` is not registered
+
+It needs the same GraphQL calendar read, and its per-item fail-open path can
+duplicate several days at once. It is left unregistered rather than shipped
+without the pre-check.
+
+### `set_activity_description` cannot clear a description
+
+An empty string is refused, at the tool layer and again in the API layer, where
+`requireText` returns `client.ErrValidation`. Upstream accepts an empty write
+field. A caller that wants to clear a description cannot do it through this
+server.
+
+### `get_exercise_types` serves a compiled-in catalog
+
+Upstream reads Garmin's web-tier exercise catalog. That host is outside this
+client's domain allowlist, and widening the allowlist for a static catalog is not
+worth the SSRF and drift surface. This server therefore serves a **documented
+subset of the FIT `exercise_category` enum**, compiled in.
+
+The validation is asymmetric on purpose: the **category** is checked against a
+closed set and an unknown category is refused, while an **exercise name** gets a
+lexical check only — upper-case ASCII, digits and underscore, bounded in length.
+Garmin remains authoritative for names, so a name this server does not list is
+passed through rather than rejected.
+
+### `get_workout_by_id` serves the numeric identifier only
+
+The UUID form that adaptive Garmin Coach plans use is not served. The input
+schema accepts the numeric identifier, and the description says so.
+
+### Three calendar reads and one FIT read are not registered
+
+| Tool | Why |
+| --- | --- |
+| `get_scheduled_workouts` | Needs the GraphQL calendar read the API layer does not build. |
+| `get_training_plan_workouts` | Same GraphQL calendar read. |
+| `get_activity_fit_data` | Needs FIT parsing this server does not do. |
+
+Leaving them unregistered is deliberate: a stub that returns an error would
+occupy the upstream name while proving nothing, and
+`docs/implementation-status.md` forbids counting a placeholder as parity.
 
 ## Resources
 
@@ -532,16 +756,22 @@ so a replay adds another library template even when the calendar entry is correc
 failed, partial, or ambiguous result, re-read the calendar with `get_scheduled_workouts`, let the caller
 decide, and remove any duplicate with `unschedule_workout`.
 
-A Go port must keep the pre-check to preserve upstream's duplicate-avoidance behavior, and must not
-advertise these tools as retry-safe. Only a server-side idempotency key, or a pre-check whose own
-failure aborts instead of falling through, would make scheduling actually idempotent.
+Only a server-side idempotency key, or a pre-check whose own failure aborts instead of falling
+through, would make scheduling actually idempotent.
+
+**What this server does.** It does not port the pre-check, because it builds no GraphQL request at
+all, so `schedule_workout` and `schedule_workouts` carry no duplicate avoidance whatsoever and say so
+in their descriptions and in their `idempotent: false` annotation. `schedule_week` is not registered.
+This is a deliberate deviation and it is recorded in
+[Deliberate deviations](#deliberate-deviations) and in the ADR 0006 register.
 
 One consequence to carry forward: the upstream docstrings for `schedule_workout` and `schedule_week`
 open with "Idempotent:", and those docstrings are the tool descriptions MCP clients receive. The
 `description` field in `compat/tools.json` is a verbatim copy, so for these two records `description`
 and `idempotency` deliberately disagree. The classification is correct and the upstream description is
-not. A Go port must not carry that sentence into its own tool description, because it is the text an
-agent reads when deciding whether a retry is safe.
+not. That sentence is **absent from every description this server serves**, and a registration test
+asserts that no description contains it, because it is the text an agent reads when deciding whether a
+retry is safe.
 
 ### Regenerating
 

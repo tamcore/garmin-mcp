@@ -4,23 +4,26 @@
 needs a rationale, a license, and a maintenance note in an ADR or in this file.
 This file is that record for direct module requirements that no ADR covers.
 
-Last updated: 2026-08-14. Verified against `go.mod`, `go mod graph`, the module
+Last updated: 2026-08-15. Verified against `go.mod`, `go mod graph`, the module
 cache license files, and `proxy.golang.org`.
 
 ## Direct requirements [NOW]
 
+This table matches the first `require` block of `go.mod` exactly: six modules, no
+more and no fewer.
+
 | Module | Version | License | Released | Used by |
 |--------|---------|---------|----------|---------|
+| `github.com/modelcontextprotocol/go-sdk` | `v1.7.0` | Apache-2.0 with a residual MIT subset; see below | 2026-07-28 | `internal/mcpserver`, `internal/tools`, `internal/oauthserver` |
 | `github.com/spf13/cobra` | `v1.10.2` | Apache-2.0 (`LICENSE.txt`) | 2025-12-03 | `internal/cmd` |
-| `github.com/spf13/viper` | `v1.21.0` | MIT | 2025-09-08 | `internal/config` |
 | `github.com/spf13/pflag` | `v1.0.10` | BSD-3-Clause | 2025-09-02 | `internal/config` |
+| `github.com/spf13/viper` | `v1.21.0` | MIT | 2025-09-08 | `internal/config` |
 | `golang.org/x/sys` | `v0.47.0` | BSD-3-Clause | 2026-06-30 | `internal/securefile` (Windows-tagged files only) |
 | `modernc.org/sqlite` | `v1.56.0` | BSD-3-Clause | 2026-08-03 | `internal/store` (multi-user backend) |
 
-All four are at the latest version published by `proxy.golang.org` on the
+All six are at the latest version published by `proxy.golang.org` on the
 verification date. `golang.org/x/sys` sits far above the version Viper selects,
-which is what its advisory required. These four are the module's real
-dependencies.
+which is what its advisory required.
 
 ### `github.com/spf13/cobra`
 
@@ -104,12 +107,13 @@ this driver's `go.mod` pins. Moving `libc` on its own is a supported way to brea
 the driver, so both modules are on the manual-review list in `.github/renovate.json`
 and neither may be automerged. They move together or not at all.
 
-**Cost.** The driver brings `modernc.org/libc`, `modernc.org/memory`,
-`modernc.org/mathutil`, `github.com/dustin/go-humanize`,
-`github.com/ncruces/go-strftime`, `github.com/mattn/go-isatty` and
-`github.com/remyoudompheng/bigfft` as indirect requirements. Internal identifiers
-are generated with `crypto/rand`, not with `github.com/google/uuid`, so that
-module stays indirect.
+**Cost.** The driver brings eight indirect requirements: `modernc.org/libc`,
+`modernc.org/memory`, `modernc.org/mathutil`, `github.com/dustin/go-humanize`,
+`github.com/ncruces/go-strftime`, `github.com/mattn/go-isatty`,
+`github.com/remyoudompheng/bigfft` and `github.com/google/uuid`, the last four of
+them through `modernc.org/libc`. Internal principal identifiers are generated
+with `crypto/rand`, not with `github.com/google/uuid`, so no code in this module
+imports that package and it stays indirect.
 
 ### House-stack note
 
@@ -119,20 +123,16 @@ shape consistent across those servers, so operator knowledge transfers. That
 consistency is why the pair was selected, not a claim that a smaller alternative
 could not work.
 
-## Pinned but not yet required [NOW]
+### `github.com/modelcontextprotocol/go-sdk`
 
-| Module | Version | License | Status |
-|--------|---------|---------|--------|
-| `github.com/modelcontextprotocol/go-sdk` | `v1.7.0` | Apache-2.0 with a residual MIT subset; see below | Pinned by ADR 0002 and `docs/upstream-pins.md`. **Absent from `go.mod`.** |
+**Version.** `v1.7.0`, pinned by ADR 0002 and `docs/upstream-pins.md`, and a
+direct requirement in `go.mod` since the MCP foundation slice.
 
-**Why it is absent.** `go mod tidy` drops a requirement that no package
-imports, and CI verifies a clean `go mod tidy` diff, so an unused requirement
-would fail the build. The module line lands with the MCP foundation slice, in
-the same commit as the first code that imports the SDK. A reader who finds no
-SDK line in `go.mod` must read that as sequencing, not as a forgotten pin.
-
-**Rationale.** ADR 0002 selects the SDK and the MCP specification version. It
-is the official SDK; `mark3labs/mcp-go` is deliberately not used.
+**Rationale.** ADR 0002 selects the SDK and the MCP specification version. It is
+the official SDK; `mark3labs/mcp-go` is deliberately not used. It supplies the
+MCP types, tool registration, the stdio transport, the Streamable HTTP handler,
+and the resource-server half of the OAuth surface. The authorization-server role
+is local code, per ADR 0003.
 
 **License.** The `LICENSE` file at the `v1.7.0` tag records a licensing
 transition. New and relicensed contributions are Apache-2.0. Contributions whose
@@ -140,23 +140,42 @@ authors have not granted relicensing consent stay MIT. Documentation excluding
 specifications is CC-BY-4.0. Both code licenses are compatible with distribution
 of this project. Re-check the mixed state whenever the pin moves.
 
-**Maintenance.** `v1.7.0` is the latest version published by
-`proxy.golang.org` on the verification date, and it is a stable release
-(`prerelease=false`, `draft=false`). `docs/upstream-pins.md` holds the tag and
-commit evidence; `docs/mcp-version-matrix.md` holds the per-feature obligations.
+**Maintenance.** `v1.7.0` is the latest version published by `proxy.golang.org`
+on the verification date, and it is a stable release (`prerelease=false`,
+`draft=false`). `docs/upstream-pins.md` holds the tag and commit evidence;
+`docs/mcp-version-matrix.md` holds the per-feature obligations.
+
+**Verification cost.** The official MCP conformance suite cannot score this
+server, so an SDK bump is validated by this repository's own tests only. See
+ADR 0002.
+
+**Cost.** The SDK brings seven indirect requirements:
+`github.com/google/jsonschema-go`, `github.com/yosida95/uritemplate/v3`,
+`github.com/segmentio/encoding`, `github.com/segmentio/asm`,
+`golang.org/x/oauth2`, `golang.org/x/sync` and `golang.org/x/time`.
 
 ## Indirect set [NOW]
 
-`go.mod` carries 11 `// indirect` requirements. The set arrived with Viper:
+`go.mod` carries 26 `// indirect` requirements, from four direct modules:
 
 - 9 reach the module only through Viper — `fsnotify/fsnotify`,
-  `go-viper/mapstructure/v2`, `pelletier/go-toml/v2`,
-  `sagikazarmark/locafero`, `sourcegraph/conc`, `spf13/afero`, `spf13/cast`,
-  `subosito/gotenv`, `golang.org/x/text`. `golang.org/x/sys` was in this set
-  until `internal/securefile` began to import it, and it is now a direct
-  requirement.
+  `go-viper/mapstructure/v2`, `pelletier/go-toml/v2`, `sagikazarmark/locafero`,
+  `sourcegraph/conc`, `spf13/afero`, `spf13/cast`, `subosito/gotenv`,
+  `golang.org/x/text`. `golang.org/x/sys` was in this set until
+  `internal/securefile` began to import it, and it is now direct.
 - 1 comes from Cobra alone — `inconshreveable/mousetrap`.
-- 1 is required by both — `go.yaml.in/yaml/v3`.
+- 1 is required by both Cobra and Viper — `go.yaml.in/yaml/v3`.
+- 8 come from `modernc.org/sqlite` — `modernc.org/libc`, `modernc.org/memory`,
+  `modernc.org/mathutil`, `dustin/go-humanize`, `ncruces/go-strftime`,
+  `mattn/go-isatty`, `remyoudompheng/bigfft` and `google/uuid`.
+- 7 come from the MCP SDK — `google/jsonschema-go`, `yosida95/uritemplate/v3`,
+  `segmentio/encoding`, `segmentio/asm`, `golang.org/x/oauth2`,
+  `golang.org/x/sync` and `golang.org/x/time`.
+
+`segmentio/asm` is the one entry `go mod why -m` reports as not needed by the
+main module: it is reached from `segmentio/encoding` under build constraints
+this build does not select, and `go mod tidy` keeps the requirement for the
+platforms that do.
 
 Licenses across the set are MIT, Apache-2.0, and BSD-3-Clause only. No copyleft
 and no unlicensed module is present.

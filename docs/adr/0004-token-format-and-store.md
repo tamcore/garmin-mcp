@@ -2,10 +2,11 @@
 
 ## Status
 
-**Partly implemented.** The file-store half has landed and is in use:
-`internal/store` persists encrypted Garmin DI token sets today, so this ADR is no
-longer a decision taken ahead of the first persisted token. The SQLite backend and
-the MCP-side record set are still open. See the two lists in the Decision below.
+**Implemented.** Both halves have landed. `internal/store` persists encrypted
+Garmin DI token sets through `FileStore` for the stdio deployment, and the
+migration-backed SQLite backend carries the whole multi-user record set. What
+remains open is operational rather than structural: backup and restore testing,
+and a store-level key-rotation driver. See the two lists in the Decision below.
 
 ## Context
 
@@ -56,25 +57,45 @@ to add one.
   schema-1 record exists outside a discarded working tree.** The next bump after
   a release carries schema 2 does need one.
 
+- The SQLite backend, on `modernc.org/sqlite` `v1.56.0`, BSD-3-Clause, pure Go so
+  `CGO_ENABLED=0` cross-compilation keeps working. Version, license and
+  maintenance notes are in `docs/dependencies.md`, and `modernc.org/libc` moves
+  only together with it.
+- The migrations themselves: `migrations/0001_initial.sql` and
+  `migrations/0002_oauth_contract.sql`, embedded, monotonically numbered, applied
+  by a migrator that records a SHA-256 checksum per file in `schema_migrations`.
+- The whole persisted record set: principals keyed by a random internal UUID with
+  a unique keyed hash of the Garmin account and a sealed identity blob;
+  registered OAuth clients and their exact redirect URIs; per-principal client
+  consents on the full tuple; hashed authorization transactions and codes; hashed
+  MCP token material with family, generation, expiry, scopes, audience and
+  revocation state; the encryption-key version column; and audit events with no
+  credentials and no health or location payloads.
+- The concurrency contract: WAL, foreign keys, busy timeout, bounded connections
+  and transactions, **asserted by querying the pragmas** on every pooled
+  connection rather than by inspecting the DSN string. Asserting on the DSN would
+  only prove that the string was built, not that SQLite accepted it.
+- Real compare-and-set on the SQLite side, through
+  `UPDATE ... WHERE principal_id = ? AND version = ?` returning
+  `ErrVersionConflict`.
+- Start-up refusal on bad key material. The composition root opens the key before
+  it serves and `doctor` branches on the `internal/cryptostore` sentinels; see
+  ADR 0005.
+- A caller for `ParseInlineTokenJSON`, in `internal/cmd/components.go`.
+- **Down migrations are not supported, and that is now decided rather than open.**
+  A down migration that drops a column silently destroys token material.
+
 ### Still open
 
-- The SQLite backend itself, with the selected pure-Go driver and its version,
-  license, and maintenance note. Nothing SQLite-related exists.
-- The rest of the persisted record set: principals and encrypted Garmin identity
-  linkage, registered OAuth clients and their exact redirect URIs, per-principal
-  client consents, hashed authorization transactions and codes, hashed MCP token
-  material with family, expiry, scopes, audience, and revocation state, the
-  encryption-key version column, and audit events with no credentials or
-  health/location payloads.
-- The concurrency contract for that backend: WAL, foreign keys, busy timeout,
-  bounded connections, and transactions. Cross-process compare-and-set is **not**
-  provided by `FileStore`, which holds a per-process mutex and no file lock, so
-  the file store is safe for a single active instance only.
-- Whether down migrations are supported, and the forward-migration atomicity and
-  backup/restore test plan. No backup or restore test exists.
-- Start-up refusal on bad key material. `internal/cmd` builds no store, so the
-  `internal/cryptostore` key sentinels are never observed; see ADR 0005.
-- A caller for `ParseInlineTokenJSON`, which is exposed and unconnected.
+- The forward-migration atomicity and backup/restore test plan. **No backup or
+  restore test exists.**
+- A store-level key-rotation driver. Nothing re-seals existing records; see
+  ADR 0005.
+- Cross-process compare-and-set is **not** provided by `FileStore`, which holds a
+  per-process mutex and no file lock, so the file store stays safe for a single
+  active instance only. That is the design, not a defect, and the SQLite backend
+  is the answer for anything else. The v1 SQLite deployment is itself
+  single-active-instance.
 
 Pending browser and Garmin cookie jars plus MFA transaction state stay in a
 bounded in-memory registry for v1. A restart loses them safely and requires a new

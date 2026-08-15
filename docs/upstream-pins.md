@@ -49,24 +49,25 @@ The items below are **requirements for this repository**. Each one is a behavior
 we must implement and cover with tests, not upstream trivia. Each is
 release-blocking for the auth/session slice.
 
-The status column was re-verified against the code on 2026-08-14, row by row.
+The status column was re-verified against the code on 2026-08-15, row by row.
 
 | # | Required behavior | Where it lands | Status |
 |---|-------------------|----------------|--------|
-| 1 | Host allowlist: only `garmin.com` and `garmin.cn` derived hosts are reachable. Reject any other host before a request is built. | `internal/garmin/protocol`, HTTP client | **partly landed.** Only those two domains parse into a `protocol.ValidatedDomain`, and every URL `internal/garmin/auth` builds comes from a `protocol.Hosts` derived from one. No request-time host check exists: `Refresher.Do` attaches the bearer token to a caller-supplied `*http.Request` without inspecting its host. |
-| 2 | Sanitized exception messages: no credential, token, cookie, header, or raw body text in any error string. | error types, client, tools | **landed for the code that exists.** `internal/garmin/protocol` and `internal/garmin/auth` sanitize page titles and scraped tokens, and the alias-leak tests prove the sealed values stay unreadable under every `fmt` verb. No tools exist. |
+| 1 | Host allowlist: only `garmin.com` and `garmin.cn` derived hosts are reachable. Reject any other host before a request is built. | `internal/garmin/protocol`, HTTP client | **landed.** Only those two domains parse into a `protocol.ValidatedDomain`, and every URL the auth and API layers build comes from a `protocol.Hosts` derived from one. `internal/garmin/auth/hostguard.go` adds the request-time check: `Refresher.Do` refuses a caller-supplied request whose host is not a validated Garmin host, with `ErrForeignHost`, on the first attempt and on the post-`401` replay. |
+| 2 | Sanitized exception messages: no credential, token, cookie, header, or raw body text in any error string. | error types, client, tools | **landed.** `internal/garmin/protocol` and `internal/garmin/auth` sanitize page titles and scraped tokens, the alias-leak tests prove the sealed values stay unreadable under every `fmt` verb, and `internal/tools` carries its own redaction tests over the tool result and error paths. |
 | 3 | URL query redaction in login errors: an error that names an endpoint carries no query string. | login/MFA error rendering | **landed.** `protocol.Error` carries a fixed endpoint label instead of a URL. |
 | 4 | Symlink-rejecting token paths: refuse a symlink at the token path **and** at every ancestor directory, checking the full ancestry. | token store | **landed.** `store.ResolveTokenFilePath` refuses `~user` and checks the full ancestry, and `internal/securefile` re-verifies every component against a directory descriptor with an identity check after the open. |
 | 5 | Serialized token refresh with atomic writes: one refresh at a time per principal, write to a temporary file and rename, never a partial file. | session/refresh, token store | **landed.** Concurrent refreshes for one principal collapse into one flight; `securefile.WriteFile` writes a random-suffixed temporary sibling, `fsync`s it, renames it over the target, and syncs the directory. Cross-process CAS is out of scope for the file store. |
 | 6 | JWT `exp` validation, and rejection of an unsigned payload. Never trust an unverified or `alg=none` token. | token parsing | **landed.** `auth/jwt_unverified.go` and `store/document.go` reject `alg:none` case-folded, a missing or empty signature segment, non-numeric, non-finite and overflowing `exp`, and oversized tokens and segments. The value is used for expiry only. |
-| 7 | Server-driven pagination caps: honor the server page cap instead of a client-chosen page size, and bound total results. | API clients, tools | **not started.** No paging code exists anywhere in the repository, because no API client and no read tool exist. |
+| 7 | Server-driven pagination caps: honor the server page cap instead of a client-chosen page size, and bound total results. | API clients, tools | **landed.** `internal/garmin/client` carries `MaxPageSizeCap`, `MaxPagesCap` and the derived `MaxPageStartCap`, and a page is clamped to the resolved `Limits.MaxPageSize` rather than to the caller's request. `internal/tools/args.go` refuses a `start` or `limit` above the cap and silently narrows a limit above the configured page size, and the date-window argument is bounded by `Limits.MaxDateRangeDays`. Wire and decompressed response bytes are bounded separately. |
 | 8 | Interleaved MFA logins must not overwrite each other's pending state. Pending MFA state is keyed per login transaction. | login transaction state | **landed.** The bounded registry keys state per transaction capability, holds no per-client "current login" field, and returns an immutable deep copy per attempt. Proven by 16-way concurrent isolation tests under `-race`. |
 | 9 | Explicit widget MFA code delivery (upstream GH-386): request the code explicitly instead of assuming that the page sends it. | widget login strategy | **not started.** `PathWidgetRequestMFACode`, `EndpointWidgetRequestMFACode` and `Hosts.WidgetRequestMFACodeURL` exist and nothing calls them, so the requirement has a constant and no behavior. `MFADeliveryUncertain()` signals the gap to the caller. |
-| 10 | Segment-aware path-traversal guards: validate each path segment, not the joined string. | download/file-taking paths, token store | **partly landed.** The store and key paths are resolved component by component with `os.Root`, so the joined string is never trusted. The download and file-taking side does not exist, so no filename is validated yet. |
+| 10 | Segment-aware path-traversal guards: validate each path segment, not the joined string. | download/file-taking paths, token store | **landed, and partly by removal.** The store and key paths are resolved component by component with `os.Root`, so the joined string is never trusted. The download side takes **no** path at all: `download_activity_file` accepts only an activity id and a format and returns a bounded embedded resource, and `set_fit_download_dir` is not registered. There is therefore no caller-supplied filename anywhere in the server to validate. Re-open this row if a file-taking path is ever added. |
 
-Items 1, 2, and 10 are partly landed, items 3 to 6 and 8 are landed, and items 7
-and 9 have not started. `docs/implementation-status.md` carries the same split in
-its gap list, and the two files must be changed together.
+Items 1 to 8 and 10 are landed. Item 9, explicit widget MFA code delivery, has
+not started and is the only one outstanding.
+`docs/implementation-status.md` carries the same split in its gap list, and the
+two files must be changed together.
 
 ## Protocol and SDK pins
 
@@ -95,12 +96,9 @@ repository tree at the `v1.7.0` tag:
   protocol 2026-07-28 by SEP-2577, and that the SDK keeps them for at least
   twelve months. This project must not build on them.
 
-The SDK is deliberately **not yet a requirement in `go.mod`**. `go mod tidy`
-drops a requirement that no package imports, and CI verifies a clean
-`go mod tidy` diff, so an unused requirement would fail the build. The module
-line lands with the MCP foundation slice (phase 3), in the same commit as the
-first code that imports `mcp`. A reader who finds no SDK line in `go.mod` must
-read that as sequencing, not as a forgotten pin.
+The SDK is a direct requirement in `go.mod` now. It landed with the MCP
+foundation slice (phase 3), in the same commit as the first code that imports
+`mcp`, which is what a clean `go mod tidy` diff requires.
 
 Per-feature obligations for this pair — required, optional, or deferred, with the
 providing SDK package or type and the owning milestone — are in
@@ -108,9 +106,15 @@ providing SDK package or type and the owning milestone — are in
 
 The MCP conformance suite
 ([`modelcontextprotocol/conformance`](https://github.com/modelcontextprotocol/conformance))
-**is not pinned and not used yet.** No CI job runs it, because there is no server
-to point it at. When that job is added, it must pin the suite to an immutable
-release or commit SHA. `docs/implementation-status.md` records the missing job.
+**is not pinned, and it will not be.** It was run for real against a live
+deployment of this server and cannot score a domain server: 45 passed and 106
+failed, and every scored server scenario failed except three, two of which passed
+with zero checks. Its only stable release, `v0.1.16` (tag commit
+`21a9a2febd7100d7c17ac1021ee7f2ed9f66a1e0`), knows specification versions only up
+to `2026-02-12`, and its server leg can present no credential while every scored
+scenario calls the SDK reference fixture's tools by literal name. ADR 0002 and
+`docs/implementation-status.md` carry the full evidence and the conditions that
+would make a pin worthwhile.
 
 ## Requirement precedence
 

@@ -8,64 +8,86 @@ describe the architecture being built. A [TARGET] statement is a binding design
 decision, never a claim that the code exists. Do not cite a [TARGET] section as
 evidence that something works.
 
-## Project Overview [TARGET]
+## Project Overview [NOW]
 
-garmin-mcp is being built as a Model Context Protocol (MCP) server that exposes
-Garmin Connect data and operations as MCP tools. It is a native Go rewrite: no
-Python, no Garth, no Python subprocess.
+garmin-mcp is a Model Context Protocol (MCP) server that exposes Garmin Connect
+data and operations as MCP tools. It is a native Go rewrite: no Python, no
+Garth, no Python subprocess.
 
 - Go module: `github.com/tamcore/garmin-mcp`.
-- MCP layer: the official `modelcontextprotocol/go-sdk` (not `mark3labs/mcp-go`).
-  Not yet added to `go.mod`; the version is pinned by ADR 0002.
+- MCP layer: the official `modelcontextprotocol/go-sdk` (not `mark3labs/mcp-go`),
+  `v1.7.0`, pinned by ADR 0002 and required in `go.mod`.
 - Transports: stdio for local single-user use, Streamable HTTP for remote
-  multi-user use.
+  multi-user use. Both exist.
 - Garmin Connect is an unofficial, undocumented private API. Endpoints, schemas,
   and WAF behavior can drift. Never add CAPTCHA bypasses, browser automation, or
   credential harvesting. This rule applies now, not later.
 
 ## Current state [NOW]
 
-As of 2026-08-14 the repository contains the following Go code. Coverage is the
-statement coverage reported by `go test -cover`.
+As of 2026-08-15 the repository contains the following Go code. Coverage is the
+statement coverage reported by `go test -count=1 -cover ./...`, measured on that
+date.
 
 | Path | What is there | Coverage |
 |------|---------------|----------|
 | `cmd/garmin-mcp/main.go` | Thin `main`: passes the ldflags-injected `version` and `commit` into `cmd.Execute` and calls `os.Exit` with the returned code | n/a |
-| `internal/cmd` | Cobra tree — root, `serve`, `auth`, `doctor`, `tools` with a `list` subcommand, `migrate`, `version`. Only `version` (and root `--version`) does real work. Bare root and bare `tools` print help; the rest validate configuration and then fail; see below | 96.4% |
-| `internal/config` | `Config`, deterministic four-layer precedence, `_FILE` secret variants, full lexical validation, redacted output | 95.3% |
-| `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, refresh with per-principal collapsing and CAS, a per-principal `TokenGate` that serializes login against refresh, unverified-JWT `exp` parsing | 87.5% with `-tags=fakegarmin`, 65.1% untagged |
+| `internal/cmd` | Cobra tree and the composition root. `serve` (stdio and streamable-http), `auth`, `doctor` and `version` do real work; `tools list` and `migrate` are still declared gaps | 74.3% |
+| `internal/config` | `Config`, deterministic four-layer precedence, `_FILE` secret variants, full lexical validation, redacted output, and the operator OAuth client registry | 90.8% |
 | `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, and the login response classifier (JSON and widget HTML). No I/O | 96.7% |
-| `internal/store` | `FileStore`: encrypted, atomically written, owner-only per-principal token records whose wrapper schema and CAS version are authenticated by the AEAD, plus legacy `garmin_tokens.json` import and export | 91.7% |
+| `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, refresh with per-principal collapsing and CAS, the shared `TokenGate`, the request-time host guard, unverified-JWT `exp` parsing | 67.3% untagged, 88.2% with `-tags=fakegarmin` |
+| `internal/garmin/client` | The authenticated request layer: bounded wire and decompressed sizes, page and page-start caps, one bounded post-`401` retry that never replays a `POST` or `PATCH`, typed errors | 93.0% |
+| `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the compiled-in exercise catalog | 86.9% |
+| `internal/mcpserver` | Server, registry, stdio and Streamable HTTP transports, bearer middleware, session binding, origin and forwarded-header guards, elicitation confirmation, `server_info` | 89.0% |
+| `internal/tools` | 47 registered tools — 21 read-only, 21 write, 5 destructive — with contracts snapshot-tested against `compat/tools.json` | 77.0% |
+| `internal/policy` | Three tiers, explicit name lists validated against the registered set at start-up, the enablement-and-scope intersection, confirmation requirement | 91.7% |
+| `internal/identity` | Principal type, request context, and the bearer resolver that takes the principal only from a verified token | 97.7% |
+| `internal/oauthserver` | The authorization server: PKCE S256 only, exact issuer and redirect matching, single-use bound codes, hashed opaque tokens, rotating refresh with family revocation, consent | 92.4% |
+| `internal/oauthstore` | The adapter from the authorization server's `Store` interface onto the SQLite store, with a compile-time assertion and five contention tests | 84.6% |
+| `internal/store` | `FileStore` for stdio, plus the migration-backed SQLite backend for remote: principals, encrypted DI token sets with CAS, clients, consents, hashed transactions and codes, token families, audit events | 83.8% |
+| `migrations` | The embedded, checksummed, monotonic SQL migrations `0001_initial.sql` and `0002_oauth_contract.sql` | 100.0% |
 | `internal/cryptostore` | AES-256-GCM envelope encryption with versioned key IDs and principal/record-type AAD, and an owner-only key file | 89.9% |
-| `internal/securefile` | The shared filesystem hardening both stores use: `os.Root` component-by-component path resolution, post-open identity verification, link-based exclusive install, non-blocking regular-file reads, owner-only modes, and Windows ACL evaluation | 84.2% |
+| `internal/securefile` | The shared filesystem hardening every store uses: `os.Root` component-by-component path resolution, post-open identity verification, link-based exclusive install, non-blocking regular-file reads, owner-only modes, and Windows ACL evaluation | 84.5% |
 | `internal/tokenlink` | `Store`, the adapter that makes a `*store.FileStore` satisfy `auth.TokenStore` by converting between the two packages' `TokenSet` types | 80.0% |
+| `internal/loginweb` | The browser login flow in two profiles: the one-shot loopback profile and the remote profile with the `__Host-` cookie, HSTS, disclosure page, independent CSRF token, and server-held MFA continuation | 82.6% |
+| `internal/mcplog` | Structured `slog` logging with the allowlisted field set, level mapping, and the stderr sink that refuses stdout | 98.5% |
+| `internal/ratelimit` | The per-principal limiter and its handler middleware | 95.7% |
 | `internal/testkit` | Scripted fake Garmin service, fake clock, fixtures, transport guard | 96.8% |
 | `e2e` | Build tag `e2e`. `cli_test.go` builds the binary and drives it as a subprocess: version output, clean stdout on the stdio path, unknown command | n/a |
 
 Everything else in the repository is documentation, contract manifests
 (`compat/`), and CI, lint, pre-commit, GoReleaser, and container configuration.
 
-`go.mod` now has real requirements: `spf13/cobra`, `spf13/viper`, `spf13/pflag`,
-and `golang.org/x/sys`, plus the transitive indirect set. `golang.org/x/sys` is a
-direct requirement because `internal/securefile` reads Windows security
-descriptors through `golang.org/x/sys/windows`. See `docs/dependencies.md`.
+`internal/tools` at 77.0% and `internal/cmd` at 74.3% are **below** the 80% rule
+below. No CI job enforces a threshold, so raise them with the next slice that
+touches them.
 
-What `serve`, `auth`, `doctor`, `tools list`, and `migrate` actually do: they
-load and validate the configuration, then return a `*cmd.NotImplementedError`
-that wraps the exported `cmd.ErrNotImplemented` sentinel. `cmd.Execute` prints
-it to stderr and returns exit code 1, which `main` passes to `os.Exit`. This is
-a declared gap, not working behavior. Stdout stays byte-empty on those paths,
-and `internal/cmd` tests assert byte-emptiness.
+`go.mod` direct requirements: `modelcontextprotocol/go-sdk`, `spf13/cobra`,
+`spf13/viper`, `spf13/pflag`, `golang.org/x/sys` and `modernc.org/sqlite`, plus
+the transitive indirect set. `golang.org/x/sys` is direct because
+`internal/securefile` reads Windows security descriptors through
+`golang.org/x/sys/windows`. `modernc.org/libc` moves only together with
+`modernc.org/sqlite`. See `docs/dependencies.md`.
 
-There is still **no** MCP server, no MCP SDK requirement in `go.mod`, no stdio
-or HTTP transport, no OAuth authorization server, no registered tool or
-resource, no `slog` logger anywhere in the binary path, no SQLite store, no
-`LoginTransport` type (the auth package uses a one-method `Doer` transport
-interface instead), and no `garminlive` command.
+What `tools list` and `migrate` actually do: they load and validate the
+configuration, then return a `*cmd.NotImplementedError` that wraps the exported
+`cmd.ErrNotImplemented` sentinel. `cmd.Execute` prints it to stderr and returns
+exit code 1, which `main` passes to `os.Exit`. This is a declared gap, not
+working behavior — both subsystems exist and only the command wiring is missing.
+Stdout stays byte-empty on those paths, and `internal/cmd` tests assert
+byte-emptiness.
 
-Nothing assembles the packages either. `internal/cmd` imports only
-`internal/config`, so no command builds a key, a store, an authenticator, or a
-refresher. Every package above is exercised by its own tests alone.
+There is still **no** MCP resource of any kind (the five upstream
+workout-template resources are unimplemented), no `LoginTransport` type (the
+auth package uses a one-method `Doer` transport interface instead), no
+`garminlive` command, no fuzz target, no MCP conformance job, and no
+`docs/operations.md`.
+
+`internal/cmd` is the composition root and assembles the packages. It builds the
+key, the store, the authenticator, the refresher, the policy, the tool
+registrar, and — in remote mode — the authorization server, the SQLite store and
+the HTTP transport. `TestRemoteAndStdioShareNoState` proves the two modes share
+no state inside one process.
 
 `docs/implementation-status.md` is the authoritative task and gap list. Read it
 with this file before any work. Where this file and the repository disagree, the
@@ -75,9 +97,9 @@ The upstream baseline is `python-garminconnect` 0.3.10. The security behaviors
 that release adds are required work for the auth and session slice, and they are
 listed in `docs/upstream-pins.md`.
 
-## Authorization model [TARGET]
+## Authorization model [NOW]
 
-These boundaries stay separate at all times:
+These boundaries stay separate at all times, and all three are enforced by code:
 
 | Boundary | Credential | Rule |
 |----------|-----------|------|
@@ -85,12 +107,18 @@ These boundaries stay separate at all times:
 | This server to Garmin | Per-principal Garmin DI token set | Never returned to the MCP client |
 | Browser to login transaction | One-time cookie plus server-side transaction state | Credentials never become MCP tool arguments |
 
-### Safety model [TARGET]
+### Safety model [NOW]
 
 - Read-only tools are always registered. Write and destructive tools need the
   **intersection** of operator enablement and granted OAuth scope. Operator
   enablement alone is never sufficient.
-- Remote deployments default to read-only.
+- On stdio the scope source is empty by construction, so every write and
+  destructive tool is refused there whatever the operator enables. On
+  streamable-http the scopes come from the verified bearer token, so an operator
+  who both enables the tier and registers a client carrying `garmin:write` gets
+  working writes.
+- Remote deployments default to read-only: both enablement flags default to
+  false, and destructive enablement additionally requires write enablement.
 - Destructive tools request confirmation through MCP elicitation and **fail
   closed**: if confirmation cannot be obtained (elicitation unsupported,
   declined, or timed out), the operation is refused and the refusal names the
@@ -126,39 +154,40 @@ A cold agent run resumes from `AGENTS.md` plus `docs/implementation-status.md`
 alone. If those two files are not sufficient to resume correctly, fix that
 before any further feature work.
 
-## Target Package Layout [TARGET]
+## Package Layout [NOW]
 
-This is the layout to build toward, not the current tree. `exists` marks a path
-that is present today; every other path must still be created. Do not import or
-reference a path marked `planned` — it will not compile.
+Most of the target layout exists. `exists` marks a path that is present today;
+a path marked `planned` must still be created, and referencing it will not
+compile.
 
 ```
 cmd/garmin-mcp/          main package only                                    exists
 internal/
-  cmd/                   Cobra commands: serve, auth, doctor, tools, migrate, version   exists (only version works)
+  cmd/                   Cobra commands and the composition root              exists (tools list and migrate still fail)
   config/                parsing, precedence, validation, redacted output      exists
   garmin/protocol/       endpoints, client identities, pacing, failure classifier  exists
-  garmin/auth/           native login/MFA strategies and DI exchange           exists
-  garmin/client/         authenticated HTTP, refresh, retry, typed errors      planned (refresh/retry live in garmin/auth today)
-  garmin/api/            domain clients: activity, health, workout, device, ...  planned
-  mcpserver/             server, transports, middleware wiring                 planned
-  tools/                 one file per MCP tool + register.go RegisterAll       planned
-  resources/             MCP resource templates and handlers                   planned
-  mcplog/                structured MCP logging, level mapping, transport sink  planned
-  ratelimit/             limiter + handler middleware, keyed per principal     planned
-  identity/              principal and request-context resolution              planned
-  oauthserver/           MCP-facing OAuth AS/RS integration and consent        planned
-  loginweb/              embedded templates and one-time login transactions    planned
-  store/                 storage interfaces, SQLite implementation, migrations  exists (FileStore only; SQLite per ADR 0004 still planned)
+  garmin/auth/           native login/MFA strategies, DI exchange, refresh, token gate  exists
+  garmin/client/         authenticated HTTP, retry, bounds, typed errors      exists
+  garmin/api/            domain clients: activity, analysis, profile, workout, gear, downloads  exists (health, nutrition, training, challenges, devices beyond get_devices still to come)
+  mcpserver/             server, transports, middleware wiring                 exists
+  tools/                 one file or domain file per MCP tool + register.go    exists (47 tools)
+  resources/             MCP resource templates and handlers                   planned (all 5 upstream resources unimplemented)
+  mcplog/                structured MCP logging, level mapping, transport sink  exists
+  ratelimit/             limiter + handler middleware, keyed per principal     exists
+  identity/              principal and request-context resolution              exists
+  oauthserver/           MCP-facing OAuth AS/RS integration and consent        exists
+  oauthstore/            oauthserver.Store implemented over the SQLite store   exists
+  loginweb/              embedded templates and one-time login transactions    exists (loopback and remote profiles)
+  store/                 storage interfaces, FileStore, SQLite implementation  exists
   cryptostore/           versioned envelope encryption and key rotation        exists
-  securefile/            shared filesystem hardening for every secret file    exists
-  tokenlink/             store-to-auth TokenSet adapter                       exists
-  policy/                scopes, write/destructive gates, limits               planned
-  observability/         redacted logging, metrics, tracing hooks              planned
+  securefile/            shared filesystem hardening for every secret file     exists
+  tokenlink/             store-to-auth TokenSet adapter                        exists
+  policy/                scopes, write/destructive gates, limits               exists
+  observability/         redacted logging, metrics, tracing hooks              planned (logging lives in mcplog; no metrics, no tracing)
   testkit/               fake Garmin, fake clock, fixtures, test keys          exists
 e2e/                     end-to-end tests (build tag: e2e)                     exists (CLI-level only)
-web/                     embedded HTML/CSS; no remote JS dependency            planned
-migrations/              embedded, monotonic database migrations                planned
+web/                     embedded HTML/CSS; no remote JS dependency            planned (pages are embedded under internal/loginweb/pages)
+migrations/              embedded, monotonic database migrations               exists (0001, 0002)
 compat/                  pinned tool and resource contract manifests           exists
 docs/adr/                consequential design records                          exists
 ```
@@ -173,17 +202,19 @@ File discipline, in force now:
   loggers explicitly.
 - Interfaces live with the consumer, not in a global interfaces package.
 
-## Adding a New MCP Tool [TARGET]
+## Adding a New MCP Tool [NOW]
 
-No tool exists yet, and steps 3 to 7 name packages that must still be created.
-This is the procedure to follow once the MCP layer exists, and it is also the
-specification that layer must satisfy. Step 1 is already possible today, because
-`compat/tools.json` exists.
+Every package this procedure names exists, and 47 tools already follow it. Copy
+the closest existing tool in `internal/tools` rather than inventing a shape.
 
-1. Add the contract to `compat/tools.json` (name, description, input schema,
-   sensitivity, effect, scope) before you write the handler.
+1. Take the contract (name, description, input schema, sensitivity, effect,
+   scope) from `compat/tools.json`. That file is a **generated** snapshot of the
+   pinned upstream commit and is not hand-edited: a tool that has no manifest
+   record is an addition beyond the pin, and it is recorded in `docs/parity.md`
+   and in the ADR 0006 register instead.
 2. Add the failing contract test: registered name plus normalized schema
-   snapshot against the manifest.
+   snapshot against the manifest, or the documented-exclusion entry for a tool
+   the manifest does not carry.
 3. Create `internal/tools/<name>.go` with a `register<Name>(...)` function.
    - Use the upstream compatibility tool name unless there is a documented
      security reason not to.
@@ -221,10 +252,11 @@ Four layers. The first three have a CI job each.
 
 | Layer | Command | Build tag | What it tests | State |
 |-------|---------|-----------|---------------|-------|
-| Unit | `go test -race -count=1 ./...` | *(none)* | Logic, handlers, policy, crypto, state machines with fakes | **[NOW]** real tests in every `internal/` package |
-| Fake-service integration | `go test -race -count=1 -tags=fakegarmin ./...` | `fakegarmin` | Login strategies, MFA, DI refresh, retries, API decoding against the scripted fake Garmin | **[NOW]** real tests. `internal/garmin/auth` carries 29 tagged test functions across four tagged test files, plus a tagged harness, which is 29 of the 100 top-level test runs the package reports under the tag. The job no longer passes vacuously |
-| E2E | `go test -race -count=1 -tags=e2e -timeout=10m ./e2e/...` | `e2e` | stdio and Streamable HTTP MCP, OAuth flow, browser login form, tenant isolation | **[NOW]** `e2e/cli_test.go` builds the binary and drives it as a subprocess: version output, a clean stdout on the stdio path, and an unknown command. The MCP, OAuth, and isolation rows are still **[TARGET]** |
+| Unit | `go test -race -count=1 ./...` | *(none)* | Logic, handlers, tools, policy, OAuth, store, crypto, state machines with fakes | **[NOW]** real tests in every `internal/` package and in `migrations` |
+| Fake-service integration | `go test -race -count=1 -tags=fakegarmin ./...` | `fakegarmin` | Login strategies, MFA, DI refresh, the host guard, retries, API decoding, and the remote login command against the scripted fake Garmin | **[NOW]** real tests in `internal/garmin/auth`, `internal/garmin/api`, `internal/garmin/client`, `internal/tools` and `internal/cmd`. The job no longer passes vacuously |
+| E2E | `go test -race -count=1 -tags=e2e -timeout=10m ./e2e/...` | `e2e` | stdio and Streamable HTTP MCP, OAuth flow, browser login form, tenant isolation | **[NOW]** seven tests over the real binary. `cli_test.go` covers version output, a clean stdout on the stdio path, and an unknown command. `remote_test.go` stands up a synthetic TLS deployment and covers protected resource metadata read unauthenticated with `bearer_methods_supported` exactly `["header"]`, an untokened MCP request refused with a challenge carrying `resource_metadata` and no error code, a token in a query parameter that never authenticates, and a bad header token reported as `invalid_token`. The OAuth-flow, browser-login and isolation rows are still **[TARGET]** at this layer: they are covered by package tests |
 | Live (opt-in) | `go test -tags=garminlive -count=1 ./...` | `garminlive` | Real Garmin login drift detection. Never in CI | **[TARGET]** nothing carries the tag |
+| Conformance | *(no command)* | — | The official MCP server conformance suite | **BLOCKED**, not merely unwired. The suite was run for real against a live deployment and cannot pass a domain server; see `docs/implementation-status.md` and ADR 0002 |
 
 A vacuous pass is a defect, not a green light. Both tagged jobs run real tests,
 and each one **fails when its suite did not actually run**. Counting files was the
@@ -239,7 +271,8 @@ Rules:
 
 - Always run Go tests with `-race`.
 - 80%+ coverage on new code. CI prints a coverage summary but does not yet
-  enforce a threshold, so this is a review duty until it does.
+  enforce a threshold, so this is a review duty until it does. Two packages are
+  under the rule today — `internal/tools` at 77.0% and `internal/cmd` at 74.3%.
 - No test may reach the public Garmin service by default.
 - Live tests need the `garminlive` tag, an explicit environment
   acknowledgement, and a dedicated non-primary account. They never mutate
@@ -272,11 +305,12 @@ version in a trailing comment. `golangci-lint`, GoReleaser, `govulncheck`,
 cosign, and syft use explicit pinned versions, never `latest`. Secrets are never
 exposed to forked pull requests.
 
-Jobs the target pipeline still needs: a bounded fuzz smoke job, the pinned MCP
-conformance suite, a coverage threshold gate, and a two-clean-build
-reproducibility check. None exists. Add each one with the subsystem that makes
-it meaningful, and see `docs/implementation-status.md` for the current
-supply-chain coverage.
+Jobs the target pipeline still needs: a bounded fuzz smoke job, a coverage
+threshold gate, and a two-clean-build reproducibility check. None exists in
+`ci.yaml` today. An MCP conformance job is **not** on that list any more: the
+suite cannot score a domain server, and the evidence is in
+`docs/implementation-status.md` and ADR 0002. See the same status file for the
+current supply-chain coverage, which is checksum signing and archive SBOMs only.
 
 ## Quality Gates [NOW]
 
@@ -315,8 +349,9 @@ These apply to every commit, including the code that already exists.
   **same** `*auth.TokenGate` to both. Each config falls back to a private gate
   when the field is nil, so two gates compile and pass their own tests while
   login and refresh serialize only against themselves — which restores the
-  rotated-token overwrite the gate exists to prevent. Nothing wires this yet;
-  see `docs/implementation-status.md`.
+  rotated-token overwrite the gate exists to prevent. `internal/cmd/wiring.go`
+  does this, and `TestServeSharesOneTokenGateBetweenLoginAndRefresh` asserts the
+  two configs hold the same pointer. Keep that test passing.
 - `context.Context` end to end. Carry cancellation and deadlines into every
   HTTP request.
 - Inject `http.Client`, clock, randomness, Garmin base URLs, stores, and

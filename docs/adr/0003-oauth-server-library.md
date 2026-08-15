@@ -74,9 +74,13 @@ package depends on its internals.
 
 ### Consent and client registration
 
-Consent is bound to `(principal, client id, exact redirect URI, exact scopes,
-resource)`. A scope increase or a redirect change requires fresh consent, which is
-the confused-deputy mitigation the brief names, tested directly.
+Consent is keyed on `(principal, client id, exact redirect URI, resource)`, and
+the consented scopes are the **value** rather than part of the key. A request is
+admitted only when `Consent.Covers` shows the requested set is a subset of the
+consented set. That gives the property the brief asks for — a scope increase or a
+redirect change requires fresh consent — while a narrower request reuses the
+existing record instead of prompting again. Tested directly, and the schema in
+`migrations/0002_oauth_contract.sql` carries the same four-column primary key.
 
 Client registration is preregistration only. The authorization-server metadata
 advertises no `registration_endpoint`, asserted by test. Dynamic registration and
@@ -101,6 +105,8 @@ clients only when PKCE is enforced" is structural here, not conditional.
 - `http://localhost` is refused; the literal `127.0.0.1` and `[::1]` are accepted,
   per RFC 8252 §8.3.
 - The choice is replaceable: `Store` is the only seam to re-point.
-- The OAuth negative matrix and the named-client interoperability tests stay
-  separate from the MCP conformance suite. That suite does not certify the
-  embedded authorization server.
+- The OAuth negative matrix and the named-client interoperability tests are the
+  **only** verification of this component. They were always separate from the MCP
+  conformance suite, which does not certify an embedded authorization server; and
+  that suite turned out to be unable to score this server at all, so no external
+  signal exists. See ADR 0002.

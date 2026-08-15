@@ -70,12 +70,9 @@ Use the official `github.com/modelcontextprotocol/go-sdk`.
 Port the house *patterns* — registration structure, tier gating, annotations,
 middleware, policy, and test layering — never the `mcp-go` call shapes.
 
-The dependency is deliberately **not** in `go.mod` yet. `go mod tidy` drops a
-requirement that no package imports, and CI verifies a clean `go mod tidy` diff,
-so an unused requirement would fail the build. The pin therefore lands with the
-MCP foundation slice (phase 3), in the same commit as the first code that imports
-`mcp`. The pin is not forgotten; it is recorded here and in
-`docs/upstream-pins.md` ahead of the code that carries it.
+The dependency is a direct requirement in `go.mod` now. It landed with the MCP
+foundation slice (phase 3), in the same commit as the first code that imports
+`mcp`, which is what a clean `go mod tidy` diff requires.
 
 Per-feature obligations for this pair are in `docs/mcp-version-matrix.md`, which
 marks each relevant feature required, optional, or deferred and names the SDK
@@ -84,18 +81,57 @@ package or type that provides it.
 Roots, sampling, and logging are deprecated as of protocol 2026-07-28. The SDK
 still supports them, but this project must not build any behavior on them. The
 `logging` protocol capability in particular must not be used. Structured logging
-**will** live in a local package that writes to stderr, which also keeps stdout
-reserved for MCP frames under stdio. No logger exists in this repository today:
-`Config.LogLevel` and `Config.LogFormat` are parsed and validated, and nothing
-reads them. The logger lands with the MCP foundation slice.
+lives in `internal/mcplog`, a local package that writes to stderr and refuses
+stdout, which keeps stdout reserved for MCP frames under stdio. It reads
+`Config.LogLevel` and `Config.LogFormat`.
 
-The conformance suite
-([`modelcontextprotocol/conformance`](https://github.com/modelcontextprotocol/conformance))
-is **not pinned and not run today**: no conformance job exists, because there is
-no server to test. The job that adds it must pin the suite to an immutable release
-or commit SHA. The suite validates MCP wire, transport,
-tool, and resource behavior only. It is not certification of the embedded OAuth
-authorization server, which keeps its own negative test matrix.
+### The conformance suite cannot score this server
+
+[`modelcontextprotocol/conformance`](https://github.com/modelcontextprotocol/conformance)
+is a TypeScript CLI published to npm as `@modelcontextprotocol/conformance`, plus
+a composite GitHub Action. It is not a Go package and not a container. In server
+mode it connects to a running server as an MCP client over Streamable HTTP.
+
+It was run for real against a live deployment of this server — generated TLS
+certificate, master key, empty database, one preregistered public client, serving
+at `https://127.0.0.1:8443/mcp` on protocol version `2026-07-28` with 48 tools.
+**45 passed, 106 failed.** Every one of the 36 scored server scenarios failed
+except three, and two of those three passed vacuously with zero checks.
+
+Two independent blockers, both read out of the suite's own source:
+
+1. The only stable release, `v0.1.16` (tag commit
+   `21a9a2febd7100d7c17ac1021ee7f2ed9f66a1e0`), knows specification versions only
+   up to `2026-02-12`. `2026-07-28` exists solely on the `0.2.0-alpha` line, so
+   testing the pinned wire version means pinning a prerelease.
+2. The suite's server leg cannot present a credential — `ServerOptionsSchema`
+   accepts only a `url` and a `scenario`, with no header, token or client
+   credentials — while this server authenticates every `POST`, `GET` and `DELETE`
+   from the `Authorization` header. Even with a token, the scored scenarios call
+   the SDK reference fixture's tools by literal name (`test_simple_text`,
+   `test_image_content`, `test_audio_content`, `test_tool_with_progress`, plus
+   fixture prompts, resources and completion flows), and a missing tool is
+   recorded as a failure rather than a skip. A domain server fails by
+   construction.
+
+**No baseline was written, deliberately.** A baseline covering roughly 35
+scenarios would encode "this is not the SDK reference fixture", which is not a
+verified SDK limitation and could never legitimately clear. This ADR permits a
+baseline entry only for a verified limitation.
+
+Three things would unblock it, and none was attempted: a header or bearer input
+on the suite's server leg, which is an upstream change; a conformance fixture
+profile inside this server that exposes the suite's expected tool, prompt and
+resource surface, which would test the SDK rather than this product and is
+therefore refused; or an upstream requirement set for domain servers.
+
+The requirement stays recorded rather than dropped. Re-check it when the suite
+ships a stable release that knows `2026-07-28` **and** accepts a credential on
+the server leg. The suite validates MCP wire, transport, tool, and resource
+behavior only in any case. It is not certification of the embedded OAuth
+authorization server, which keeps its own negative test matrix, and the
+transport-level authorization behaviors it cannot reach are covered by
+`e2e/remote_test.go` against the real binary instead.
 
 ## Alternatives considered
 
@@ -112,20 +148,18 @@ list, so older clients keep working without pinning to it.
 from house convention. It is the maintainer's house SDK in other repositories,
 including `tamcore/kubectl-mcp` on v0.57.0. It is not used here for the three
 reasons the brief's SDK-deviation section gives: this project needs OAuth
-resource-server integration, it needs Streamable HTTP behavior, and it must run
-the official conformance suite. The official SDK ships all three; adopting
-`mcp-go` would mean reimplementing the resource-server layer and forgoing the
-conformance signal.
+resource-server integration, it needs Streamable HTTP behavior, and it was
+expected to run the official conformance suite. The official SDK ships the first
+two, which is what still justifies the choice; the conformance argument turned
+out to be worth nothing, because the suite cannot score a domain server at all.
 
 House patterns with no direct official-SDK equivalent, and how each is
 reimplemented, are recorded in `docs/mcp-version-matrix.md` next to the feature
-they belong to. The one-tool-per-file registration layout, the explicit
+they belong to. The per-domain registration layout, the explicit
 `writeTools`/`destructiveTools` name lists validated at startup, and the
-rate-limit handler middleware **will** be local code: the official SDK supplies
-only `mcp.AddTool` and the `Middleware` hooks they build on. None of that code
-exists yet, and neither do the packages that will hold it. Where this ADR names a
-package that will own a behavior, read it as the intended target layout, not as a
-description of the tree.
+rate-limit handler middleware are local code in `internal/tools`,
+`internal/policy` and `internal/ratelimit`, because the official SDK supplies
+only `mcp.AddTool` and the `Middleware` hooks they build on.
 
 ## Consequences
 
@@ -136,9 +170,13 @@ description of the tree.
   audience, registration, and token-exchange types.
 - Roots, sampling, and the `logging` capability are off limits as a design
   foundation, even though the SDK still accepts them.
-- Conformance results are tied to the pinned pair. A baseline entry may record a
-  verified SDK limitation temporarily, but CI fails on a new failure and on a
-  stale expected-failure entry.
-- Changing the pin later needs an amendment here plus a conformance re-run.
-- The pin is recorded before the module requirement exists. A reader who sees no
-  SDK line in `go.mod` must read that as sequencing, not as an open decision.
+- **There is no conformance signal for this server, and none can be
+  manufactured.** No CI job runs the suite and no baseline file exists. If the
+  suite ever becomes usable, results are tied to the pinned pair, a baseline
+  entry may record a verified SDK limitation temporarily, and CI must fail on a
+  new failure and on a stale expected-failure entry.
+- Changing the pin later needs an amendment here. It cannot be validated by a
+  conformance re-run, so the SDK upgrade must be covered by this repository's own
+  tests, including `e2e/remote_test.go`.
+- The transport authorization behaviors the suite would have covered are proven
+  instead by `e2e/remote_test.go` against the real binary.
