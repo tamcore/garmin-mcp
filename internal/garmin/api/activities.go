@@ -107,7 +107,19 @@ type Activity struct {
 	StartLongitude client.Number   `json:"startLongitude"`
 	OwnerID        client.Number   `json:"ownerId"`
 	Favorite       *bool           `json:"favorite"`
+
+	// The four fields below are carried by the single-day gateway document and
+	// are usually absent from the search listing, so every one of them is a union
+	// decoder that reports absence rather than zero.
+	Steps                    client.Number `json:"steps"`
+	LapCount                 client.Number `json:"lapCount"`
+	ModerateIntensityMinutes client.Number `json:"moderateIntensityMinutes"`
+	VigorousIntensityMinutes client.Number `json:"vigorousIntensityMinutes"`
 }
+
+// jsonNull is the JSON null literal, which every tolerant decoder in this package
+// treats as an absent document rather than as a decode failure.
+const jsonNull = "null"
 
 // activityEnvelope decodes both shapes the search endpoint answers with: a bare
 // array, and an object that carries the array under a key. Upstream only ever sees
@@ -121,7 +133,7 @@ type activityEnvelope struct {
 // null.
 func (e *activityEnvelope) UnmarshalJSON(data []byte) error {
 	trimmed := bytes.TrimSpace(data)
-	if len(trimmed) == 0 || string(trimmed) == "null" {
+	if len(trimmed) == 0 || string(trimmed) == jsonNull {
 		*e = activityEnvelope{}
 		return nil
 	}
@@ -255,6 +267,102 @@ func (a *Activities) walkPages(
 		client.PathActivitySearch, nil)
 	return nil, unexpected(req, fmt.Errorf("%w after %d pages",
 		client.ErrPaginationExhausted, limits.MaxPages))
+}
+
+// activityCount is the account's total activity count as Garmin answers it. The
+// count is a union decoder because the same field has been observed as a number
+// and as a numeric string.
+type activityCount struct {
+	TotalCount client.Number `json:"totalCount"`
+}
+
+// Count reads how many activities the account holds.
+//
+// Source: count_activities, which raises when the answer carries no totalCount
+// rather than reporting zero. That distinction is kept here: a missing or
+// negative count is upstream drift, and answering zero would be a wrong answer
+// about a person's history rather than an error about a response.
+func (a *Activities) Count(ctx context.Context, session client.Session) (int64, error) {
+	req := readRequest(client.OpCountActivities, client.EndpointActivitiesCount,
+		client.PathActivitiesCount, nil)
+
+	var counted activityCount
+	if _, err := a.req.read(ctx, session, req, &counted); err != nil {
+		return 0, err
+	}
+	total, ok := counted.TotalCount.Int64()
+	if !ok || total < 0 {
+		return 0, unexpected(req, fmt.Errorf("%w: the activity count carries no usable totalCount",
+			client.ErrUnexpectedResponse))
+	}
+	return total, nil
+}
+
+// dayEnvelope decodes the single-day gateway document.
+//
+// Only the activity payload is kept. The same response carries the day's
+// heart-rate series, which is health data no caller of this read asked for, so it
+// is dropped at the decode boundary rather than filtered later.
+type dayEnvelope struct {
+	activities []Activity
+}
+
+// UnmarshalJSON accepts the documented shape, the same document without the
+// ActivitiesForDay wrapper, a bare array, and null.
+func (e *dayEnvelope) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || string(trimmed) == jsonNull {
+		*e = dayEnvelope{}
+		return nil
+	}
+	if trimmed[0] == '[' {
+		var items []Activity
+		if err := json.Unmarshal(trimmed, &items); err != nil {
+			return err
+		}
+		*e = dayEnvelope{activities: items}
+		return nil
+	}
+
+	var wrapper struct {
+		ActivitiesForDay struct {
+			Payload []Activity `json:"payload"`
+		} `json:"ActivitiesForDay"`
+		Payload []Activity `json:"payload"`
+	}
+	if err := json.Unmarshal(trimmed, &wrapper); err != nil {
+		return err
+	}
+	items := wrapper.ActivitiesForDay.Payload
+	if items == nil {
+		items = wrapper.Payload
+	}
+	*e = dayEnvelope{activities: items}
+	return nil
+}
+
+// ForDate reads the activities recorded on one calendar day.
+//
+// Source: get_activities_fordate, which reads the mobile gateway's day document.
+// A day with no activity answers with an empty payload, which is a normal state
+// rather than a failure.
+func (a *Activities) ForDate(
+	ctx context.Context, session client.Session, date client.Date,
+) ([]Activity, error) {
+	prefix := readRequest(client.OpListActivitiesForDate, client.EndpointActivitiesForDate,
+		client.PathActivitiesForDatePrefix, nil)
+	if err := requireDate(prefix, date); err != nil {
+		return nil, err
+	}
+
+	req := prefix
+	req.Path = client.PathActivitiesForDatePrefix + "/" + date.String()
+
+	var day dayEnvelope
+	if _, err := a.req.read(ctx, session, req, &day); err != nil {
+		return nil, err
+	}
+	return day.activities, nil
 }
 
 // pageSizeOrDefault resolves a requested page size against the configured bound.

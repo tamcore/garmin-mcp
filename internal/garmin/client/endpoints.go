@@ -22,6 +22,15 @@ const (
 	// limit, activityType, startDate, endDate and sortOrder.
 	// Source: garmin_connect_activities.
 	PathActivitySearch = "/activitylist-service/activities/search/activities"
+	// PathActivitiesCount is the account's total activity count, answered as an
+	// object carrying totalCount. Source: garmin_connect_activities_count.
+	PathActivitiesCount = "/activitylist-service/activities/count"
+	// PathActivitiesForDatePrefix precedes a calendar date in the single-day
+	// activity path. The path belongs to the mobile gateway's heart-rate tier and
+	// the useful part of its answer is the ActivitiesForDay document, which is why
+	// the surrounding heart-rate series is dropped on decode.
+	// Source: garmin_connect_activity_fordate.
+	PathActivitiesForDatePrefix = "/mobile-gateway/heartRate/forDate"
 	// PathDailySleepPrefix is the date-keyed daily sleep summary. The display name
 	// is appended as a single escaped path segment.
 	// Source: garmin_connect_daily_sleep_url.
@@ -137,6 +146,8 @@ const (
 	EndpointUserSettings        = Endpoint("connectapi.userprofile.user_settings")
 	EndpointUserProfileSettings = Endpoint("connectapi.userprofile.settings")
 	EndpointActivitySearch      = Endpoint("connectapi.activitylist.search")
+	EndpointActivitiesCount     = Endpoint("connectapi.activitylist.count")
+	EndpointActivitiesForDate   = Endpoint("connectapi.mobilegateway.activities_for_date")
 	EndpointDailySleep          = Endpoint("connectapi.wellness.daily_sleep")
 	EndpointUserSummary         = Endpoint("connectapi.usersummary.daily")
 	EndpointDevices             = Endpoint("connectapi.device.registered_devices")
@@ -171,6 +182,8 @@ var knownEndpoints = [...]Endpoint{
 	EndpointUserSettings,
 	EndpointUserProfileSettings,
 	EndpointActivitySearch,
+	EndpointActivitiesCount,
+	EndpointActivitiesForDate,
 	EndpointDailySleep,
 	EndpointUserSummary,
 	EndpointDevices,
@@ -239,6 +252,8 @@ const (
 	OpGetUserProfileSettings  = Op("get_userprofile_settings")
 	OpListActivities          = Op("list_activities")
 	OpListActivitiesByDate    = Op("list_activities_by_date")
+	OpCountActivities         = Op("count_activities")
+	OpListActivitiesForDate   = Op("get_activities_fordate")
 	OpGetDailySleep           = Op("get_daily_sleep")
 	OpGetUserSummary          = Op("get_user_summary")
 	OpListDevices             = Op("list_devices")
@@ -286,6 +301,8 @@ var knownOps = [...]Op{
 	OpGetUserProfileSettings,
 	OpListActivities,
 	OpListActivitiesByDate,
+	OpCountActivities,
+	OpListActivitiesForDate,
 	OpGetDailySleep,
 	OpGetUserSummary,
 	OpListDevices,
