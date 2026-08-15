@@ -93,19 +93,24 @@ func (r *remoteDeployment) serveOn(
 	revocations := make(chan error, 1)
 	go func() { revocations <- r.transport.Run(watch) }()
 
+	// The cleanup shares the watch context, so it stops when the server does and
+	// cannot outlive the database it sweeps.
+	cleanups := make(chan error, 1)
+	go func() { cleanups <- r.cleanup.Run(watch) }()
+
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- serveListener(server, listener) }()
 
 	select {
 	case err := <-serveErr:
 		watchDone()
-		return errors.Join(err, <-revocations)
+		return errors.Join(err, <-revocations, <-cleanups)
 	case <-ctx.Done():
 	}
 
 	stopErr := r.stop(server)
 	watchDone()
-	return errors.Join(stopErr, <-revocations, <-serveErr)
+	return errors.Join(stopErr, <-revocations, <-cleanups, <-serveErr)
 }
 
 // httpServer builds the listener's server, with TLS when the operator configured

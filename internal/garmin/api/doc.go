@@ -46,6 +46,9 @@
 //	Workouts.Get                 /workout-service/workout/{id}                      one workout
 //	ActivityFiles.Download       /download-service/...                              streamed
 //	Workouts.Download            /workout-service/workout/FIT/{id}                  streamed
+//	Calendar.ScheduledWorkouts   POST /graphql-gateway/graphql, workoutSchedule…    query read
+//	Calendar.TrainingPlanWorkouts POST same, trainingPlanScalar                     query read
+//	Calendar.IsScheduled         the one-day form of ScheduledWorkouts              query read
 //
 // The writes, each with the effect the retry predicate reads:
 //
@@ -136,10 +139,9 @@
 //
 // # Documented gaps
 //
-//   - The nutrition, body-composition and hydration writes, the course endpoints
-//     and the GraphQL-backed calendar reads (get_scheduled_workouts,
-//     get_training_plan_workouts, schedule_week), which need a GraphQL request
-//     shape this package does not build.
+//   - The nutrition, body-composition and hydration writes and the course
+//     endpoints. The GraphQL-backed calendar reads are no longer a gap: Calendar
+//     serves them over the request shape in internal/garmin/client/graphql.go.
 //   - Activity and course file upload, which needs multipart encoding.
 //   - The remaining 0.3.10 read endpoints — body battery, HRV, stress, training
 //     readiness, badges, challenges, gear, goals, workouts, courses, nutrition — which

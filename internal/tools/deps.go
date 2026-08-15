@@ -182,6 +182,7 @@ type service struct {
 	writes     *api.ActivityWrites
 	gear       *api.Gear
 	workouts   *api.Workouts
+	calendar   *api.Calendar
 	strength   *api.StrengthWrites
 	files      *api.ActivityFiles
 }
@@ -229,6 +230,9 @@ func (s *service) buildReadClients(rc *client.Client) error {
 	}
 	if s.files, err = api.NewActivityFiles(rc); err != nil {
 		return fmt.Errorf("building the download client: %w", err)
+	}
+	if s.calendar, err = api.NewCalendar(rc); err != nil {
+		return fmt.Errorf("building the calendar client: %w", err)
 	}
 	return nil
 }

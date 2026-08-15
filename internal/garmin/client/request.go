@@ -22,6 +22,17 @@ const (
 	// EffectDelete removes a resource. It is never retried automatically, so a
 	// caller sees the real outcome of the one attempt that was made.
 	EffectDelete
+	// EffectQueryRead is a read that carries a body, which is what Garmin's GraphQL
+	// tier requires: the query document travels in the request, so the call is a
+	// POST even though it changes nothing.
+	//
+	// It is repeatable for the same reason EffectRead is, and the reason is
+	// structural rather than a promise: the only bodies this package sends with this
+	// effect are rendered by GraphQLRequest, whose root field must be one of the
+	// GraphQLField constants, and every one of those constants is a query field. No
+	// mutation can be expressed, so repeating the request cannot apply anything
+	// twice.
+	EffectQueryRead
 )
 
 // String returns a stable label for logs and metrics.
@@ -35,6 +46,8 @@ func (e Effect) String() string {
 		return "unsafe_write"
 	case EffectDelete:
 		return "delete"
+	case EffectQueryRead:
+		return "query_read"
 	default:
 		return labelUnknown
 	}
@@ -42,7 +55,7 @@ func (e Effect) String() string {
 
 // repeatable reports whether a request with this effect may be sent twice.
 func (e Effect) repeatable() bool {
-	return e == EffectRead || e == EffectIdempotentWrite
+	return e == EffectRead || e == EffectIdempotentWrite || e == EffectQueryRead
 }
 
 // allowedMethods are the HTTP methods this package will dispatch. Everything else
@@ -118,6 +131,9 @@ func (r Request) Validate() error {
 	}
 	if r.Effect != EffectRead && r.method() == http.MethodGet {
 		return validationError("a write request must not use GET")
+	}
+	if r.Effect == EffectQueryRead && (len(r.Body) == 0 || r.method() != http.MethodPost) {
+		return validationError("a query read must be a POST carrying its query document")
 	}
 	return validateQuery(r.Query)
 }

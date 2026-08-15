@@ -166,10 +166,10 @@ the single-active-instance limit. Every setting is listed in
 
 This is honest, not promotional.
 
-**Tool coverage: 42 of the 138 upstream tools are implemented.** The upstream
+**Tool coverage: 45 of the 138 upstream tools are implemented.** The upstream
 surface is the Taxuspt `garmin_mcp` project at a pinned commit, inventoried
-statically into `compat/tools.json`. This build registers 47 Garmin tools — the
-42 from that manifest plus 5 the manifest does not carry — and one built-in
+statically into `compat/tools.json`. This build registers 50 Garmin tools — the
+45 from that manifest plus 5 the manifest does not carry — and one built-in
 `server_info` tool. None of the 5 upstream resources is implemented.
 `docs/parity.md` carries the per-tool status.
 

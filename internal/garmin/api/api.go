@@ -41,6 +41,32 @@ func (r requester) read(
 	return r.rc.GetJSON(ctx, session, req, out)
 }
 
+// query performs a GraphQL read and decodes the queried root field into out.
+//
+// It is the GraphQL twin of read and refuses an unusable session the same way. It
+// returns no payload: a GraphQL response carries its useful part under data, which is
+// what out receives, so no domain model here retains the envelope.
+func (r requester) query(
+	ctx context.Context, session client.Session, req client.GraphQLRequest, out any,
+) error {
+	if session.IsZero() {
+		return invalidQuery(req, client.ErrMissingPrincipal)
+	}
+	_, err := r.rc.GraphQL(ctx, session, req, out)
+	return err
+}
+
+// invalidQuery is invalid for a GraphQL request, so a caller-side refusal on that
+// tier carries the same sanitized labels a dispatched failure would.
+func invalidQuery(req client.GraphQLRequest, cause error) error {
+	return &client.APIError{
+		Op:       req.Op,
+		Endpoint: req.Endpoint,
+		Kind:     client.KindValidation,
+		Err:      cause,
+	}
+}
+
 // readRequest builds a read request for op, endpoint and path.
 func readRequest(op client.Op, endpoint client.Endpoint, path string, query url.Values) client.Request {
 	return client.Request{

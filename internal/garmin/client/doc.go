@@ -89,6 +89,18 @@
 // query parameter is encoded by this package. DisplayName is identity material and
 // follows the repository redaction convention.
 //
+// # GraphQL reads
+//
+// Garmin serves the workout calendar from a GraphQL gateway. GraphQLRequest is the
+// typed request for it: a root field from a closed set of query fields, string
+// arguments under a narrow charset, rendered into the anonymous query upstream
+// sends and posted to PathGraphQL as {"query": "..."}. It carries the same Op and
+// Endpoint labels a REST call does and is EffectQueryRead — a read that happens to
+// need a body, retried exactly as a GET read is, because no mutation field can be
+// expressed. The response envelope is decoded tolerantly and a non-empty errors
+// array is a failure whatever the status was, reported as ErrGraphQLErrors with the
+// error count and never the reported messages.
+//
 // # File downloads
 //
 // Download streams a file response into a caller-supplied io.Writer instead of

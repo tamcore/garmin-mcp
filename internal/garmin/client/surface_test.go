@@ -58,6 +58,7 @@ func TestEffectAndKindLabels(t *testing.T) {
 		client.EffectIdempotentWrite: "idempotent_write",
 		client.EffectUnsafeWrite:     "unsafe_write",
 		client.EffectDelete:          "delete",
+		client.EffectQueryRead:       "query_read",
 		client.Effect(99):            labelUnknown,
 	}
 	for effect, want := range effects {

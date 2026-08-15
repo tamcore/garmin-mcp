@@ -105,6 +105,8 @@ func readOnlyRegistrations() []registration {
 		{getWorkoutsContract, registerGetWorkouts},
 		{getWorkoutByIDContract, registerGetWorkoutByID},
 		{downloadWorkoutContract, registerDownloadWorkout},
+		{getScheduledWorkoutsContract, registerGetScheduledWorkouts},
+		{getTrainingPlanWorkoutsContract, registerGetTrainingPlanWorkouts},
 	}
 }
 
@@ -134,6 +136,7 @@ func writeRegistrations() []registration {
 		{updateWorkoutContract, registerUpdateWorkout},
 		{scheduleWorkoutContract, registerScheduleWorkout},
 		{scheduleWorkoutsContract, registerScheduleWorkouts},
+		{scheduleWeekContract, registerScheduleWeek},
 		{createWalkRunWorkoutContract, registerCreateWalkRunWorkout},
 		{createRunWorkoutContract, registerCreateRunWorkout},
 		{createZ2WalkWorkoutContract, registerCreateZ2WalkWorkout},

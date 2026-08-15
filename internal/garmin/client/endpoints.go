@@ -160,6 +160,10 @@ const (
 	EndpointWorkout                = Endpoint("connectapi.workout.item")
 	EndpointWorkoutDownload        = Endpoint("connectapi.workout.download")
 	EndpointWorkoutSchedule        = Endpoint("connectapi.workout.schedule")
+	// EndpointGraphQL is Garmin's GraphQL gateway. One label covers the whole tier
+	// because one path does: the root field being queried is a separate sanitized
+	// label, GraphQLField, and the Op says which read it serves.
+	EndpointGraphQL = Endpoint("connectapi.graphql.gateway")
 )
 
 var knownEndpoints = [...]Endpoint{
@@ -189,6 +193,7 @@ var knownEndpoints = [...]Endpoint{
 	EndpointWorkout,
 	EndpointWorkoutDownload,
 	EndpointWorkoutSchedule,
+	EndpointGraphQL,
 }
 
 // labelUnknown is what an unrecognized label renders as, matching protocol.
@@ -271,6 +276,8 @@ const (
 	OpScheduleWorkout           = Op("schedule_workout")
 	OpUnscheduleWorkout         = Op("unschedule_workout")
 	OpDownloadWorkout           = Op("download_workout")
+	OpGetScheduledWorkouts      = Op("get_scheduled_workouts")
+	OpGetTrainingPlanWorkouts   = Op("get_training_plan_workouts")
 )
 
 var knownOps = [...]Op{
@@ -315,6 +322,8 @@ var knownOps = [...]Op{
 	OpScheduleWorkout,
 	OpUnscheduleWorkout,
 	OpDownloadWorkout,
+	OpGetScheduledWorkouts,
+	OpGetTrainingPlanWorkouts,
 }
 
 // credentialOps are the protocol operations that carry a password or a one-time

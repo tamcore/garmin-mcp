@@ -49,6 +49,10 @@ type remoteDeployment struct {
 	// the sessions it covers.
 	revocations *revocationBus
 
+	// cleanup removes expired authorization state on a bounded schedule. It exists
+	// only here: the stdio deployment has no multi-user store to sweep.
+	cleanup *storeCleaner
+
 	endpoints remoteEndpoints
 	handler   http.Handler
 }
@@ -170,6 +174,10 @@ func assembleRemote(
 	if err != nil {
 		return nil, err
 	}
+	cleanup, err := newStoreCleaner(parts.sqlite, deps.events)
+	if err != nil {
+		return nil, err
+	}
 
 	remote := &remoteDeployment{
 		cfg:         cfg,
@@ -180,6 +188,7 @@ func assembleRemote(
 		transport:   transport,
 		login:       login,
 		revocations: parts.revocations,
+		cleanup:     cleanup,
 		endpoints:   parts.endpoints,
 	}
 	handler, err := remote.mount()

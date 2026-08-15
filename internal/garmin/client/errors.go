@@ -55,6 +55,12 @@ var (
 	// MAX_PAGINATED_REQUESTS guard in get_activities_by_date, which fails loudly
 	// rather than truncating.
 	ErrPaginationExhausted = errors.New("garmin api: pagination exceeded its page bound")
+	// ErrGraphQLErrors reports a GraphQL response that carried an errors array.
+	// Garmin returns one alongside HTTP 200 and, often, alongside a data object that
+	// looks usable, so this is never inferred from the status code. The failure
+	// carries the error count and never the reported messages, which are Garmin's
+	// prose about the caller's own calendar.
+	ErrGraphQLErrors = errors.New("garmin api: the GraphQL response reported errors")
 )
 
 // sentinels is the set this package renders verbatim inside a redacted cause,
@@ -63,7 +69,7 @@ var sentinels = [...]error{
 	ErrNotFound, ErrAuthentication, ErrRateLimited, ErrInvalidFile, ErrValidation,
 	ErrTemporaryConnection, ErrServer, ErrMalformedPayload, ErrUnexpectedResponse,
 	ErrResponseTooLarge, ErrInvalidLimits, ErrNotConfigured, ErrMissingPrincipal,
-	ErrPaginationExhausted,
+	ErrPaginationExhausted, ErrGraphQLErrors,
 }
 
 // protocolSentinels are the login-layer sentinels this package may render, for a

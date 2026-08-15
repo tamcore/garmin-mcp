@@ -34,6 +34,8 @@ var wantReadOnlyToolNames = []string{
 	"get_workouts",
 	"get_workout_by_id",
 	"download_workout",
+	tools.ToolGetScheduledWorkouts,
+	tools.ToolGetTrainingPlanWorkouts,
 }
 
 // wantWriteToolNames is the write tier. Every one of them needs the operator's
@@ -56,6 +58,7 @@ var wantWriteToolNames = []string{
 	"update_workout",
 	"schedule_workout",
 	"schedule_workouts",
+	tools.ToolScheduleWeek,
 	"create_walk_run_workout",
 	"create_run_workout",
 	"create_z2_walk_workout",
@@ -89,6 +92,7 @@ var nonIdempotentTools = []string{
 	"upload_workouts",
 	"schedule_workout",
 	"schedule_workouts",
+	tools.ToolScheduleWeek,
 	"create_walk_run_workout",
 	"create_run_workout",
 	"create_z2_walk_workout",

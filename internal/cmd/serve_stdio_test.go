@@ -263,3 +263,17 @@ func TestServeRefusesInlineMasterKeyMaterial(t *testing.T) {
 		t.Errorf("stdout = %q, want empty", stdout)
 	}
 }
+
+// TestStdioServeRunsNoStoreCleanup pins the deployment split. The periodic removal
+// of expired authorization state belongs to the remote composition root, which owns
+// the multi-user database; a stdio process has no such store, so it must start no
+// cleanup loop at all.
+func TestStdioServeRunsNoStoreCleanup(t *testing.T) {
+	clearGarminEnv(t)
+	stateDir(t)
+
+	served := serveStdio(t, "")
+	if strings.Contains(served.stderr, cmd.CleanupLogMessage) {
+		t.Errorf("a stdio run logged a store cleanup record: %s", served.stderr)
+	}
+}

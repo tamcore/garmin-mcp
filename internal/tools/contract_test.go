@@ -20,11 +20,6 @@ import (
 // manifestPath is the pinned contract this package must not drift from.
 const manifestPath = "../../compat/tools.json"
 
-// graphQLCalendarGap is why the three calendar tools are unregistered: all of them
-// read the workout calendar through Garmin's GraphQL tier, which the API layer under
-// this package does not build a request shape for.
-const graphQLCalendarGap = "needs the GraphQL calendar read the API layer does not build"
-
 // manifestTool is the subset of a manifest entry this test enforces.
 type manifestTool struct {
 	Name        string         `json:"name"`
@@ -290,11 +285,8 @@ func TestNoManifestToolIsRegisteredWithoutTheEndpointItNeeds(t *testing.T) {
 	t.Parallel()
 
 	unregistered := map[string]string{
-		"get_scheduled_workouts":     graphQLCalendarGap,
-		"get_training_plan_workouts": graphQLCalendarGap,
-		"schedule_week":              graphQLCalendarGap,
-		"get_activity_fit_data":      "needs FIT parsing this server does not do",
-		"set_fit_download_dir":       "would persist a caller-supplied server filesystem path",
+		"get_activity_fit_data": "needs FIT parsing this server does not do",
+		"set_fit_download_dir":  "would persist a caller-supplied server filesystem path",
 	}
 
 	contracts := tools.Contracts()
