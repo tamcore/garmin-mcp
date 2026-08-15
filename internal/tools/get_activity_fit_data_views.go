@@ -123,7 +123,8 @@ type FITPowerBestView struct {
 
 // A FITRecordView is one sample of the per-second series.
 //
-// It carries no coordinates. The file has them and this server never decodes them:
+// It carries no coordinates. The file has them and the FIT SDK decodes them, but no
+// coordinate is ever read into this server's own model, so none can reach this view:
 // a per-second track is the most sensitive thing in an activity file, and no figure
 // in this result needs it.
 type FITRecordView struct {

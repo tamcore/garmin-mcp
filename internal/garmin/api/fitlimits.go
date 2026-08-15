@@ -14,6 +14,11 @@ type FITLimits struct {
 	MaxMessages int
 	// MaxRecords bounds how many per-second records are retained.
 	MaxRecords int
+	// MaxSpans bounds how many sessions and how many laps are retained, counted
+	// separately. It bounds the analysis rather than the result: every span is
+	// summarized against the whole record stream, so an unbounded span count over a
+	// full sample stream is quadratic work.
+	MaxSpans int
 }
 
 // Defaults for a FIT decode. Each is the point at which a file stops being a ride
@@ -22,6 +27,11 @@ const (
 	DefaultMaxFITBytes    int64 = 16 << 20
 	DefaultMaxFITMessages       = 500_000
 	DefaultMaxFITRecords        = 60_000
+
+	// DefaultMaxFITSpans is far above what a device writes — a recorder stops at a
+	// few hundred laps — and far below the count at which summarizing every span
+	// against every retained sample stops being affordable.
+	DefaultMaxFITSpans = 1000
 )
 
 // withDefaults returns a copy of l with every zero field replaced by its default.
@@ -30,6 +40,7 @@ func (l FITLimits) withDefaults() FITLimits {
 		MaxBytes:    DefaultMaxFITBytes,
 		MaxMessages: DefaultMaxFITMessages,
 		MaxRecords:  DefaultMaxFITRecords,
+		MaxSpans:    DefaultMaxFITSpans,
 	}
 	if l.MaxBytes > 0 {
 		out.MaxBytes = l.MaxBytes
@@ -39,6 +50,9 @@ func (l FITLimits) withDefaults() FITLimits {
 	}
 	if l.MaxRecords > 0 {
 		out.MaxRecords = l.MaxRecords
+	}
+	if l.MaxSpans > 0 {
+		out.MaxSpans = l.MaxSpans
 	}
 	return out
 }

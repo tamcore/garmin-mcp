@@ -249,7 +249,37 @@ func (w *Workouts) Update(
 		return SavedWorkout{}, invalid(req, err)
 	}
 	req.Body = merged.Bytes()
-	return w.save(ctx, session, req)
+
+	saved, err := w.save(ctx, session, req)
+	if err != nil {
+		return SavedWorkout{}, err
+	}
+	if _, reported := saved.WorkoutID.Int64(); reported {
+		return saved, nil
+	}
+	return w.readSaved(ctx, session, id)
+}
+
+// readSaved reports what Garmin stored, for an update it answered with no content.
+//
+// Garmin answers an in-place workout update with 204 and an empty body, so the
+// answer names neither the workout nor the name it stored. Treating that as a
+// malformed payload reported failure for an update that had succeeded. The rule the
+// type documents still holds — the identifier and the name are the server's, not the
+// caller's — so they are read back rather than echoed from the request. Confirmed
+// against the live service on 2026-08-15.
+func (w *Workouts) readSaved(
+	ctx context.Context, session client.Session, id client.ID,
+) (SavedWorkout, error) {
+	stored, err := w.Get(ctx, session, id)
+	if err != nil {
+		return SavedWorkout{}, err
+	}
+	return SavedWorkout{
+		WorkoutID:   stored.WorkoutID,
+		WorkoutName: stored.WorkoutName,
+		raw:         stored.raw,
+	}, nil
 }
 
 // save dispatches an upload or an update and reports what Garmin saved.

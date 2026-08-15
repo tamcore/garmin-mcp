@@ -26,8 +26,9 @@ const unmappedSportPrefix = "SportInvalid("
 
 // readRecord maps one record message onto the sample model.
 //
-// Coordinates are absent by construction: PositionLat and PositionLong are never
-// read, so no returned structure can carry a track.
+// Coordinates are absent from the result by construction: the SDK decodes
+// PositionLat and PositionLong into its own message struct, and this function never
+// reads either of them, so no returned structure can carry a track.
 func readRecord(m *mesgdef.Record) FITRecord {
 	record := FITRecord{
 		Time:        m.Timestamp,

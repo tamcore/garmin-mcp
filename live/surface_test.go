@@ -170,24 +170,44 @@ func TestDerivedArgumentToolsAnswer(t *testing.T) {
 
 	library := e.call(t, tools.ToolGetWorkouts, nil)
 	entries, _ := library["workouts"].([]any)
-	if len(entries) == 0 {
-		t.Skip("not run — the account's workout library is empty, so no workout id can be derived")
-	}
-	first, ok := entries[0].(map[string]any)
-	if !ok {
-		t.Fatalf("%s returned a workout that is not an object", tools.ToolGetWorkouts)
-	}
-	id, ok := first[argWorkoutID].(float64)
-	if !ok {
-		t.Fatalf("%s returned a workout without a workout id", tools.ToolGetWorkouts)
+	id, found := firstPreexistingWorkout(t, entries)
+	if !found {
+		t.Skip("not run — the account's workout library holds no workout this suite did not " +
+			"create, so no workout id can be derived")
 	}
 
 	for _, tool := range derivedCalls() {
 		t.Run(tool, func(t *testing.T) {
-			result := e.call(t, tool, map[string]any{argWorkoutID: int64(id)})
+			result := e.call(t, tool, map[string]any{argWorkoutID: id})
 			assertResultIsSafe(t, tool, result)
 		})
 	}
+}
+
+// firstPreexistingWorkout picks the first library entry the write half did not
+// create.
+//
+// The write half creates and removes its own workouts, and a listing taken while one
+// of them exists would otherwise hand a short-lived object to the read checks. The
+// read half must not depend on the order the two halves ran in.
+func firstPreexistingWorkout(t *testing.T, entries []any) (int64, bool) {
+	t.Helper()
+
+	for _, entry := range entries {
+		workout, ok := entry.(map[string]any)
+		if !ok {
+			t.Fatalf("%s returned a workout that is not an object", tools.ToolGetWorkouts)
+		}
+		if name, named := workout["name"].(string); named && strings.HasPrefix(name, objectPrefix) {
+			continue
+		}
+		id, ok := workout[argWorkoutID].(float64)
+		if !ok {
+			t.Fatalf("%s returned a workout without a workout id", tools.ToolGetWorkouts)
+		}
+		return int64(id), true
+	}
+	return 0, false
 }
 
 // TestEveryReadOnlyToolIsAccountedFor keeps the sweep honest.

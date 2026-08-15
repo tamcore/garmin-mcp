@@ -3,6 +3,7 @@ package api
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -24,9 +25,13 @@ func fitNumber(value float64) FITNumber { return FITNumber{Value: value, OK: tru
 
 // A FITRecord is one sample of the record stream.
 //
-// Coordinates are deliberately absent. The FIT file carries them, and this server
-// decodes activity files without ever building a track: a per-second position series
-// is the most sensitive thing in the file and no summary here needs it.
+// Coordinates are deliberately absent. The file carries them and the FIT SDK decodes
+// every field of every record message, position included, because its decoder has no
+// field filter. What this package controls is what it reads out of the SDK's message
+// and keeps: PositionLat and PositionLong are never read into a FITRecord, the
+// collector's reused message struct is scrubbed of them after each sample, and no
+// returned structure, log line or error carries a position. A per-second track is the
+// most sensitive thing in the file and no summary here needs it.
 type FITRecord struct {
 	Time         time.Time
 	HeartRate    FITNumber
@@ -90,6 +95,9 @@ type FITActivity struct {
 	// RecordsTruncated reports that the record stream hit the configured bound and
 	// the decode stopped collecting rather than growing without limit.
 	RecordsTruncated bool
+
+	// SpansTruncated reports the same for the session or lap list.
+	SpansTruncated bool
 }
 
 // ParseFITActivity decodes one activity file into the model above.
@@ -98,13 +106,17 @@ type FITActivity struct {
 // device FIT file, or the bare FIT file. Both are accepted, and both are bounded
 // before anything is decoded, so a small archive that expands into a large file is
 // refused rather than decoded.
-func ParseFITActivity(data []byte, limits FITLimits) (FITActivity, error) {
+//
+// ctx bounds the decode: cancelling it abandons the file rather than reading it to
+// its end, which is what lets a caller's deadline reach the one part of this package
+// whose cost is set by the file rather than by the request.
+func ParseFITActivity(ctx context.Context, data []byte, limits FITLimits) (FITActivity, error) {
 	resolved := limits.withDefaults()
 	raw, err := extractFIT(data, resolved)
 	if err != nil {
 		return FITActivity{}, err
 	}
-	return decodeFITActivity(raw, resolved)
+	return decodeFITActivity(ctx, raw, resolved)
 }
 
 // zipMagic is the local file header signature of a zip archive.

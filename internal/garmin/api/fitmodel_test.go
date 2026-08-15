@@ -71,7 +71,7 @@ func rideFile(seconds int) testkit.FITFile {
 func TestParseFITReadsEveryScaledReading(t *testing.T) {
 	t.Parallel()
 
-	activity, err := api.ParseFITActivity(rideFile(10).Bytes(), api.FITLimits{})
+	activity, err := api.ParseFITActivity(t.Context(), rideFile(10).Bytes(), api.FITLimits{})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}
@@ -107,7 +107,7 @@ func TestParseFITReportsAMissingSensorAsAbsent(t *testing.T) {
 	t.Parallel()
 
 	file := testkit.FITFile{Samples: []testkit.FITSample{{Second: 0}}}
-	activity, err := api.ParseFITActivity(file.Bytes(), api.FITLimits{})
+	activity, err := api.ParseFITActivity(t.Context(), file.Bytes(), api.FITLimits{})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}
@@ -144,7 +144,7 @@ func TestParseFITReadsTheSessionSportAndLaps(t *testing.T) {
 		{StartSecond: 30, EndSecond: 59},
 	}
 
-	activity, err := api.ParseFITActivity(file.Bytes(), api.FITLimits{})
+	activity, err := api.ParseFITActivity(t.Context(), file.Bytes(), api.FITLimits{})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}
@@ -167,7 +167,7 @@ func TestParseFITReportsAnUnmappedSportByNumber(t *testing.T) {
 	file := rideFile(5)
 	file.Sport = 96
 
-	activity, err := api.ParseFITActivity(file.Bytes(), api.FITLimits{})
+	activity, err := api.ParseFITActivity(t.Context(), file.Bytes(), api.FITLimits{})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}
@@ -187,7 +187,7 @@ func TestParseFITDecodesGearChanges(t *testing.T) {
 		{Second: 20, Front: true, FrontGear: 1, RearGear: 7},
 	}
 
-	activity, err := api.ParseFITActivity(file.Bytes(), api.FITLimits{})
+	activity, err := api.ParseFITActivity(t.Context(), file.Bytes(), api.FITLimits{})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}
@@ -202,10 +202,15 @@ func TestParseFITDecodesGearChanges(t *testing.T) {
 	}
 }
 
-// TestParseFITNeverDecodesCoordinates is the position suppression test. The file
-// carries a synthetic track in every record, and neither the semicircle value nor
-// the degrees it renders as may appear anywhere in the decoded model.
-func TestParseFITNeverDecodesCoordinates(t *testing.T) {
+// TestParseFITRetainsAndReturnsNoCoordinates is the position suppression test.
+//
+// It is named for what it can prove. The FIT SDK decodes every field of every record
+// message, position included, and offers no field filter that would stop it, so no
+// test can show that a coordinate was never decoded. What this test shows is the
+// guarantee this package actually makes and the one that matters: the file carries a
+// synthetic track in every record, and neither the semicircle value nor the degrees it
+// renders as appears anywhere in the model this package returns, rendered or encoded.
+func TestParseFITRetainsAndReturnsNoCoordinates(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -218,8 +223,8 @@ func TestParseFITNeverDecodesCoordinates(t *testing.T) {
 		samples[index].Longitude = new(longitude)
 	}
 
-	activity, err := api.ParseFITActivity(
-		testkit.FITFile{Sport: 2, Session: true, Samples: samples}.Bytes(), api.FITLimits{})
+	file := testkit.FITFile{Sport: 2, Session: true, Samples: samples}
+	activity, err := api.ParseFITActivity(t.Context(), file.Bytes(), api.FITLimits{})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}
@@ -232,9 +237,22 @@ func TestParseFITNeverDecodesCoordinates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal() = %v", err)
 	}
+	// The summary is checked too: it is what a tool renders, and a figure derived
+	// from a position would carry one just as a retained field would.
+	summary := fmt.Sprintf("%+v", api.AnalyzeFIT(activity))
+	encodedSummary, err := json.Marshal(api.AnalyzeFIT(activity))
+	if err != nil {
+		t.Fatalf("json.Marshal() of the summary = %v", err)
+	}
+
 	for _, needle := range []string{"48.13", "11.57", "574653", "138126", "Lat", "Long", "osition"} {
-		if strings.Contains(rendered, needle) || strings.Contains(string(encoded), needle) {
-			t.Errorf("the decoded activity carries %q, want no position of any kind", needle)
+		for _, subject := range []string{
+			rendered, string(encoded), summary, string(encodedSummary),
+		} {
+			if strings.Contains(subject, needle) {
+				t.Errorf("the decoded activity or its summary carries %q, want no position of "+
+					"any kind", needle)
+			}
 		}
 	}
 }
@@ -245,7 +263,7 @@ func TestParseFITUnpacksTheArchiveGarminServes(t *testing.T) {
 	t.Parallel()
 
 	archived := testkit.ZipFIT("18446744_ACTIVITY.fit", rideFile(10).Bytes())
-	activity, err := api.ParseFITActivity(archived, api.FITLimits{})
+	activity, err := api.ParseFITActivity(t.Context(), archived, api.FITLimits{})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() on the archive = %v", err)
 	}
@@ -260,7 +278,7 @@ func TestParseFITRefusesAnArchiveWithoutAFITEntry(t *testing.T) {
 	t.Parallel()
 
 	archived := testkit.ZipFIT("readme.txt", []byte("not an activity"))
-	_, err := api.ParseFITActivity(archived, api.FITLimits{})
+	_, err := api.ParseFITActivity(t.Context(), archived, api.FITLimits{})
 	if !errors.Is(err, client.ErrMalformedPayload) {
 		t.Errorf("ParseFITActivity() = %v, want ErrMalformedPayload", err)
 	}
@@ -276,7 +294,7 @@ func TestParseFITRefusesAnArchiveThatExpandsPastTheBound(t *testing.T) {
 		t.Fatalf("the compressed fixture is %d bytes, want it well under the bound", len(archived))
 	}
 
-	_, err := api.ParseFITActivity(archived, api.FITLimits{MaxBytes: 8192})
+	_, err := api.ParseFITActivity(t.Context(), archived, api.FITLimits{MaxBytes: 8192})
 	if !errors.Is(err, client.ErrResponseTooLarge) {
 		t.Errorf("ParseFITActivity() = %v, want ErrResponseTooLarge", err)
 	}

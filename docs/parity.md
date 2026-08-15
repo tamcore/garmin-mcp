@@ -671,7 +671,9 @@ through `github.com/muktihari/fit`, so the session and lap summary figures a
 device computes itself — distance, elapsed time, ascent, calories, average and
 peak heart rate, average and peak power, normalized power — are reported as the
 device wrote them rather than re-derived from the record stream. Coordinates are
-still never decoded. See [ADR 0007](adr/0007-fit-decoding-library.md). What is
+still never retained and never returned: the SDK decodes them, this server reads
+none of them, and the reused decode buffer is scrubbed of them after every
+sample. See [ADR 0007](adr/0007-fit-decoding-library.md). What is
 left is short, and it
 is the whole gap between the implemented rows of [Tools](#tools) and the
 deviations above:

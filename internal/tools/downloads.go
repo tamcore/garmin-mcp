@@ -36,7 +36,13 @@ func downloadMediaTypes() map[api.FileFormat]string {
 //
 // It is the whole download policy of this package: the bytes go into memory and then
 // into an MCP resource, never to a filesystem path, and a transfer that outgrows the
-// bound stops being collected and is reported as too large rather than truncated.
+// bound is reported as too large rather than truncated.
+//
+// The bound is on the bytes handed to the sink, which are the bytes after any
+// transport decompression, because those are what would be base64-encoded into a
+// result. The wire itself is bounded separately, and more loosely, by the request
+// layer's own MaxResponseBytes: the two are different numbers measuring different
+// things, and neither claims to be the other.
 type boundedSink struct {
 	buffer   bytes.Buffer
 	limit    int64
@@ -45,15 +51,21 @@ type boundedSink struct {
 
 func newBoundedSink(limit int64) *boundedSink { return &boundedSink{limit: limit} }
 
-// Write collects the chunk unless the bound has been passed.
+// Write collects the chunk, or aborts the transfer once the bound is passed.
+//
+// The first chunk that would cross the bound drops what was collected and returns an
+// error, which stops the copy in the request layer rather than letting the rest of an
+// oversized file be transferred and discarded. The error is the one err reports, so a
+// caller that inspects the transfer failure and a caller that inspects the sink reach
+// the same refusal.
 func (s *boundedSink) Write(chunk []byte) (int, error) {
 	if s.overflow {
-		return len(chunk), nil
+		return 0, s.err()
 	}
 	if int64(s.buffer.Len()+len(chunk)) > s.limit {
 		s.overflow = true
 		s.buffer.Reset()
-		return len(chunk), nil
+		return 0, s.err()
 	}
 	return s.buffer.Write(chunk)
 }
@@ -173,11 +185,14 @@ func registerDownloadActivityFile(registry *mcpserver.Registry, svc *service) er
 		}
 
 		sink := newBoundedSink(svc.bounds.MaxDownloadBytes)
-		if _, err := svc.files.Download(ctx, session, id, format, sink); err != nil {
-			return nil, DownloadedFile{}, fail(err)
-		}
+		_, transferErr := svc.files.Download(ctx, session, id, format, sink)
+		// The sink is asked first: it aborts the copy, so its own refusal is the
+		// cause of the transfer error and is the one worth reporting.
 		if err := sink.err(); err != nil {
 			return nil, DownloadedFile{}, err
+		}
+		if transferErr != nil {
+			return nil, DownloadedFile{}, fail(transferErr)
 		}
 
 		mediaType := downloadMediaTypes()[format]

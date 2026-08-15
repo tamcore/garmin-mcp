@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/muktihari/fit/decoder"
+	"github.com/muktihari/fit/profile/basetype"
 	"github.com/muktihari/fit/profile/mesgdef"
 	"github.com/muktihari/fit/profile/typedef"
 	"github.com/muktihari/fit/proto"
@@ -17,8 +18,14 @@ import (
 // The container itself — header, definition and data records, base types, developer
 // fields, compressed timestamps, endianness and the checksum — is the library's
 // work. What stays here is everything the library has no opinion about: how many
-// messages one file may carry, how many samples are retained, which messages are
-// collected at all, and how a failure is reported without quoting the file.
+// messages one file may carry, how many samples and spans are retained, which
+// messages are collected at all, and how a failure is reported without quoting the
+// file.
+//
+// The library decodes every field of every message it is handed, coordinates
+// included, and offers no field filter that would prevent it. Suppression is
+// therefore a property of what this file reads out of a decoded message and of what
+// it keeps: see fitCollector.addRecord.
 
 // maxFITShifts bounds the collected gear changes. A long ride shifts often, and the
 // shift list is a summary input, not a transcript.
@@ -29,9 +36,10 @@ const maxFITShifts = 5000
 // The decoder broadcasts each message as it is read and retains none of them, so the
 // only thing that grows with the file is what fitCollector chooses to keep, and that
 // is bounded. Exceeding the message bound cancels the decode rather than letting it
-// run to the end of an oversized file.
-func decodeFITActivity(raw []byte, limits FITLimits) (FITActivity, error) {
-	ctx, cancel := context.WithCancel(context.Background())
+// run to the end of an oversized file, and the caller's own cancellation stops it the
+// same way.
+func decodeFITActivity(parent context.Context, raw []byte, limits FITLimits) (FITActivity, error) {
+	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
 	collector := &fitCollector{limits: limits, stop: cancel}
@@ -41,7 +49,7 @@ func decodeFITActivity(raw []byte, limits FITLimits) (FITActivity, error) {
 
 	for dec.Next() {
 		if _, err := dec.DecodeWithContext(ctx); err != nil {
-			return FITActivity{}, collector.fail()
+			return FITActivity{}, collector.fail(parent.Err())
 		}
 	}
 	if collector.messages == 0 {
@@ -67,6 +75,7 @@ type fitCollector struct {
 	messages  int
 	overflow  bool
 	truncated bool
+	spansCut  bool
 
 	sessions []FITSpan
 	laps     []FITSpan
@@ -87,17 +96,44 @@ func (c *fitCollector) OnMesg(mesg proto.Message) {
 	case typedef.MesgNumRecord:
 		c.addRecord(&mesg)
 	case typedef.MesgNumSession:
-		c.sessions = append(c.sessions, readSession(mesgdef.NewSession(&mesg)))
+		if c.spanRoom(len(c.sessions)) {
+			c.sessions = append(c.sessions, readSession(mesgdef.NewSession(&mesg)))
+		}
 	case typedef.MesgNumLap:
-		c.laps = append(c.laps, readLap(mesgdef.NewLap(&mesg)))
+		if c.spanRoom(len(c.laps)) {
+			c.laps = append(c.laps, readLap(mesgdef.NewLap(&mesg)))
+		}
 	case typedef.MesgNumEvent:
 		c.addShift(&mesg)
 	}
 }
 
+// spanRoom reports whether another session or lap may be collected, and records the
+// refusal when there is no room.
+//
+// The bound is applied here, during collection, rather than on the rendered result.
+// Every span is analysed against the whole record stream, so the cost of the analysis
+// is the product of the two counts: a file carrying hundreds of thousands of
+// overlapping spans over a full sample stream would be quadratic work performed
+// before any result bound could apply.
+func (c *fitCollector) spanRoom(collected int) bool {
+	if collected >= c.limits.MaxSpans {
+		c.spansCut = true
+		return false
+	}
+	return true
+}
+
 // addRecord collects one sample, up to the record bound.
+//
+// The SDK has already decoded every field of the message, position included, into the
+// reused profile struct. readRecord reads no position out of it, and the two position
+// fields are put back to their invalid value before the struct is handed to the next
+// message, so no coordinate outlives this call even inside the collector.
 func (c *fitCollector) addRecord(mesg *proto.Message) {
 	c.record.Reset(mesg)
+	defer c.dropPosition()
+
 	if c.record.Timestamp.IsZero() {
 		return
 	}
@@ -106,6 +142,13 @@ func (c *fitCollector) addRecord(mesg *proto.Message) {
 		return
 	}
 	c.records = append(c.records, readRecord(&c.record))
+}
+
+// dropPosition puts the reused record's coordinates back to the profile's invalid
+// value, which is what an absent reading is on the wire.
+func (c *fitCollector) dropPosition() {
+	c.record.PositionLat = basetype.Sint32Invalid
+	c.record.PositionLong = basetype.Sint32Invalid
 }
 
 // addShift collects one electronic gear change, up to the shift bound.
@@ -126,13 +169,21 @@ func (c *fitCollector) activity() FITActivity {
 		Records:          c.records,
 		Shifts:           c.shifts,
 		RecordsTruncated: c.truncated,
+		SpansTruncated:   c.spansCut,
 	}
 }
 
 // fail turns a decode failure into a sanitized error. The library's own message
 // carries a byte position and would grow to carry more, so none of it is
 // reproduced: the caller learns the class of the failure and nothing about the file.
-func (c *fitCollector) fail() error {
+//
+// A cancelled caller is reported as itself rather than as a malformed file: the
+// decode stopped because the caller's deadline or cancellation arrived, and calling
+// that a bad file would be wrong.
+func (c *fitCollector) fail(cancelled error) error {
+	if cancelled != nil {
+		return fmt.Errorf("decoding the activity file: %w", cancelled)
+	}
 	if c.overflow {
 		return fmt.Errorf("%w: the activity file carries more messages than this server decodes",
 			client.ErrResponseTooLarge)

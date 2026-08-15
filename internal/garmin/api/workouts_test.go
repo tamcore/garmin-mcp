@@ -184,6 +184,54 @@ func TestUpdateKeepsTheWorkoutIdentityAndPrefersTheServerAnswer(t *testing.T) {
 	}
 }
 
+// TestUpdateReadsTheWorkoutBackWhenGarminAnswersWithNoContent covers what the real
+// service actually does.
+//
+// Garmin answers an in-place workout update with 204 and an empty body, so there is
+// no identifier and no name in the answer at all. Reporting that as a malformed
+// payload made update_workout fail on every real update while the update itself had
+// succeeded. The identifier and the name must still be the server's rather than the
+// caller's, so they are read back rather than echoed. Confirmed against the live
+// service on 2026-08-15.
+func TestUpdateReadsTheWorkoutBackWhenGarminAnswersWithNoContent(t *testing.T) {
+	t.Parallel()
+
+	script := testkit.NewScript().With(workoutItemPath(),
+		testkit.JSON(http.StatusNoContent, ""),
+		testkit.JSON(http.StatusOK,
+			`{"workoutId":18446744,"workoutName":"Easy Run (normalized)"}`))
+	h := newHarness(t, script, client.Limits{})
+
+	document, err := api.ParseWorkoutDocument([]byte(`{"workoutName":"easy run"}`))
+	if err != nil {
+		t.Fatalf("ParseWorkoutDocument() = %v", err)
+	}
+	saved, err := newWorkouts(t, h).Update(t.Context(), h.session, mustID(t), document)
+	if err != nil {
+		t.Fatalf("Update() = %v, want the empty answer to be handled rather than refused", err)
+	}
+
+	requests := h.server.Requests()
+	if len(requests) != 2 {
+		t.Fatalf("%d requests, want the update and the read-back", len(requests))
+	}
+	if requests[0].Method != http.MethodPut || requests[1].Method != http.MethodGet {
+		t.Errorf("methods = %q then %q, want PUT then GET",
+			requests[0].Method, requests[1].Method)
+	}
+
+	id, err := saved.ID()
+	if err != nil {
+		t.Fatalf("ID() = %v", err)
+	}
+	if id.Int64() != 18446744 {
+		t.Errorf("ID() = %d, want the identifier the read-back reported", id.Int64())
+	}
+	if name, ok := saved.Name(); !ok || name != "Easy Run (normalized)" {
+		t.Errorf("Name() = %q/%v, want the name Garmin stored", name, ok)
+	}
+}
+
 // TestUpdateRefusesAnArrayDocument keeps the upload validators in force for the
 // in-place update, plus the one rule only the update has: a replacement must be a
 // single complete object.

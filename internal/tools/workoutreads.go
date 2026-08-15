@@ -256,11 +256,14 @@ func registerDownloadWorkout(registry *mcpserver.Registry, svc *service) error {
 		}
 
 		sink := newBoundedSink(svc.bounds.MaxDownloadBytes)
-		if _, err := svc.workouts.Download(ctx, session, id, sink); err != nil {
-			return nil, DownloadedFile{}, fail(err)
-		}
+		_, transferErr := svc.workouts.Download(ctx, session, id, sink)
+		// The sink is asked first: it aborts the copy, so its own refusal is the
+		// cause of the transfer error and is the one worth reporting.
 		if err := sink.err(); err != nil {
 			return nil, DownloadedFile{}, err
+		}
+		if transferErr != nil {
+			return nil, DownloadedFile{}, fail(transferErr)
 		}
 
 		uri := workoutResourceStart + id.String() + ".fit"

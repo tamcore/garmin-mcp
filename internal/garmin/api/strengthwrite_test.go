@@ -57,7 +57,8 @@ func TestReplaceSetsWritesThenReadsBack(t *testing.T) {
 	}
 
 	var body struct {
-		Sets []struct {
+		ActivityID int64 `json:"activityId"`
+		Sets       []struct {
 			SetType   string  `json:"setType"`
 			StartTime string  `json:"startTime"`
 			Duration  float64 `json:"duration"`
@@ -85,6 +86,15 @@ func TestReplaceSetsWritesThenReadsBack(t *testing.T) {
 	}
 	if len(set.Exercises) != 1 || set.Exercises[0].Category != categorySquat {
 		t.Errorf("exercises = %+v, want the category carried through", set.Exercises)
+	}
+
+	// Garmin refuses the whole write with "Activity ID should not be Null in the
+	// Exercises Object" when the envelope omits the activity, and it is the envelope
+	// that must carry it: repeating it inside the set or inside the exercise does
+	// not satisfy the check. Confirmed against the live service on 2026-08-15.
+	if body.ActivityID != mustID(t).Int64() {
+		t.Errorf("activityId = %d, want the path identifier: Garmin refuses an envelope "+
+			"that does not name the activity", body.ActivityID)
 	}
 }
 

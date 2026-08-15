@@ -15,7 +15,7 @@ func nearly(got, want float64) bool { return math.Abs(got-want) < 1e-6 }
 func analyzeRide(t *testing.T, file testkit.FITFile) api.FITSummary {
 	t.Helper()
 
-	activity, err := api.ParseFITActivity(file.Bytes(), api.FITLimits{})
+	activity, err := api.ParseFITActivity(t.Context(), file.Bytes(), api.FITLimits{})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}

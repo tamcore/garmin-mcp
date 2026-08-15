@@ -4,7 +4,9 @@ package live
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -92,7 +94,7 @@ func TestLiveCallerRefusesAnythingButARead(t *testing.T) {
 
 	writePath := client.PathActivityPrefix + "/1"
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
-		err := probe(t, guard, method, writePath)
+		err := probe(t, guard, method, writePath, "")
 		if err == nil {
 			t.Errorf("the read-only caller accepted a %s request to a write path", method)
 		} else if !strings.Contains(err.Error(), "read-only") {
@@ -103,9 +105,10 @@ func TestLiveCallerRefusesAnythingButARead(t *testing.T) {
 		t.Errorf("%d write probes passed the guard and reached the transport", inner.reached)
 	}
 
-	// The one allowed POST is the GraphQL query the workout calendar needs. It must
+	// The one allowed POST is a GraphQL query the workout calendar needs. It must
 	// still pass, or the calendar reads in this suite would be proving nothing.
-	if err := probe(t, guard, http.MethodPost, client.PathGraphQL); err != errProbeReachedTransport {
+	if err := probe(t, guard, http.MethodPost, client.PathGraphQL,
+		knownQueryBody(t)); err != errProbeReachedTransport {
 		t.Errorf("the guard refused the GraphQL read: %v", err)
 	}
 
@@ -115,12 +118,77 @@ func TestLiveCallerRefusesAnythingButARead(t *testing.T) {
 	}
 }
 
-// probe pushes one request at the guard and reports what came back. Nothing is
-// dispatched: the inner caller never performs a request.
-func probe(t *testing.T, guard readOnlyCaller, method, path string) error {
+// TestLiveCallerRefusesAGraphQLMutation is the other half of the read-only guard.
+//
+// The whole GraphQL surface sits behind one path, so a guard that judged method and
+// path would admit every mutation the gateway exposes, now and after any drift. Each
+// body below reaches the same path with the same method as the calendar read and must
+// still be refused. Nothing is dispatched.
+func TestLiveCallerRefusesAGraphQLMutation(t *testing.T) {
+	liveEnv(t)
+
+	inner := &countingCaller{}
+	guard := readOnlyCaller{inner: inner}
+
+	for name, body := range map[string]string{
+		"a mutation document":         `{"query":"mutation{deleteWorkout(workoutId:\"1\")}"}`,
+		"an unknown query field":      `{"query":"query{deleteEverythingScalar(id:\"1\")}"}`,
+		"a query with a second field": `{"query":"query{workoutScheduleSummariesScalar}"}`,
+		"an operation name beside it": `{"query":"query{workoutScheduleSummariesScalar(a:\"b\")}","operationName":"x"}`,
+		"a body that is not JSON":     `not json`,
+		"an empty body":               "",
+	} {
+		if err := probe(t, guard, http.MethodPost, client.PathGraphQL, body); err == nil {
+			t.Errorf("the read-only caller accepted %s on the GraphQL path", name)
+		} else if !strings.Contains(err.Error(), "read-only") {
+			t.Errorf("the refusal of %s does not name the read-only rule", name)
+		}
+	}
+	if inner.reached != 0 {
+		t.Errorf("%d GraphQL probes passed the guard and reached the transport", inner.reached)
+	}
+}
+
+// knownQueryBody renders the calendar query the request layer itself produces, so the
+// admitted case is the real document rather than one this test authored.
+func knownQueryBody(t *testing.T) string {
 	t.Helper()
 
-	req, err := http.NewRequestWithContext(t.Context(), method, "https://connectapi.garmin.com"+path, nil)
+	document, err := client.GraphQLRequest{
+		Op:       client.OpGetScheduledWorkouts,
+		Endpoint: client.EndpointGraphQL,
+		Field:    client.GraphQLFieldWorkoutScheduleSummaries,
+		Arguments: []client.GraphQLArgument{
+			{Name: client.GraphQLArgStartDate, Value: "2026-01-01"},
+			{Name: client.GraphQLArgEndDate, Value: "2026-01-07"},
+		},
+	}.Document()
+	if err != nil {
+		t.Fatalf("rendering the calendar query document: %v", err)
+	}
+
+	body, err := json.Marshal(map[string]string{"query": document})
+	if err != nil {
+		t.Fatalf("encoding the calendar query body: %v", err)
+	}
+	return string(body)
+}
+
+// probe pushes one request at the guard and reports what came back. Nothing is
+// dispatched: the inner caller never performs a request.
+//
+// A body is supplied through http.NewRequest with a *strings.Reader, which is what
+// sets GetBody — the same seam internal/garmin/client relies on, so the guard here
+// reads a request shaped exactly like a real one.
+func probe(t *testing.T, guard readOnlyCaller, method, path, body string) error {
+	t.Helper()
+
+	var reader io.Reader
+	if body != "" {
+		reader = strings.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(
+		t.Context(), method, "https://connectapi.garmin.com"+path, reader)
 	if err != nil {
 		t.Fatalf("building the %s probe: %v", method, err)
 	}

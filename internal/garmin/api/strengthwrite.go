@@ -68,14 +68,20 @@ type exerciseBody struct {
 }
 
 // renderSets turns validated sets into the replace-all document.
-func renderSets(sets []StrengthSet) any {
+//
+// The envelope names the activity as well as the path does. Garmin refuses a body
+// that does not, with "Activity ID should not be Null in the Exercises Object", and
+// it is the envelope it wants: repeating the identifier inside a set or inside an
+// exercise leaves the same refusal. Verified against the live service on 2026-08-15.
+func renderSets(id client.ID, sets []StrengthSet) any {
 	rendered := make([]setBody, 0, len(sets))
 	for _, set := range sets {
 		rendered = append(rendered, renderSet(set))
 	}
 	return struct {
-		Sets []setBody `json:"exerciseSets"`
-	}{Sets: rendered}
+		ActivityID int64     `json:"activityId"`
+		Sets       []setBody `json:"exerciseSets"`
+	}{ActivityID: id.Int64(), Sets: rendered}
 }
 
 // renderSet renders one set.
@@ -125,7 +131,7 @@ func (s *StrengthWrites) ReplaceSets(
 	if err != nil {
 		return ExerciseSets{}, err
 	}
-	body, err := jsonBody(req, renderSets(valid))
+	body, err := jsonBody(req, renderSets(id, valid))
 	if err != nil {
 		return ExerciseSets{}, err
 	}

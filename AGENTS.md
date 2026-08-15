@@ -33,19 +33,19 @@ date.
 |------|---------------|----------|
 | `cmd/garmin-mcp/main.go` | Thin `main`: passes the ldflags-injected `version` and `commit` into `cmd.Execute` and calls `os.Exit` with the returned code | n/a |
 | `cmd/notices/main.go` | Thin `main` for the notices generator: flags, then `notices.Generate`. A maintenance tool, never linked into `garmin-mcp` | n/a |
-| `internal/cmd` | Cobra tree and the composition root. `serve` (stdio and streamable-http), `auth`, `doctor`, `version`, `tools list` and `migrate` all do real work; no command returns a not-implemented sentinel | 74.3% |
+| `internal/cmd` | Cobra tree and the composition root. `serve` (stdio and streamable-http), `auth`, `doctor`, `version`, `tools list` and `migrate` all do real work; no command returns a not-implemented sentinel | 80.8% |
 | `internal/config` | `Config`, deterministic four-layer precedence, `_FILE` secret variants, full lexical validation, redacted output, and the operator OAuth client registry | 90.8% |
 | `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, and the login response classifier (JSON and widget HTML). No I/O | 96.7% |
 | `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, refresh with per-principal collapsing and CAS, the shared `TokenGate`, the request-time host guard, unverified-JWT `exp` parsing | 67.3% untagged, 88.2% with `-tags=fakegarmin` |
-| `internal/garmin/client` | The authenticated request layer: bounded wire and decompressed sizes, page and page-start caps, one bounded post-`401` retry that never replays a `POST` or `PATCH`, typed errors | 93.0% |
-| `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the compiled-in exercise catalog, and FIT activity decoding through `github.com/muktihari/fit` | 89.9% |
-| `internal/mcpserver` | Server, registry, stdio and Streamable HTTP transports, bearer middleware, session binding, origin and forwarded-header guards, elicitation confirmation, `server_info` | 89.0% |
-| `internal/tools` | 59 registered tools — 32 read-only, 22 write, 5 destructive — with contracts snapshot-tested against `compat/tools.json` | 83.5% |
+| `internal/garmin/client` | The authenticated request layer: bounded wire and decompressed sizes, page and page-start caps, one bounded post-`401` retry that never replays a `POST` or `PATCH`, typed errors | 94.3% |
+| `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the compiled-in exercise catalog, and FIT activity decoding through `github.com/muktihari/fit` | 90.0% |
+| `internal/mcpserver` | Server, registry, stdio and Streamable HTTP transports, bearer middleware, session binding, origin and forwarded-header guards, elicitation confirmation, `server_info` | 89.3% |
+| `internal/tools` | 59 registered tools — 32 read-only, 22 write, 5 destructive — with contracts snapshot-tested against `compat/tools.json` | 83.6% |
 | `internal/policy` | Three tiers, explicit name lists validated against the registered set at start-up, the enablement-and-scope intersection, confirmation requirement | 91.7% |
 | `internal/identity` | Principal type, request context, and the bearer resolver that takes the principal only from a verified token | 97.7% |
 | `internal/oauthserver` | The authorization server: PKCE S256 only, exact issuer and redirect matching, single-use bound codes, hashed opaque tokens, rotating refresh with family revocation, consent | 92.4% |
 | `internal/oauthstore` | The adapter from the authorization server's `Store` interface onto the SQLite store, with a compile-time assertion and five contention tests | 84.6% |
-| `internal/store` | `FileStore` for stdio, plus the migration-backed SQLite backend for remote: principals, encrypted DI token sets with CAS, clients, consents, hashed transactions and codes, token families, audit events | 83.8% |
+| `internal/store` | `FileStore` for stdio, plus the migration-backed SQLite backend for remote: principals, encrypted DI token sets with CAS, clients, consents, hashed transactions and codes, token families, audit events | 83.6% |
 | `migrations` | The embedded, checksummed, monotonic SQL migrations `0001_initial.sql` and `0002_oauth_contract.sql` | 100.0% |
 | `internal/cryptostore` | AES-256-GCM envelope encryption with versioned key IDs and principal/record-type AAD, and an owner-only key file | 89.9% |
 | `internal/securefile` | The shared filesystem hardening every store uses: `os.Root` component-by-component path resolution, post-open identity verification, link-based exclusive install, non-blocking regular-file reads, owner-only modes, and Windows ACL evaluation | 84.5% |
@@ -53,18 +53,22 @@ date.
 | `internal/loginweb` | The browser login flow in two profiles: the one-shot loopback profile and the remote profile with the `__Host-` cookie, HSTS, disclosure page, independent CSRF token, and server-held MFA continuation | 82.6% |
 | `internal/mcplog` | Structured `slog` logging with the allowlisted field set, level mapping, and the stderr sink that refuses stdout | 98.5% |
 | `internal/notices` | The `THIRD_PARTY_NOTICES.md` generator: the linked module set unioned over the six released targets, the curated SPDX and licence-file registry, verbatim licence copying, and the freshness test that fails on a stale notices file | 89.3% |
-| `internal/ratelimit` | The per-principal limiter and its handler middleware | 95.7% |
+| `internal/ratelimit` | The per-principal limiter and its handler middleware | 94.8% |
 | `internal/testkit` | Scripted fake Garmin service, fake clock, fixtures, synthetic FIT builder, transport guard | 91.5% |
 | `e2e` | Build tag `e2e`. `cli_test.go` builds the binary and drives it as a subprocess: version output, clean stdout on the stdio path, unknown command | n/a |
-| `live` | Build tag `garminlive`. The opt-in suite against the real Garmin service: three gates, one shared login, a read-only caller, cross-source FIT-against-summary agreement, tool-against-domain-client agreement, and the read-only surface sweep. Never in CI | n/a |
+| `live` | Build tag `garminlive`. The opt-in suite against the real Garmin service: one shared login; a read half behind three gates whose caller admits only reads and the GraphQL query documents the request layer itself renders; and a write half behind a fourth gate whose caller mutates only objects a verifying ownership ledger holds. Carries the FIT-against-summary agreement, tool-against-domain-client agreement, the read-only surface sweep, and the write and destructive surface end to end. Never in CI | n/a |
 
 Everything else in the repository is documentation, contract manifests
 (`compat/`), and CI, lint, pre-commit, GoReleaser, and container configuration.
 
-`internal/cmd` at 74.3% is **below** the 80% rule below; `internal/tools` left
-that list, rising to 83.5%. CI enforces a per-package floor with an explicit
-exception list, so a package that drops under it fails the build unless it is
-named there.
+Every package in the untagged profile is at or above the 80% rule below.
+`internal/garmin/auth` is the one exception CI carries on merit: its login, MFA
+and refresh paths are tagged `fakegarmin`, so the untagged profile sees 67.3% and
+the tagged job reports 88.2%. `cmd/garmin-mcp` is the other, because it is the
+process entry point and the `e2e` job runs the built command instead. CI enforces
+the floor per package against that explicit list in both directions, so a package
+that drops under it fails the build and a listed package that reaches it must
+leave the list.
 
 `go.mod` direct requirements: `modelcontextprotocol/go-sdk`, `spf13/cobra`,
 `spf13/viper`, `spf13/pflag`, `golang.org/x/sys`, `modernc.org/sqlite` and
@@ -265,7 +269,7 @@ Four layers. The first three have a CI job each.
 | Unit | `go test -race -count=1 ./...` | *(none)* | Logic, handlers, tools, policy, OAuth, store, crypto, state machines with fakes | **[NOW]** real tests in every `internal/` package and in `migrations` |
 | Fake-service integration | `go test -race -count=1 -tags=fakegarmin ./...` | `fakegarmin` | Login strategies, MFA, DI refresh, the host guard, retries, API decoding, and the remote login command against the scripted fake Garmin | **[NOW]** real tests in `internal/garmin/auth`, `internal/garmin/api`, `internal/garmin/client`, `internal/tools` and `internal/cmd`. The job no longer passes vacuously |
 | E2E | `go test -race -count=1 -tags=e2e -timeout=10m ./e2e/...` | `e2e` | stdio and Streamable HTTP MCP, OAuth flow, browser login form, tenant isolation | **[NOW]** seven tests over the real binary. `cli_test.go` covers version output, a clean stdout on the stdio path, and an unknown command. `remote_test.go` stands up a synthetic TLS deployment and covers protected resource metadata read unauthenticated with `bearer_methods_supported` exactly `["header"]`, an untokened MCP request refused with a challenge carrying `resource_metadata` and no error code, a token in a query parameter that never authenticates, and a bad header token reported as `invalid_token`. The OAuth-flow, browser-login and isolation rows are still **[TARGET]** at this layer: they are covered by package tests |
-| Live (opt-in) | `go test -race -count=1 -tags=garminlive ./live/...` | `garminlive` | The real service: login strategy fallback, DI exchange and session validation; the decoded device file against Garmin's own activity summary; tool results against the domain clients; the read-only tool surface for shape, bounds, truncation flags and leaks. Never in CI | **[NOW]** ten tests in `live/`. Read-only by construction and gated three ways; see **Running the live suite** below |
+| Live (opt-in) | `go test -race -count=1 -tags=garminlive ./live/...` | `garminlive` | The real service: login strategy fallback, DI exchange and session validation; the decoded device file against Garmin's own activity summary; tool results against the domain clients; the read-only tool surface for shape, bounds, truncation flags and leaks; and, behind a fourth gate, the write and destructive surface driven end to end against objects the suite creates itself. Never in CI | **[NOW]** real tests in `live/`, and the count is deliberately not repeated here: `TestEveryReadOnlyToolIsAccountedFor` and `TestEveryWriteAndDestructiveToolIsAccountedFor` fail when a registered tool is neither driven nor excused, which is the property a number cannot state. The read half is read-only by construction and gated three ways; the write half is gated four ways, mutates only what it created, and removes it again. See **Running the live suite** below |
 | Conformance | *(no command)* | — | The official MCP server conformance suite | **BLOCKED**, not merely unwired. The suite was run for real against a live deployment and cannot pass a domain server; see `docs/implementation-status.md` and ADR 0002 |
 
 ### Running the live suite
@@ -280,7 +284,19 @@ export GARMIN_LIVE_ACK=i-accept-live-garmin-traffic
 go test -race -count=1 -tags=garminlive ./live/...
 ```
 
-The acknowledgement value is exact: a truthy `1` does not open the gate.
+A **fourth** gate, separate and default off, additionally enables the write
+checks. With it unset the read-only suite behaves exactly as it did before and
+every write check skips with a reason:
+
+```sh
+export GARMIN_LIVE_WRITE_ACK=i-accept-live-garmin-writes
+```
+
+Acknowledging live *traffic* never acknowledges live *mutation*: the two values
+are separate on purpose, so a credential set that later points at a different
+account cannot start mutating it by inheriting one export.
+
+The acknowledgement values are exact: a truthy `1` does not open either gate.
 `GARMIN_LIVE_MFA_CODE` is optional and only needed for an account that
 challenges the login; without it an MFA challenge skips the suite rather than
 hanging on a prompt no test can answer.
@@ -302,12 +318,49 @@ What it asserts, in priority order:
 4. The login itself: which strategy of the fallback chain succeeded, that the DI
    exchange produced a reusable token set, and that the API tier accepted it.
 
+With the fourth gate open it additionally drives **26 of the 27 write and
+destructive tools** end to end, each against an object it created itself:
+
+5. One workout from creation to removal — a builder uploads it, the library
+   reads it back, the calendar takes it, an in-place `update_workout` replaces
+   its content, the calendar entry survives that update, and the entry and the
+   template are removed again. The surviving entry is the live check of the
+   ported proposal's stated purpose, and it is only testable where a real
+   calendar exists.
+6. One manual activity from creation to removal, with all six per-activity
+   metadata writes — name, type, event type, description, feel and perceived
+   effort — written and then read back from the activity record. The feel is
+   compared as written and the effort against the ten-fold scale Garmin stores.
+7. One completed strength session: created with its sets attached, its whole set
+   list replaced, and the result re-read through the read-only tool and compared
+   position by position.
+8. The four batch tools and the week schedule, over workouts it created, so the
+   per-item reporting and `schedule_week`'s calendar pre-check are exercised
+   against a real calendar rather than a fixture.
+9. `download_activity_file` in three formats. It is write-tier because it moves
+   a whole device file, but it mutates nothing, so it runs against the same
+   activity the read half analyses.
+
 Rules the suite enforces on itself:
 
-- **Read-only by construction.** Every domain client and every tool reaches
-  Garmin through a caller that refuses anything but a `GET`, a `HEAD`, or the
-  one `POST` the GraphQL calendar gateway needs. There is no mutation path in
-  the package, and the guard has its own test.
+- **Read-only by construction on the read half.** Every domain client and every
+  tool of the read half reaches Garmin through a caller that refuses anything
+  but a `GET`, a `HEAD`, or the one `POST` the GraphQL calendar gateway needs.
+  There is no mutation path in that half, and the guard has its own test.
+- **Owned objects only on the write half.** The write half has its own caller,
+  which refuses any mutating request whose target is not an object this suite
+  created — before the request leaves the process. Ownership is learned from
+  Garmin's own create responses rather than declared by a test, the recognised
+  endpoint set is an allowlist, and both halves of the guard are pinned by
+  tests. The maintainer's own pre-existing activity and workout are untouchable
+  by construction, and the read half additionally skips any object carrying the
+  suite's prefix so the two halves cannot interfere.
+- **Every created object is removed.** Each create registers a `t.Cleanup`
+  removal, so a failing assertion still cleans up; anything the ledger still
+  holds when the suite ends is removed there; a removal that fails is reported
+  loudly and never swallowed. Every created object carries the
+  `garmin-mcp-live-` name prefix, and a sweeper at suite start removes leftovers
+  **matching that prefix only**, so a killed run cannot accumulate junk.
 - **No golden values.** Nothing is pinned to the account under test: no
   distance, heart rate, name, date or identifier appears in the package. Every
   check compares two sources Garmin itself provides, or asserts an invariant.
@@ -337,12 +390,14 @@ Rules:
 - Always run Go tests with `-race`.
 - 80%+ coverage on new code. CI enforces this per package against an explicit
   exception list, checked in both directions: a package under the floor fails,
-  and a listed package that reaches the floor must leave the list. One package is
-  under the rule today — `internal/cmd` at 74.3%.
+  and a listed package that reaches the floor must leave the list. No package is
+  under the rule today.
 - No test may reach the public Garmin service by default.
 - Live tests need the `garminlive` tag, an explicit environment
   acknowledgement, and a dedicated non-primary account. They never mutate
-  unless separately enabled and never record raw traffic.
+  unless separately enabled — that is `GARMIN_LIVE_WRITE_ACK`, default off — and
+  they never record raw traffic. What they may mutate when it is enabled is
+  bounded by construction: an object the suite created itself, and nothing else.
 - Fixtures are synthetic and hand-sanitized. Never commit recordings that could
   contain credentials, authorization headers, health data, or precise locations.
 - Missing live credentials never block unit, fake-service, contract, auth, or

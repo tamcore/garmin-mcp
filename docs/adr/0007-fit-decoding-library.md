@@ -95,12 +95,23 @@ none of the following moves into it:
 - **Zip handling.** Garmin serves the original format as a zip archive or as a
   bare FIT file. `extractFIT` handles both and expands the archive entry under the
   byte bound, so a compression bomb is refused at the bound.
-- **Coordinate suppression.** `record.position_lat` and `record.position_long` are
-  in the library's `mesgdef.Record` and are never read into `FITRecord`. A
-  per-second position series is the most sensitive thing in the file and no summary
-  here needs it. `TestParseFITNeverDecodesCoordinates` decodes a file that carries
-  a synthetic track and asserts that neither the semicircle value nor the degrees
-  it renders as appear anywhere in the model.
+- **Coordinate suppression.** State this precisely, because the imprecise version was
+  in this file and was wrong. The library **does** decode `record.position_lat` and
+  `record.position_long`: `decoder.New` with a message listener decodes every field of
+  every message, and the decoder exposes no field filter that would let a caller opt
+  out. Field-level filtering before unmarshalling was evaluated against the SDK's
+  options — `WithFactory` is the only hook anywhere near it, and a factory that omitted
+  the two fields would leave them decoded as *unknown* fields rather than not decoded —
+  so there is nothing to buy at any cost. What this package guarantees is therefore
+  narrower, and it is what the code enforces: the two fields are **never read** into
+  `FITRecord`; `fitCollector.dropPosition` puts them back to their invalid sentinel in
+  the reused `mesgdef.Record` after every sample, so no coordinate outlives one
+  `OnMesg` call even inside the collector; and no returned structure, log line or error
+  can carry a position. A per-second position series is the most sensitive thing in the
+  file and no summary here needs it.
+  `TestParseFITRetainsAndReturnsNoCoordinates` decodes a file that carries a synthetic
+  track and asserts that neither the semicircle value nor the degrees it renders as
+  appear anywhere in the decoded model or in its analysis.
 - **Error sanitization.** The library's errors carry a byte position and would grow
   to carry more. None of that text is reproduced. `fitCollector.fail` classifies
   the failure as `client.ErrMalformedPayload` or `client.ErrResponseTooLarge` and

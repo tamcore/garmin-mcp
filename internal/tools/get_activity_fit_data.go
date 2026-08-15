@@ -80,16 +80,21 @@ type FITData struct {
 	SamplesTruncated bool                `json:"samples_truncated" jsonschema:"whether the decode stopped collecting"`
 }
 
-// LogValue reports the shape of the analysis, never a reading. Every figure here is
-// derived from health and location data, so none of it is loggable.
+// LogValue reports the shape of the analysis, never a reading.
+//
+// Every figure in this result is derived from health and location data, so none of it
+// is loggable — a shift *count* included: how often a rider changed gear is activity
+// telemetry, not shape. What is logged is the length of each retained list and
+// whether anything was cut, which describes the result rather than the ride.
 func (d FITData) LogValue() slog.Value {
 	return shape("fitData",
 		slog.Int("sessions", len(d.Sessions)),
 		slog.Int("laps", len(d.Laps)),
 		slog.Int("climbs", len(d.Climbs)),
-		slog.Int("shifts", d.Shifts.Total),
+		slog.Int("shiftEvents", len(d.Shifts.Events)),
 		slog.Int("records", len(d.Records)),
-		slog.Bool("truncated", d.RecordsTruncated || d.LapsTruncated || d.SamplesTruncated),
+		slog.Bool("truncated", d.RecordsTruncated || d.LapsTruncated ||
+			d.SamplesTruncated || d.Shifts.Truncated),
 	)
 }
 
@@ -106,7 +111,7 @@ func getActivityFITDataContract() Contract {
 				"or more, a hot-against-cool comparison, and the power duration curve at 5s, " +
 				"30s, 1min, 5min, 10min, 20min and 60min. The per-second series comes back " +
 				"only when include_records is set, and it is bounded. No coordinates are " +
-				"decoded, and power per kilogram is not reported because this server does not " +
+				"returned, and power per kilogram is not reported because this server does not " +
 				"read body composition",
 			Tier:        policy.TierReadOnly,
 			Category:    categoryLocation,
@@ -156,14 +161,17 @@ func (s *service) downloadFITActivity(
 	ctx context.Context, session client.Session, id client.ID,
 ) (api.FITActivity, int, error) {
 	sink := newBoundedSink(s.bounds.MaxDownloadBytes)
-	if _, err := s.files.Download(ctx, session, id, api.FormatOriginal, sink); err != nil {
-		return api.FITActivity{}, 0, fail(err)
-	}
+	_, transferErr := s.files.Download(ctx, session, id, api.FormatOriginal, sink)
+	// The sink is asked first: it aborts the copy, so its own refusal is the cause of
+	// the transfer error and is the one worth reporting.
 	if err := sink.err(); err != nil {
 		return api.FITActivity{}, 0, err
 	}
+	if transferErr != nil {
+		return api.FITActivity{}, 0, fail(transferErr)
+	}
 
-	activity, err := api.ParseFITActivity(sink.bytes(), fitLimits())
+	activity, err := api.ParseFITActivity(ctx, sink.bytes(), fitLimits())
 	if err != nil {
 		return api.FITActivity{}, 0, fail(err)
 	}
@@ -190,7 +198,7 @@ func newFITData(activityID int64, size int, activity api.FITActivity, records bo
 		Drift:            newFITDriftView(summary.Drift),
 		Shifts:           newFITShiftView(summary.Shifts, maxFITShiftEvents),
 		RecordsIncluded:  records,
-		SamplesTruncated: activity.RecordsTruncated,
+		SamplesTruncated: activity.RecordsTruncated || activity.SpansTruncated,
 	}
 	if summary.Sport != "" {
 		sport := summary.Sport

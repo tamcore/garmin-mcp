@@ -290,6 +290,23 @@ that drops under the floor fails the build unless it is named there.
       because a fixture built from a test's declared values agrees with any
       derivation of them. One behaviour is lost: the old reader tolerated a
       truncated announced `dataSize` in the header, and the SDK rejects it.
+
+      Four defects an adversarial review of that slice found are fixed with it.
+      The **coordinate claim was wrong**: the SDK decodes every field of every
+      message, position included, and has no field filter, so "coordinates are
+      never decoded" was untrue everywhere it was written. The guarantee is now
+      stated as what the code enforces — never read into this server's model,
+      scrubbed out of the reused decode buffer after each sample, never returned
+      and never logged — and the test is named for it. **Session and lap spans
+      are now bounded during collection** (`FITLimits.MaxSpans`, default 1000):
+      every span is summarized against the whole record stream, so a file
+      carrying hundreds of thousands of overlapping spans over a full sample
+      stream was quadratic work performed before any result bound could apply.
+      **The caller's context reaches the decode**, so an MCP deadline can stop
+      it, and a cancelled decode is reported as cancellation rather than as a
+      malformed file. **`FITData.LogValue` no longer logs the ride's shift
+      total**, which is activity telemetry; it logs retained list lengths and
+      truncation state only.
 - [ ] The remaining upstream breadth. 53 of the 138 manifest tools are
       implemented and **no resource is**. Health and wellness, nutrition, weight
       management, training, challenges, courses, women's health, data management,
@@ -423,18 +440,33 @@ service and it is opt-in. Run it deliberately, and record its outcome:
 ```sh
 GARMIN_USERNAME=... GARMIN_PASSWORD=... \
 GARMIN_LIVE_ACK=i-accept-live-garmin-traffic \
+GARMIN_LIVE_WRITE_ACK=i-accept-live-garmin-writes \
 go test -race -count=1 -tags=garminlive ./live/...
 ```
 
 ## The live layer
 
-`live/` carries the `garminlive` tag and ten tests. It is read-only by
-construction — every domain client and every tool reaches Garmin through a
-caller that refuses anything but a `GET`, a `HEAD`, or the single `POST` the
-GraphQL calendar gateway needs — and it is gated three ways: the build tag,
-`GARMIN_USERNAME`/`GARMIN_PASSWORD`, and `GARMIN_LIVE_ACK` set to the exact
-value `i-accept-live-garmin-traffic`. A missing gate is a skip, never a failure.
-No workflow builds the tag and none may. `AGENTS.md` holds the full how-to.
+`live/` carries the `garminlive` tag, in two halves. The test count is not
+restated here, because it rots on every added test and states nothing: what keeps
+the layer honest is `TestEveryReadOnlyToolIsAccountedFor` and
+`TestEveryWriteAndDestructiveToolIsAccountedFor`, which fail when a registered
+tool is neither driven by the suite nor listed with a reason.
+
+The **read half** is read-only by construction — every domain client and every
+tool of that half reaches Garmin through a caller that refuses anything but a
+`GET`, a `HEAD`, or a `POST` whose body is one of the GraphQL query documents
+the request layer itself renders, so no mutation can reach the gateway — and
+it is gated three ways: the build tag, `GARMIN_USERNAME`/`GARMIN_PASSWORD`, and
+`GARMIN_LIVE_ACK` set to the exact value `i-accept-live-garmin-traffic`.
+
+The **write half** needs a fourth gate on top of those three:
+`GARMIN_LIVE_WRITE_ACK` set to the exact value `i-accept-live-garmin-writes`.
+It is default off, so acknowledging live traffic never acknowledges live
+mutation. With it shut every write check skips and the read half behaves exactly
+as it did before.
+
+A missing gate is a skip, never a failure. No workflow builds the tag and none
+may. `AGENTS.md` holds the full how-to.
 
 It asserts cross-source consistency and never a golden value. Nothing in the
 package is pinned to the account under test, and a failure names the field and
@@ -479,6 +511,121 @@ omitted `prStartTimeGmt` entirely: it was written to the same wrong assumption
 as the model, which is exactly the blind spot this layer exists to remove. The
 fields are `client.Text` now, and a regression test pins both the numeric and
 the string form.
+
+### The write half
+
+The write half drives **26 of the 27 write and destructive tools** against the
+real service. `upload_workout` is the one exclusion, and it is recorded rather
+than silent: `upload_workouts` sends the same document to the same endpoint
+through the same api-layer method and additionally proves the per-item reporting
+the single form has none of. An accounting test fails when a registered write or
+destructive tool is neither exercised nor excused with a reason, so this list
+cannot decay.
+
+What makes it safe is structural, not conventional:
+
+- A **write caller** refuses any mutating request whose target is not an object
+  this suite created, before the request leaves the process. The recognised
+  endpoint set is an allowlist, so a mutating endpoint a later slice adds is
+  refused until the guard is taught how to own its objects.
+- The **ownership ledger has no way to declare ownership**. It exposes three
+  entry points and every one of them verifies: `ownCreated` reads the assigned
+  identifier out of Garmin's own create response, so a tool that creates and then
+  immediately mutates its own creation inside one call still passes; `ownSwept`
+  parses the object's name and requires an earlier run's stamp; `ownScheduled`
+  takes a calendar entry that was read back and names an already-owned workout,
+  so the entry and the workout it belongs to come from the same answer rather
+  than from a caller. Go has no file-level visibility, so this is a boundary
+  every path respects rather than one the compiler draws — what it does remove is
+  any way to *assert* ownership without evidence.
+- Both halves of that guard have tests, and one of them drives `delete_activity`
+  through the whole real stack — registry, policy with both tiers enabled and
+  both scopes held, confirmation middleware with a consenting client — against
+  a non-owned identifier, and it is still refused.
+- Every created object is removed: by `t.Cleanup` so a failing assertion still
+  cleans up, and by an end-of-suite pass over anything the ledger still holds. A
+  removal that fails is reported and never swallowed.
+- Every created object carries a generated name — the reserved
+  `garmin-mcp-live-` prefix, a label, the run stamp and a counter. The sweeper at
+  suite start removes a leftover **only** when that whole shape parses and the
+  run stamp lies between a compiled-in floor and the instant the current run
+  began, so a prefix alone is never taken for ownership and nothing the current
+  run created can be swept. The residual — a hand-written name that reproduces
+  the exact generated shape with a past stamp — is stated in the code rather than
+  hidden. The read half skips anything merely carrying the prefix, which is the
+  safe direction for a reader.
+
+**Re-run on 2026-08-15 against the dedicated test account after the adversarial
+review fixes, all four gates open: the whole suite passes**, with one skip. It
+was run twice: the second run's sweeper reported nothing, which is what proves
+the first left nothing behind.
+
+- `TestLiveWorkoutLifecycle` — create through `create_run_workout`, read back,
+  schedule, `update_workout` in place, the calendar entry still points at the
+  same workout afterwards, unschedule, delete, gone.
+- `TestLiveManualActivityLifecycle` — create, read back, all six metadata writes
+  and their read-back, delete, gone.
+- `TestLiveStrengthActivityLifecycle` — create with sets, replace the whole set
+  list, re-read and compare position by position, delete, gone.
+- `TestLiveWorkoutBatchToolsApplyEachItemSeparately` — `upload_workouts`,
+  `schedule_workouts`, `schedule_week`, `unschedule_workouts`,
+  `delete_workouts`, each item applied and reported on its own.
+- `TestLiveRemainingWorkoutBuildersUpload` — the three other builders.
+- `TestLiveDownloadActivityFileAnswersForEveryFormat` — `fit`, `tcx`, `gpx`.
+- The four guard tests.
+- `TestLiveGearLinkAndUnlinkOnACreatedActivity` **skipped**: the account links no
+  gear to the activity the read half analyses, so no gear identifier can be
+  derived. The skip states the reason. Link a piece of gear to that activity and
+  the check runs.
+
+Nothing leaked: the run ended with no outstanding-object report, and the
+following run's sweeper removed nothing, which is what proves it. The account
+still holds exactly the pre-existing activity and workout it started with — the
+FIT cross-check, the session-coverage invariant, the nine activity-scoped tools
+and the derived-argument tests all selected them in the same run and passed.
+
+### The write half earned its keep too: two shipped tools were broken
+
+Both were green in every fixture test and both failed on first contact with the
+real service. Neither could have been caught by a fixture, because in both cases
+the fixture was written to the same wrong assumption as the code.
+
+**`update_workout` failed on every real update.** Garmin answers an in-place
+workout `PUT` with **204 and an empty body** — it names neither the workout nor
+the name it stored. `SavedWorkout.ID()` then reported `malformed_payload`, so
+the tool returned an error for an update that had already succeeded. The fixture
+had scripted a `200` with a full body, which no deployment sends. `Update` now
+reads the workout back when the answer carries no identifier, which keeps the
+rule the type documents — the identifier and the name are the server's, not the
+caller's — instead of echoing what was sent.
+
+**`set_activity_strength_exercise_sets` and `create_strength_training_activity`
+failed on every real write.** Garmin refused the set list with HTTP 400 and
+`{"message":"Activity ID should not be Null in the Exercises Object"}`. The
+replace-all envelope carried only `exerciseSets`; Garmin also requires
+`activityId` at the **envelope root**, and it wants it there specifically —
+repeating the identifier inside a set or inside an exercise object leaves the
+same refusal. `renderSets` now names the activity in the envelope, and the unit
+test asserts it with the reason written down. Both tools work live now.
+
+**One catalog entry does not survive a real write.** With the envelope fixed,
+Garmin rejected the `SQUAT` / `BACK_SQUAT` pair with
+`{"message":"Invalid Sub-Category Passed in the request"}`, while
+`BENCH_PRESS` / `BARBELL_BENCH_PRESS` and any known category with a null
+exercise name were accepted. That is a state
+`internal/garmin/api/exercisecatalog.go` already documents — it is "a documented
+subset, not a mirror", and "a name it lists is still rejected if Garmin's enum
+disagrees" — so it is recorded rather than patched: verifying the whole
+compiled-in catalog against the live service is its own slice, and guessing at
+one entry would not make the rest trustworthy. The live suite uses a pair
+Garmin accepts.
+
+**One behaviour of the service is worth recording for anyone writing calendar
+code.** Garmin serves the workout calendar from a GraphQL gateway that does not
+always answer with an entry the REST tier accepted a moment earlier, and the lag
+runs in both directions — a removed entry can still be listed. The live suite
+re-reads a bounded number of times rather than asserting on the first answer; it
+is a wait, not a weaker assertion, because the bound still fails.
 
 ## MCP conformance is blocked
 

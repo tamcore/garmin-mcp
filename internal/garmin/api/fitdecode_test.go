@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"testing"
@@ -30,7 +31,7 @@ func TestParseFITReadsABigEndianDefinition(t *testing.T) {
 	body = binary.BigEndian.AppendUint32(body, fitStamp)
 	body = binary.BigEndian.AppendUint16(body, 321)
 
-	activity, err := api.ParseFITActivity(fitContainer(body), api.FITLimits{})
+	activity, err := api.ParseFITActivity(t.Context(), fitContainer(body), api.FITLimits{})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}
@@ -56,7 +57,7 @@ func TestParseFITStepsOverDeveloperFields(t *testing.T) {
 	body = binary.LittleEndian.AppendUint16(body, 250)
 	body = append(body, 0xAB, 0xCD)
 
-	activity, err := api.ParseFITActivity(fitContainer(body), api.FITLimits{})
+	activity, err := api.ParseFITActivity(t.Context(), fitContainer(body), api.FITLimits{})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}
@@ -88,7 +89,7 @@ func TestParseFITReadsACompressedTimestampHeader(t *testing.T) {
 	body = append(body, 0x80|0x20|0x05) // local slot 1, offset five seconds
 	body = binary.LittleEndian.AppendUint16(body, 110)
 
-	activity, err := api.ParseFITActivity(fitContainer(body), api.FITLimits{})
+	activity, err := api.ParseFITActivity(t.Context(), fitContainer(body), api.FITLimits{})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}
@@ -114,7 +115,7 @@ func TestParseFITRefusesWhatIsNotAFITFile(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := api.ParseFITActivity(data, api.FITLimits{})
+			_, err := api.ParseFITActivity(t.Context(), data, api.FITLimits{})
 			if !errors.Is(err, client.ErrMalformedPayload) {
 				t.Errorf("ParseFITActivity() = %v, want ErrMalformedPayload", err)
 			}
@@ -132,7 +133,7 @@ func TestParseFITRefusesATruncatedRecord(t *testing.T) {
 	body = append(body, 2, 253, 4, 0x86, 7, 2, 0x84)
 	body = append(body, 0x00, 0x01, 0x02) // a data message that stops mid-field
 
-	_, err := api.ParseFITActivity(fitContainer(body), api.FITLimits{})
+	_, err := api.ParseFITActivity(t.Context(), fitContainer(body), api.FITLimits{})
 	if !errors.Is(err, client.ErrMalformedPayload) {
 		t.Errorf("ParseFITActivity() = %v, want ErrMalformedPayload", err)
 	}
@@ -143,7 +144,7 @@ func TestParseFITRefusesATruncatedRecord(t *testing.T) {
 func TestParseFITRefusesAnUndefinedMessageSlot(t *testing.T) {
 	t.Parallel()
 
-	_, err := api.ParseFITActivity(fitContainer([]byte{0x03, 0x00}), api.FITLimits{})
+	_, err := api.ParseFITActivity(t.Context(), fitContainer([]byte{0x03, 0x00}), api.FITLimits{})
 	if !errors.Is(err, client.ErrMalformedPayload) {
 		t.Errorf("ParseFITActivity() = %v, want ErrMalformedPayload", err)
 	}
@@ -155,7 +156,7 @@ func TestParseFITRefusesAFileOverItsByteBound(t *testing.T) {
 	t.Parallel()
 
 	file := testkit.FITFile{Samples: rideSamples(60)}.Bytes()
-	_, err := api.ParseFITActivity(file, api.FITLimits{MaxBytes: 32})
+	_, err := api.ParseFITActivity(t.Context(), file, api.FITLimits{MaxBytes: 32})
 	if !errors.Is(err, client.ErrResponseTooLarge) {
 		t.Errorf("ParseFITActivity() = %v, want ErrResponseTooLarge", err)
 	}
@@ -167,7 +168,7 @@ func TestParseFITRefusesAFileOverItsMessageBound(t *testing.T) {
 	t.Parallel()
 
 	file := testkit.FITFile{Samples: rideSamples(60)}.Bytes()
-	_, err := api.ParseFITActivity(file, api.FITLimits{MaxMessages: 4})
+	_, err := api.ParseFITActivity(t.Context(), file, api.FITLimits{MaxMessages: 4})
 	if !errors.Is(err, client.ErrResponseTooLarge) {
 		t.Errorf("ParseFITActivity() = %v, want ErrResponseTooLarge", err)
 	}
@@ -179,7 +180,7 @@ func TestParseFITStopsCollectingAtTheRecordBound(t *testing.T) {
 	t.Parallel()
 
 	file := testkit.FITFile{Samples: rideSamples(60)}.Bytes()
-	activity, err := api.ParseFITActivity(file, api.FITLimits{MaxRecords: 10})
+	activity, err := api.ParseFITActivity(t.Context(), file, api.FITLimits{MaxRecords: 10})
 	if err != nil {
 		t.Fatalf("ParseFITActivity() = %v", err)
 	}
@@ -188,5 +189,93 @@ func TestParseFITStopsCollectingAtTheRecordBound(t *testing.T) {
 	}
 	if !activity.RecordsTruncated {
 		t.Error("RecordsTruncated = false, want the bound reported")
+	}
+}
+
+// spanFile builds a file whose lap count is deliberately absurd: every lap spans the
+// whole record stream, which is the shape that makes the analysis quadratic. A device
+// writes a few hundred laps at most, so a file like this is malformed or hostile.
+func spanFile(seconds, laps int) []byte {
+	windows := make([]testkit.FITLapFixture, 0, laps)
+	for range laps {
+		windows = append(windows, testkit.FITLapFixture{StartSecond: 0, EndSecond: seconds - 1})
+	}
+	return testkit.FITFile{Sport: 2, Session: true, Samples: rideSamples(seconds), Laps: windows}.Bytes()
+}
+
+// TestParseFITStopsCollectingAtTheSpanBound proves the session and lap counts are
+// bounded during collection rather than on the rendered result.
+//
+// Every span is summarized against the whole record stream, so the cost of the
+// analysis is the product of the two counts. Bounding the spans only when the result
+// is rendered would leave that product unbounded, which is what this asserts against:
+// the collected count stops at the bound, the decode says it truncated, and the call
+// returns.
+func TestParseFITStopsCollectingAtTheSpanBound(t *testing.T) {
+	t.Parallel()
+
+	const (
+		seconds  = 200
+		laps     = 500
+		maxSpans = 10
+	)
+	activity, err := api.ParseFITActivity(
+		t.Context(), spanFile(seconds, laps), api.FITLimits{MaxSpans: maxSpans})
+	if err != nil {
+		t.Fatalf("ParseFITActivity() = %v", err)
+	}
+	if len(activity.Laps) != maxSpans {
+		t.Errorf("%d laps, want the bound of %d", len(activity.Laps), maxSpans)
+	}
+	if !activity.SpansTruncated {
+		t.Error("SpansTruncated = false, want the bound reported")
+	}
+
+	// The analysis runs over the bounded collection, so it summarizes exactly the
+	// spans that survived the bound and no more.
+	if summary := api.AnalyzeFIT(activity); len(summary.Laps) != maxSpans {
+		t.Errorf("the analysis produced %d lap segments, want the bounded %d",
+			len(summary.Laps), maxSpans)
+	}
+}
+
+// TestParseFITAppliesTheDefaultSpanBound proves the bound is on by default, so a
+// caller that declares no limits is not the unbounded case.
+func TestParseFITAppliesTheDefaultSpanBound(t *testing.T) {
+	t.Parallel()
+
+	if api.DefaultMaxFITSpans <= 0 {
+		t.Fatalf("DefaultMaxFITSpans = %d, want a positive bound", api.DefaultMaxFITSpans)
+	}
+	activity, err := api.ParseFITActivity(
+		t.Context(), spanFile(20, api.DefaultMaxFITSpans+5), api.FITLimits{})
+	if err != nil {
+		t.Fatalf("ParseFITActivity() = %v", err)
+	}
+	if len(activity.Laps) != api.DefaultMaxFITSpans {
+		t.Errorf("%d laps, want the default bound of %d",
+			len(activity.Laps), api.DefaultMaxFITSpans)
+	}
+	if !activity.SpansTruncated {
+		t.Error("SpansTruncated = false, want the default bound reported")
+	}
+}
+
+// TestParseFITStopsWhenTheCallerCancels proves the caller's context reaches the
+// decode, so an MCP deadline can stop the one part of this package whose cost is set
+// by the file rather than by the request.
+func TestParseFITStopsWhenTheCallerCancels(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := api.ParseFITActivity(ctx, testkit.FITFile{Samples: rideSamples(60)}.Bytes(),
+		api.FITLimits{})
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("ParseFITActivity() = %v, want context.Canceled", err)
+	}
+	if errors.Is(err, client.ErrMalformedPayload) {
+		t.Error("a cancelled decode was reported as a malformed file")
 	}
 }
