@@ -79,9 +79,9 @@ that drops under the floor fails the build unless it is named there.
       login failure classifier.
 - [x] Upstream `python-garminconnect` baseline re-pinned from 0.3.8 to 0.3.10.
       The reconciliation window is 0.3.2 to 0.3.10. See `docs/upstream-pins.md`.
-- [x] Cobra command tree in `internal/cmd`. `serve`, `auth` and `doctor` now do
-      real work; `migrate` and `tools list` are still declared gaps. See the gap
-      list below.
+- [x] Cobra command tree in `internal/cmd`. `serve`, `auth`, `doctor`,
+      `version`, `migrate` and `tools list` all do real work. No command returns
+      a not-implemented sentinel any more.
 - [x] Official Go SDK and MCP spec version pinned; ADR 0002 decided. The module
       requirement is in `go.mod` now.
 
@@ -557,13 +557,15 @@ unstarted.
   `pull_request` with `fail-on-severity: low` and an explicit `allow-licenses`
   list that matches `docs/dependencies.md`.
 
-### Commands that are still declared gaps
+### Commands: no declared gaps remain
 
-`garmin-mcp migrate` and `garmin-mcp tools list` still validate configuration and
-then return a `*cmd.NotImplementedError`. Both subsystems now exist — the
-migrator is in `internal/store` with the embedded `migrations` package, and the
-registry is `internal/tools` — so these two commands are wiring that was not
-done, not missing capability. They must not be counted as working behavior.
+`garmin-mcp migrate` and `garmin-mcp tools list` were the last two commands that
+validated configuration and then returned a `*cmd.NotImplementedError`. Both are
+wired now: `tools list` prints the registered surface with its tier and effect
+and exits 0, and `migrate` applies the embedded migrations, refusing with a
+configuration error when no database path is set rather than guessing a
+location. The `cmd.ErrNotImplemented` sentinel no longer appears anywhere in the
+source.
 
 ### Platform and environment limits
 

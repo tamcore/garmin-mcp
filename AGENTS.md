@@ -33,7 +33,7 @@ date.
 |------|---------------|----------|
 | `cmd/garmin-mcp/main.go` | Thin `main`: passes the ldflags-injected `version` and `commit` into `cmd.Execute` and calls `os.Exit` with the returned code | n/a |
 | `cmd/notices/main.go` | Thin `main` for the notices generator: flags, then `notices.Generate`. A maintenance tool, never linked into `garmin-mcp` | n/a |
-| `internal/cmd` | Cobra tree and the composition root. `serve` (stdio and streamable-http), `auth`, `doctor` and `version` do real work; `tools list` and `migrate` are still declared gaps | 74.3% |
+| `internal/cmd` | Cobra tree and the composition root. `serve` (stdio and streamable-http), `auth`, `doctor`, `version`, `tools list` and `migrate` all do real work; no command returns a not-implemented sentinel | 74.3% |
 | `internal/config` | `Config`, deterministic four-layer precedence, `_FILE` secret variants, full lexical validation, redacted output, and the operator OAuth client registry | 90.8% |
 | `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, and the login response classifier (JSON and widget HTML). No I/O | 96.7% |
 | `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, refresh with per-principal collapsing and CAS, the shared `TokenGate`, the request-time host guard, unverified-JWT `exp` parsing | 67.3% untagged, 88.2% with `-tags=fakegarmin` |
@@ -71,13 +71,12 @@ the transitive indirect set. `golang.org/x/sys` is direct because
 `golang.org/x/sys/windows`. `modernc.org/libc` moves only together with
 `modernc.org/sqlite`. See `docs/dependencies.md`.
 
-What `tools list` and `migrate` actually do: they load and validate the
-configuration, then return a `*cmd.NotImplementedError` that wraps the exported
-`cmd.ErrNotImplemented` sentinel. `cmd.Execute` prints it to stderr and returns
-exit code 1, which `main` passes to `os.Exit`. This is a declared gap, not
-working behavior — both subsystems exist and only the command wiring is missing.
-Stdout stays byte-empty on those paths, and `internal/cmd` tests assert
-byte-emptiness.
+What `tools list` and `migrate` actually do: `tools list` reads the declared
+tool contracts and prints each name with its tier and effect, without needing a
+Garmin client, a token or a database. `migrate` applies the embedded migrations
+to the configured database, and refuses with a configuration error when no
+database path is set rather than guessing a location. The
+`cmd.ErrNotImplemented` sentinel has been removed; no command returns it.
 
 There is still **no** MCP resource of any kind (the five upstream
 workout-template resources are unimplemented), no `LoginTransport` type (the
@@ -166,7 +165,7 @@ compile.
 cmd/garmin-mcp/          main package only                                    exists
 cmd/notices/             main package only: the notices generator             exists
 internal/
-  cmd/                   Cobra commands and the composition root              exists (tools list and migrate still fail)
+  cmd/                   Cobra commands and the composition root              exists
   config/                parsing, precedence, validation, redacted output      exists
   garmin/protocol/       endpoints, client identities, pacing, failure classifier  exists
   garmin/auth/           native login/MFA strategies, DI exchange, refresh, token gate  exists
