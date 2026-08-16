@@ -291,3 +291,47 @@ func decimalBytesOf(s string) string {
 	}
 	return strings.Join(parts, " ")
 }
+
+// TestDateRangeContainsBoundsBothEnds pins the inclusive filter the trend tools use
+// to drop Garmin entries that fall outside the window that was asked for.
+func TestDateRangeContainsBoundsBothEnds(t *testing.T) {
+	span, err := client.NewDateRange(mustDate(t, "2000-01-02"), mustDate(t, "2000-01-04"))
+	if err != nil {
+		t.Fatalf("NewDateRange() = %v, want nil", err)
+	}
+
+	for _, day := range []string{"2000-01-02", "2000-01-03", "2000-01-04"} {
+		if !span.Contains(mustDate(t, day)) {
+			t.Errorf("%s is inside the window and was excluded", day)
+		}
+	}
+	for _, day := range []string{"2000-01-01", "2000-01-05", "1999-12-31", "2001-01-03"} {
+		if span.Contains(mustDate(t, day)) {
+			t.Errorf("%s is outside the window and was included", day)
+		}
+	}
+	if span.Contains(client.Date{}) {
+		t.Error("an unset day was placed inside a window")
+	}
+	if (client.DateRange{}).Contains(mustDate(t, "2000-01-03")) {
+		t.Error("an unset window contained a day")
+	}
+}
+
+// TestNewCalendarDayKeepsTheDayTheCallerStandsIn is the regression for a latest
+// reading asked for under the wrong calendar day. Just after local midnight in a
+// zone ahead of UTC, the UTC day is still yesterday; the account's day is not.
+func TestNewCalendarDayKeepsTheDayTheCallerStandsIn(t *testing.T) {
+	ahead := time.FixedZone("ahead", 2*60*60)
+	justAfterMidnight := time.Date(2000, time.January, 3, 0, 30, 0, 0, ahead)
+
+	if got := client.NewCalendarDay(justAfterMidnight).String(); got != "2000-01-03" {
+		t.Errorf("NewCalendarDay took %s, want the local day 2000-01-03", got)
+	}
+	if got := client.NewDate(justAfterMidnight).String(); got != "2000-01-02" {
+		t.Errorf("NewDate took %s, want the UTC day 2000-01-02: the two must differ here", got)
+	}
+	if !client.NewCalendarDay(time.Time{}).IsZero() {
+		t.Error("a zero instant produced a set day")
+	}
+}

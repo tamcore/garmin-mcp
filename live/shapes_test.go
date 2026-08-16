@@ -43,7 +43,7 @@ func answersLocally() map[string]string {
 func resultShapes() map[string][]string {
 	shapes := map[string][]string{}
 	for _, group := range []map[string][]string{
-		accountShapes(), activityShapes(), healthShapes(),
+		accountShapes(), activityShapes(), healthShapes(), trainingShapes(),
 	} {
 		maps.Copy(shapes, group)
 	}

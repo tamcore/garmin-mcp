@@ -1239,20 +1239,45 @@ source.
   algorithm instead. A Go regenerator that fails CI on manifest drift is still
   deferred, so manifest drift against a new upstream pin cannot be diffed in CI.
 
+## Known gap: the write safety delay does not exist
+
+`AGENTS.md` has instructed, since before the first write tool, that a configurable
+safety delay be applied before write and destructive execution. Nothing implements
+it. There is no delay in `internal/tools`, none in the `internal/mcpserver`
+middleware chain, and no setting for one in `config.Config`; `grep -rn "safety
+delay\|SafetyDelay" internal/` matches nothing outside documentation.
+
+All 23 write tools and 5 destructive tools were registered under that instruction and
+none of them applies a delay, so this is a documentation defect rather than a
+regression in any one slice. The step is now marked **[TARGET]** in `AGENTS.md`.
+
+What actually guards a write today: operator enablement intersected with a granted
+OAuth scope, elicitation confirmation that fails closed for destructive tools, and
+the per-principal rate limiter. A delay would add a cancellation window on top of
+those, which is what it was meant for.
+
+Deciding whether to build it is open. If it is built it belongs in the middleware
+chain, beside the confirmation gate, never as a per-tool sleep.
+
 ## Next task
 
-Continue phase 5: port the next upstream domain, contract test first, starting
-with health and wellness, the largest unported module at 29 tools.
+Continue phase 5: port the next upstream domain, contract test first. Health and
+wellness (27 tools) and training (15 tools) are both done; 43 manifest tools
+remain unimplemented, and the largest remaining modules are nutrition,
+challenges and data management.
 
 Scope, in order:
 
-1. Add the `internal/garmin/api` read client for the health and wellness
-   endpoints, with tolerant decoding, bounded responses and the existing page
-   caps, and cover it against the fake Garmin service.
-2. Register the read-only tools for that domain, each with all four annotation
-   hints, a strict schema drawn from `compat/tools.json`, bounded results and
-   sanitized errors, and a name and schema snapshot test.
-3. Update `docs/parity.md` in the same commit, and record any deviation in the
+1. Add the `internal/garmin/api` read client for the chosen domain's endpoints,
+   with tolerant decoding, bounded responses and the existing page caps, and
+   cover it against the fake Garmin service.
+2. Register the tools for that domain, each with all four annotation hints, a
+   strict schema drawn from `compat/tools.json`, bounded results and sanitized
+   errors, and a name and schema snapshot test.
+3. Extend the `live/` sweep and its shape table in the **same commit** as the
+   registration. A slice that grows the tool surface without growing the sweep
+   leaves the surface unaudited, which has already happened once.
+4. Update `docs/parity.md` in the same commit, and record any deviation in the
    ADR 0006 register rather than in a commit message.
 
 One open item sits outside that slice and must not be forgotten: the operations

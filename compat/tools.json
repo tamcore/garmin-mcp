@@ -81,8 +81,8 @@
   "counts": {
     "tools": 138,
     "byStatus": {
-      "implemented": 80,
-      "not-implemented": 58
+      "implemented": 95,
+      "not-implemented": 43
     },
     "byEffect": {
       "destructive": 8,
@@ -8133,7 +8133,7 @@
     },
     {
       "name": "get_progress_summary_between_dates",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 161,
@@ -8204,10 +8204,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetProgressSummaryBetweenDates",
+        "file": "internal/tools/get_progress_summary_between_dates.go",
+        "registeredName": "get_progress_summary_between_dates"
       },
       "tests": {
         "unit": [],
@@ -8217,7 +8217,7 @@
     },
     {
       "name": "get_hill_score",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 217,
@@ -8284,10 +8284,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetHillScore",
+        "file": "internal/tools/get_hill_score.go",
+        "registeredName": "get_hill_score"
       },
       "tests": {
         "unit": [],
@@ -8297,7 +8297,7 @@
     },
     {
       "name": "get_endurance_score",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 274,
@@ -8372,10 +8372,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetEnduranceScore",
+        "file": "internal/tools/get_endurance_score.go",
+        "registeredName": "get_endurance_score"
       },
       "tests": {
         "unit": [],
@@ -8385,7 +8385,7 @@
     },
     {
       "name": "get_training_effect",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 388,
@@ -8448,10 +8448,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetTrainingEffect",
+        "file": "internal/tools/get_training_effect.go",
+        "registeredName": "get_training_effect"
       },
       "tests": {
         "unit": [],
@@ -8461,7 +8461,7 @@
     },
     {
       "name": "get_hrv_data",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 431,
@@ -8528,10 +8528,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetHRVData",
+        "file": "internal/tools/get_hrv_data.go",
+        "registeredName": "get_hrv_data"
       },
       "tests": {
         "unit": [],
@@ -8541,7 +8541,7 @@
     },
     {
       "name": "get_fitnessage_data",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 487,
@@ -8608,10 +8608,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetFitnessAgeData",
+        "file": "internal/tools/get_fitnessage_data.go",
+        "registeredName": "get_fitnessage_data"
       },
       "tests": {
         "unit": [],
@@ -8621,7 +8621,7 @@
     },
     {
       "name": "get_training_status",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 566,
@@ -8684,10 +8684,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetTrainingStatus",
+        "file": "internal/tools/get_training_status.go",
+        "registeredName": "get_training_status"
       },
       "tests": {
         "unit": [],
@@ -8697,7 +8697,7 @@
     },
     {
       "name": "get_cycling_ftp",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 647,
@@ -8754,10 +8754,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetCyclingFTP",
+        "file": "internal/tools/get_cycling_ftp.go",
+        "registeredName": "get_cycling_ftp"
       },
       "tests": {
         "unit": [],
@@ -8767,7 +8767,7 @@
     },
     {
       "name": "get_lactate_threshold",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 675,
@@ -8835,10 +8835,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetLactateThreshold",
+        "file": "internal/tools/get_lactate_threshold.go",
+        "registeredName": "get_lactate_threshold"
       },
       "tests": {
         "unit": [],
@@ -8848,7 +8848,7 @@
     },
     {
       "name": "request_reload",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 778,
@@ -8911,10 +8911,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerRequestReload",
+        "file": "internal/tools/request_reload.go",
+        "registeredName": "request_reload"
       },
       "tests": {
         "unit": [],
@@ -8924,7 +8924,7 @@
     },
     {
       "name": "get_training_load_trend",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 791,
@@ -8996,10 +8996,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetTrainingLoadTrend",
+        "file": "internal/tools/get_training_load_trend.go",
+        "registeredName": "get_training_load_trend"
       },
       "tests": {
         "unit": [],
@@ -9009,7 +9009,7 @@
     },
     {
       "name": "get_training_load_balance",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 899,
@@ -9074,10 +9074,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetTrainingLoadBalance",
+        "file": "internal/tools/get_training_load_balance.go",
+        "registeredName": "get_training_load_balance"
       },
       "tests": {
         "unit": [],
@@ -9087,7 +9087,7 @@
     },
     {
       "name": "get_hrv_trend",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 998,
@@ -9160,10 +9160,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetHRVTrend",
+        "file": "internal/tools/get_hrv_trend.go",
+        "registeredName": "get_hrv_trend"
       },
       "tests": {
         "unit": [],
@@ -9173,7 +9173,7 @@
     },
     {
       "name": "get_vo2max_trend",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 1072,
@@ -9246,10 +9246,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetVO2MaxTrend",
+        "file": "internal/tools/get_vo2max_trend.go",
+        "registeredName": "get_vo2max_trend"
       },
       "tests": {
         "unit": [],
@@ -9259,7 +9259,7 @@
     },
     {
       "name": "get_respiration_trend",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/training.py",
         "line": 1227,
@@ -9332,10 +9332,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetRespirationTrend",
+        "file": "internal/tools/get_respiration_trend.go",
+        "registeredName": "get_respiration_trend"
       },
       "tests": {
         "unit": [],

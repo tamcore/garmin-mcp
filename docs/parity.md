@@ -324,7 +324,7 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_courses` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | courses.py:173 |
 | `get_custom_food_serving_units` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:253 |
 | `get_custom_foods` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:220 |
-| `get_cycling_ftp` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:647 |
+| `get_cycling_ftp` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:647 |
 | `get_daily_steps` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:172 |
 | `get_daily_weigh_ins` | not-implemented | read-only | health | `garmin:health:read` | idempotent | weight_management.py:86 |
 | `get_device_alarms` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:279 |
@@ -333,8 +333,8 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_device_solar_data` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:229 |
 | `get_devices` | **implemented** | read-only | device | `garmin:devices:read` | idempotent | devices.py:23 |
 | `get_earned_badges` | not-implemented | read-only | ordinary | `garmin:challenges:read` | idempotent | challenges.py:297 |
-| `get_endurance_score` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:274 |
-| `get_fitnessage_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:487 |
+| `get_endurance_score` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:274 |
+| `get_fitnessage_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:487 |
 | `get_floors` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:326 |
 | `get_full_name` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:22 |
 | `get_garmin_coach_workouts` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1098 |
@@ -342,12 +342,12 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_goals` | not-implemented | read-only | health | `garmin:health:read` | idempotent | challenges.py:237 |
 | `get_heart_rates` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:358 |
 | `get_heart_rates_summary` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:377 |
-| `get_hill_score` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:217 |
-| `get_hrv_data` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:431 |
-| `get_hrv_trend` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:998 |
+| `get_hill_score` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:217 |
+| `get_hrv_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:431 |
+| `get_hrv_trend` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:998 |
 | `get_hydration_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:415 |
 | `get_inprogress_virtual_challenges` | not-implemented | read-only | health | `garmin:challenges:read` | idempotent | challenges.py:552 |
-| `get_lactate_threshold` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:675 |
+| `get_lactate_threshold` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:675 |
 | `get_lifestyle_logging_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:703 |
 | `get_menstrual_calendar_data` | not-implemented | read-only | womens-health | `garmin:womens-health:read` | idempotent | womens_health.py:75 |
 | `get_menstrual_data_for_date` | not-implemented | read-only | womens-health | `garmin:womens-health:read` | idempotent | womens_health.py:60 |
@@ -360,11 +360,11 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_power_duration_curve` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_analysis.py:1150 |
 | `get_pregnancy_summary` | not-implemented | read-only | womens-health | `garmin:womens-health:read` | idempotent | womens_health.py:49 |
 | `get_primary_training_device` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:177 |
-| `get_progress_summary_between_dates` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:161 |
+| `get_progress_summary_between_dates` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:161 |
 | `get_race_predictions` | not-implemented | read-only | health | `garmin:health:read` | idempotent | challenges.py:513 |
 | `get_respiration_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:588 |
 | `get_respiration_summary` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:607 |
-| `get_respiration_trend` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:1227 |
+| `get_respiration_trend` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:1227 |
 | `get_rhr_day` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:342 |
 | `get_scheduled_workouts` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1059 |
 | `get_sleep_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:431 |
@@ -375,17 +375,17 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_steps_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:153 |
 | `get_stress_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:524 |
 | `get_stress_summary` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:543 |
-| `get_training_effect` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:388 |
-| `get_training_load_balance` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:899 |
-| `get_training_load_trend` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:791 |
+| `get_training_effect` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:388 |
+| `get_training_load_balance` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:899 |
+| `get_training_load_trend` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:791 |
 | `get_training_plan_workouts` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1132 |
 | `get_training_readiness` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:189 |
-| `get_training_status` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:566 |
+| `get_training_status` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:566 |
 | `get_unit_system` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:31 |
 | `get_user_profile` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:40 |
 | `get_user_summary` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:99 |
 | `get_userprofile_settings` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:51 |
-| `get_vo2max_trend` | not-implemented | read-only | health | `garmin:health:read` | idempotent | training.py:1072 |
+| `get_vo2max_trend` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:1072 |
 | `get_weekly_intensity_minutes` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:811 |
 | `get_weekly_steps` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:722 |
 | `get_weekly_stress` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:769 |
@@ -395,7 +395,7 @@ See [Deliberate deviations](#deliberate-deviations).
 | `log_custom_food` | not-implemented | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:546 |
 | `log_food` | not-implemented | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:637 |
 | `remove_gear_from_activity` | **implemented** | write | device | `garmin:devices:write` | idempotent | gear_management.py:182 |
-| `request_reload` | not-implemented | write | health | `garmin:health:write` | idempotent | training.py:778 |
+| `request_reload` | **implemented** | write | health | `garmin:health:write` | idempotent | training.py:778 |
 | `schedule_week` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:522 |
 | `schedule_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:1154 |
 | `schedule_workouts` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:1212 |
@@ -472,38 +472,88 @@ See [Deliberate deviations](#deliberate-deviations).
 Every row is registered by `internal/tools/register.go` in tier order. Paths are
 relative to the repository root.
 
-### Read-only tier — 23 tools
+### Read-only tier — 72 tools
 
 | Tool | Go registrar | File |
 | --- | --- | --- |
 | `get_user_profile` | `registerGetUserProfile` | `internal/tools/get_user_profile.go` |
 | `get_full_name` | `registerGetFullName` | `internal/tools/get_full_name.go` |
 | `get_unit_system` | `registerGetUnitSystem` | `internal/tools/get_unit_system.go` |
-| `get_userprofile_settings` | `registerGetUserProfileSettings` | `internal/tools/profilereads.go` |
-| `get_personal_record` | `registerGetPersonalRecord` | `internal/tools/profilereads.go` |
 | `get_activities` | `registerGetActivities` | `internal/tools/get_activities.go` |
 | `get_activities_by_date` | `registerGetActivitiesByDate` | `internal/tools/get_activities_by_date.go` |
+| `get_activities_fordate` | `registerGetActivitiesForDate` | `internal/tools/get_activities_fordate.go` |
+| `count_activities` | `registerCountActivities` | `internal/tools/count_activities.go` |
+| `get_activity` | `registerGetActivity` | `internal/tools/get_activity.go` |
+| `get_activity_gear` | `registerGetActivityGear` | `internal/tools/get_activity_gear.go` |
+| `get_activity_types` | `registerGetActivityTypes` | `internal/tools/get_activity_types.go` |
+| `get_sleep_data` | `registerGetSleepData` | `internal/tools/get_sleep_data.go` |
+| `get_user_summary` | `registerGetUserSummary` | `internal/tools/get_user_summary.go` |
+| `get_stats` | `registerGetStats` | `internal/tools/get_stats.go` |
+| `get_stats_and_body` | `registerGetStatsAndBody` | `internal/tools/get_stats_and_body.go` |
+| `get_body_composition` | `registerGetBodyComposition` | `internal/tools/get_body_composition.go` |
+| `get_steps_data` | `registerGetStepsData` | `internal/tools/get_steps_data.go` |
+| `get_daily_steps` | `registerGetDailySteps` | `internal/tools/get_daily_steps.go` |
+| `get_weekly_steps` | `registerGetWeeklySteps` | `internal/tools/get_weekly_steps.go` |
+| `get_floors` | `registerGetFloors` | `internal/tools/get_floors.go` |
+| `get_weekly_intensity_minutes` | `registerGetWeeklyIntensityMinutes` | `internal/tools/get_weekly_intensity_minutes.go` |
+| `get_stress_data` | `registerGetStressData` | `internal/tools/get_stress_data.go` |
+| `get_stress_summary` | `registerGetStressSummary` | `internal/tools/get_stress_summary.go` |
+| `get_all_day_stress` | `registerGetAllDayStress` | `internal/tools/get_all_day_stress.go` |
+| `get_weekly_stress` | `registerGetWeeklyStress` | `internal/tools/get_weekly_stress.go` |
+| `get_body_battery` | `registerGetBodyBattery` | `internal/tools/get_body_battery.go` |
+| `get_body_battery_events` | `registerGetBodyBatteryEvents` | `internal/tools/get_body_battery_events.go` |
+| `get_training_readiness` | `registerGetTrainingReadiness` | `internal/tools/get_training_readiness.go` |
+| `get_morning_training_readiness` | `registerGetMorningTrainingReadiness` | `internal/tools/get_morning_training_readiness.go` |
+| `get_all_day_events` | `registerGetAllDayEvents` | `internal/tools/get_all_day_events.go` |
+| `get_heart_rates` | `registerGetHeartRates` | `internal/tools/get_heart_rates.go` |
+| `get_heart_rates_summary` | `registerGetHeartRatesSummary` | `internal/tools/get_heart_rates_summary.go` |
+| `get_rhr_day` | `registerGetRestingHeartRateDay` | `internal/tools/get_rhr_day.go` |
+| `get_respiration_data` | `registerGetRespirationData` | `internal/tools/get_respiration_data.go` |
+| `get_respiration_summary` | `registerGetRespirationSummary` | `internal/tools/get_respiration_summary.go` |
+| `get_spo2_data` | `registerGetSpO2Data` | `internal/tools/get_spo2_data.go` |
+| `get_sleep_summary` | `registerGetSleepSummary` | `internal/tools/get_sleep_summary.go` |
+| `get_blood_pressure` | `registerGetBloodPressure` | `internal/tools/get_blood_pressure.go` |
+| `get_hydration_data` | `registerGetHydrationData` | `internal/tools/get_hydration_data.go` |
+| `get_lifestyle_logging_data` | `registerGetLifestyleLoggingData` | `internal/tools/get_lifestyle_logging_data.go` |
+| `get_devices` | `registerGetDevices` | `internal/tools/get_devices.go` |
+| `get_activity_typed_splits` | `registerGetActivityTypedSplits` | `internal/tools/get_activity_typed_splits.go` |
+| `get_activity_exercise_sets` | `registerGetActivityExerciseSets` | `internal/tools/get_activity_exercise_sets.go` |
+| `get_userprofile_settings` | `registerGetUserProfileSettings` | `internal/tools/profilereads.go` |
+| `get_personal_record` | `registerGetPersonalRecord` | `internal/tools/profilereads.go` |
 | `get_activity_splits` | `registerGetActivitySplits` | `internal/tools/analysis.go` |
 | `get_activity_split_summaries` | `registerGetActivitySplitSummaries` | `internal/tools/analysis.go` |
-| `get_activity_typed_splits` | `registerGetActivityTypedSplits` | `internal/tools/get_activity_typed_splits.go` |
 | `get_activity_hr_in_timezones` | `registerGetActivityHRInZones` | `internal/tools/analysis.go` |
 | `get_activity_power_in_timezones` | `registerGetActivityPowerInZones` | `internal/tools/analysis.go` |
 | `get_activity_weather` | `registerGetActivityWeather` | `internal/tools/get_activity_weather.go` |
-| `get_activity_exercise_sets` | `registerGetActivityExerciseSets` | `internal/tools/get_activity_exercise_sets.go` |
-| `get_sleep_data` | `registerGetSleepData` | `internal/tools/get_sleep_data.go` |
-| `get_user_summary` | `registerGetUserSummary` | `internal/tools/get_user_summary.go` |
-| `get_devices` | `registerGetDevices` | `internal/tools/get_devices.go` |
+| `get_activity_fit_data` | `registerGetActivityFITData` | `internal/tools/get_activity_fit_data.go` |
+| `get_power_duration_curve` | `registerGetPowerDurationCurve` | `internal/tools/get_power_duration_curve.go` |
+| `get_exercise_types` † | `registerGetExerciseTypes` | `internal/tools/builders_strength.go` |
 | `get_workouts` | `registerGetWorkouts` | `internal/tools/workoutreads.go` |
 | `get_workout_by_id` | `registerGetWorkoutByID` | `internal/tools/workoutreads.go` |
 | `download_workout` | `registerDownloadWorkout` | `internal/tools/workoutreads.go` |
 | `get_scheduled_workouts` | `registerGetScheduledWorkouts` | `internal/tools/calendarreads.go` |
 | `get_training_plan_workouts` | `registerGetTrainingPlanWorkouts` | `internal/tools/calendarreads.go` |
-| `get_exercise_types` † | `registerGetExerciseTypes` | `internal/tools/builders_strength.go` |
+| `get_garmin_coach_workouts` | `registerGetGarminCoachWorkouts` | `internal/tools/garmincoach.go` |
+| `get_hill_score` | `registerGetHillScore` | `internal/tools/get_hill_score.go` |
+| `get_endurance_score` | `registerGetEnduranceScore` | `internal/tools/get_endurance_score.go` |
+| `get_training_effect` | `registerGetTrainingEffect` | `internal/tools/get_training_effect.go` |
+| `get_fitnessage_data` | `registerGetFitnessAgeData` | `internal/tools/get_fitnessage_data.go` |
+| `get_training_status` | `registerGetTrainingStatus` | `internal/tools/get_training_status.go` |
+| `get_cycling_ftp` | `registerGetCyclingFTP` | `internal/tools/get_cycling_ftp.go` |
+| `get_lactate_threshold` | `registerGetLactateThreshold` | `internal/tools/get_lactate_threshold.go` |
+| `get_progress_summary_between_dates` | `registerGetProgressSummaryBetweenDates` | `internal/tools/get_progress_summary_between_dates.go` |
+| `get_hrv_data` | `registerGetHRVData` | `internal/tools/get_hrv_data.go` |
+| `get_hrv_trend` | `registerGetHRVTrend` | `internal/tools/get_hrv_trend.go` |
+| `get_vo2max_trend` | `registerGetVO2MaxTrend` | `internal/tools/get_vo2max_trend.go` |
+| `get_respiration_trend` | `registerGetRespirationTrend` | `internal/tools/get_respiration_trend.go` |
+| `get_training_load_trend` | `registerGetTrainingLoadTrend` | `internal/tools/get_training_load_trend.go` |
+| `get_training_load_balance` | `registerGetTrainingLoadBalance` | `internal/tools/get_training_load_balance.go` |
 
-### Write tier — 22 tools
+### Write tier — 23 tools
 
 | Tool | Go registrar | File |
 | --- | --- | --- |
+| `request_reload` | `registerRequestReload` | `internal/tools/request_reload.go` |
 | `set_activity_name` | `registerSetActivityName` | `internal/tools/activitywrites.go` |
 | `set_activity_type` | `registerSetActivityType` | `internal/tools/activitywrites.go` |
 | `set_activity_event_type` | `registerSetActivityEventType` | `internal/tools/activitywrites.go` |
@@ -513,8 +563,11 @@ relative to the repository root.
 | `add_gear_to_activity` | `registerAddGearToActivity` | `internal/tools/gearwrites.go` |
 | `remove_gear_from_activity` | `registerRemoveGearFromActivity` | `internal/tools/gearwrites.go` |
 | `create_manual_activity` | `registerCreateManualActivity` | `internal/tools/activitylifecycle.go` |
+| `set_activity_strength_exercise_sets` † | `registerSetActivityStrengthExerciseSets` | `internal/tools/strengthwrites.go` |
+| `create_strength_training_activity` † | `registerCreateStrengthTrainingActivity` | `internal/tools/create_strength_training_activity.go` |
 | `upload_workout` | `registerUploadWorkout` | `internal/tools/workoutwrites.go` |
 | `upload_workouts` | `registerUploadWorkouts` | `internal/tools/workoutwrites.go` |
+| `update_workout` † | `registerUpdateWorkout` | `internal/tools/workoutwrites.go` |
 | `schedule_workout` | `registerScheduleWorkout` | `internal/tools/workoutschedule.go` |
 | `schedule_workouts` | `registerScheduleWorkouts` | `internal/tools/workoutschedule.go` |
 | `schedule_week` | `registerScheduleWeek` | `internal/tools/scheduleweek.go` |
@@ -522,20 +575,17 @@ relative to the repository root.
 | `create_run_workout` | `registerCreateRunWorkout` | `internal/tools/builders_run.go` |
 | `create_z2_walk_workout` | `registerCreateZ2WalkWorkout` | `internal/tools/builders_run.go` |
 | `create_strength_workout` | `registerCreateStrengthWorkout` | `internal/tools/builders_strength.go` |
-| `download_activity_file` ‡ | `registerDownloadActivityFile` | `internal/tools/downloads.go` |
-| `set_activity_strength_exercise_sets` † | `registerSetActivityStrengthExerciseSets` | `internal/tools/strengthwrites.go` |
-| `create_strength_training_activity` † | `registerCreateStrengthTrainingActivity` | `internal/tools/create_strength_training_activity.go` |
-| `update_workout` † | `registerUpdateWorkout` | `internal/tools/workoutwrites.go` |
+| `download_activity_file` | `registerDownloadActivityFile` | `internal/tools/downloads.go` |
 
 ### Destructive tier — 5 tools
 
 | Tool | Go registrar | File |
 | --- | --- | --- |
+| `delete_activity` † | `registerDeleteActivity` | `internal/tools/activitylifecycle.go` |
 | `delete_workout` | `registerDeleteWorkout` | `internal/tools/workoutdelete.go` |
 | `delete_workouts` | `registerDeleteWorkouts` | `internal/tools/workoutdelete.go` |
 | `unschedule_workout` | `registerUnscheduleWorkout` | `internal/tools/workoutschedule.go` |
 | `unschedule_workouts` | `registerUnscheduleWorkouts` | `internal/tools/workoutschedule.go` |
-| `delete_activity` † | `registerDeleteActivity` | `internal/tools/activitylifecycle.go` |
 
 † Not in the pinned manifest. See
 [Tools beyond the pinned manifest](#tools-beyond-the-pinned-manifest).
@@ -963,6 +1013,52 @@ best.
 
 The UUID form that adaptive Garmin Coach plans use is not served. The input
 schema accepts the numeric identifier, and the description says so.
+
+### Training status codes are rendered as strings, where upstream passes the number through
+
+`get_training_status` reports `training_status` and `fitness_trend` as strings. A
+differential run against one account showed Garmin sending both as numbers there, and
+upstream passing them through as numbers, while the feedback phrases beside them in
+the same document are strings.
+
+Garmin sends these fields as either type depending on the account and the device, so
+the model decodes them through the tolerant union and renders one stable type rather
+than whichever type arrived. The code itself is unchanged — `7` becomes `"7"`.
+
+The cost is a caller that compares to a number, which works against upstream and
+fails here. The benefit is that a caller comparing to a string works whatever Garmin
+sent, instead of working until the day the account's device changes. Neither field is
+an enumeration this server closes: an unrecognized code passes through intact.
+
+### `get_training_status` describes one device, never two
+
+Garmin's aggregated training-status document keys three blocks by device: the latest
+status, the VO2 max section, and the monthly load balance. Upstream takes "the first
+device" out of a Python dict for each block independently, which on a multi-device
+account can answer with one watch's training status beside another watch's monthly
+load, and can differ between two identical calls because dict order is not a promise.
+
+This server picks the device once, in `api.SelectStatusDevice`, and every block
+describes that device. The rule is: the device Garmin marks primary, then the most
+recently dated entry, then the lowest key. When the chosen device reports no load
+balance, the load figures are omitted rather than filled from another device — some
+device's load is not this device's load. `status_devices_reported` and
+`balance_devices_reported` still report how many devices the day carried, so a caller
+can see that a choice was made.
+
+### `get_lactate_threshold` refuses a lone date, where upstream answers anyway
+
+Upstream takes `start_date` and `end_date` and, when only one is given, silently
+answers with the account's latest reading instead of the window that was asked
+for. This server refuses that call and names the missing argument.
+
+The reason is that the silent form answers a different question from the one the
+caller asked. A caller who sends `start_date` alone is asking about a window; an
+answer carrying the latest reading is not a subset of that window, and nothing in
+the result says so. A caller who wants the latest reading can omit both dates,
+which is the documented way to ask for it and which this server does serve.
+
+So the strictness is only at the boundary: both dates, or neither.
 
 ### What stays unregistered, and why
 

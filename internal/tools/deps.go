@@ -32,6 +32,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/api"
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
@@ -156,6 +157,11 @@ type Deps struct {
 	// Bounds are the per-tool result bounds. The zero value means the defaults.
 	Bounds Bounds
 
+	// Now reads the current instant. The zero value means time.Now. It is injected
+	// because a tool that asks Garmin for "today" must be testable across the local
+	// midnight, where the account's day and the UTC day differ.
+	Now func() time.Time
+
 	// ExerciseCatalog is the strength catalog this process serves and validates
 	// against. It is loaded once, before the server starts, and is immutable
 	// afterwards, so every concurrent tool call reads the same snapshot. A nil
@@ -179,6 +185,7 @@ func (d Deps) validate() error {
 // the per-principal session is built fresh from the request context on every call.
 type service struct {
 	caller     client.Caller
+	now        func() time.Time
 	bounds     Bounds
 	limits     client.Limits
 	catalog    *api.ExerciseCatalog
@@ -200,8 +207,13 @@ func newService(deps Deps) (*service, error) {
 		return nil, err
 	}
 
+	now := deps.Now
+	if now == nil {
+		now = time.Now
+	}
 	built := &service{
 		caller:  deps.Caller,
+		now:     now,
 		bounds:  deps.Bounds.resolved(),
 		limits:  deps.Client.Limits(),
 		catalog: deps.ExerciseCatalog,

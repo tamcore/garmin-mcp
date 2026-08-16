@@ -46,6 +46,23 @@ func ParseDate(value string) (Date, error) {
 	return Date{day: day}, nil
 }
 
+// NewCalendarDay takes the calendar day instant already sits in, in its own
+// location, rather than converting it to UTC first.
+//
+// This is the constructor a Garmin calendar date wants. Garmin keys a day's
+// documents by the account's own day, so at 00:30 in a zone ahead of UTC the UTC
+// day is still yesterday and NewDate would ask for the wrong one. The resulting
+// Date is still held at UTC midnight, because that is only how a Date is
+// represented; the day it names is the one the caller was standing in.
+func NewCalendarDay(instant time.Time) Date {
+	if instant.IsZero() {
+		return Date{}
+	}
+	return Date{day: time.Date(
+		instant.Year(), instant.Month(), instant.Day(), 0, 0, 0, 0, time.UTC,
+	)}
+}
+
 // NewDate takes the UTC calendar day of instant. A zero instant yields the zero
 // Date.
 func NewDate(instant time.Time) Date {
@@ -105,6 +122,16 @@ func (r DateRange) End() Date { return r.end }
 
 // IsZero reports whether the range is unset.
 func (r DateRange) IsZero() bool { return r.start.IsZero() || r.end.IsZero() }
+
+// Contains reports whether day falls inside the inclusive range. An unset range
+// contains nothing, and so does an unset day: a caller filtering a Garmin response
+// against a window must drop what it cannot place, not keep it.
+func (r DateRange) Contains(day Date) bool {
+	if r.IsZero() || day.IsZero() {
+		return false
+	}
+	return !day.Time().Before(r.start.Time()) && !day.Time().After(r.end.Time())
+}
 
 // Days is the inclusive day count, so a single-day range reports 1.
 func (r DateRange) Days() int {

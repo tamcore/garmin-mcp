@@ -273,6 +273,7 @@ func exercisedWrites() []string {
 		tools.ToolDeleteWorkout,
 		tools.ToolDeleteWorkouts,
 		tools.ToolDownloadActivityFile,
+		tools.ToolRequestReload,
 	}
 }
 

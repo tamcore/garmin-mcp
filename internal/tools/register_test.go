@@ -73,12 +73,29 @@ var wantReadOnlyToolNames = []string{
 	tools.ToolGetBloodPressure,
 	tools.ToolGetHydrationData,
 	tools.ToolGetLifestyleLoggingData,
+
+	// Training.
+	tools.ToolGetHillScore,
+	tools.ToolGetEnduranceScore,
+	tools.ToolGetTrainingEffect,
+	tools.ToolGetFitnessAgeData,
+	tools.ToolGetTrainingStatus,
+	tools.ToolGetCyclingFTP,
+	tools.ToolGetLactateThreshold,
+	tools.ToolGetProgressSummaryBetweenDates,
+	tools.ToolGetHRVData,
+	tools.ToolGetHRVTrend,
+	tools.ToolGetVO2MaxTrend,
+	tools.ToolGetRespirationTrend,
+	tools.ToolGetTrainingLoadTrend,
+	tools.ToolGetTrainingLoadBalance,
 }
 
 // wantWriteToolNames is the write tier. Every one of them needs the operator's
 // enablement and the caller's write scope, so a default deployment refuses all of
 // them and a stdio deployment refuses them whatever the operator enabled.
 var wantWriteToolNames = []string{
+	tools.ToolRequestReload,
 	"set_activity_name",
 	"set_activity_type",
 	"set_activity_event_type",

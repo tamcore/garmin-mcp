@@ -148,6 +148,24 @@ func readOnlyRegistrations() []registration {
 		{getScheduledWorkoutsContract, registerGetScheduledWorkouts},
 		{getTrainingPlanWorkoutsContract, registerGetTrainingPlanWorkouts},
 		{getGarminCoachWorkoutsContract, registerGetGarminCoachWorkouts},
+
+		// Training: scores and thresholds.
+		{getHillScoreContract, registerGetHillScore},
+		{getEnduranceScoreContract, registerGetEnduranceScore},
+		{getTrainingEffectContract, registerGetTrainingEffect},
+		{getFitnessAgeDataContract, registerGetFitnessAgeData},
+		{getTrainingStatusContract, registerGetTrainingStatus},
+		{getCyclingFTPContract, registerGetCyclingFTP},
+		{getLactateThresholdContract, registerGetLactateThreshold},
+
+		// Training: the day-by-day walks and the aggregated reads.
+		{getProgressSummaryBetweenDatesContract, registerGetProgressSummaryBetweenDates},
+		{getHRVDataContract, registerGetHRVData},
+		{getHRVTrendContract, registerGetHRVTrend},
+		{getVO2MaxTrendContract, registerGetVO2MaxTrend},
+		{getRespirationTrendContract, registerGetRespirationTrend},
+		{getTrainingLoadTrendContract, registerGetTrainingLoadTrend},
+		{getTrainingLoadBalanceContract, registerGetTrainingLoadBalance},
 	}
 }
 
@@ -161,6 +179,9 @@ func readOnlyRegistrations() []registration {
 // so the policy has a tool to refuse and the start-up tier validation covers them.
 func writeRegistrations() []registration {
 	return []registration{
+		// Training: the domain's only write.
+		{requestReloadContract, registerRequestReload},
+
 		{setActivityNameContract, registerSetActivityName},
 		{setActivityTypeContract, registerSetActivityType},
 		{setActivityEventTypeContract, registerSetActivityEventType},

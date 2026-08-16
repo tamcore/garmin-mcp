@@ -25,7 +25,7 @@ Garth, no Python subprocess.
 
 ## Current state [NOW]
 
-As of 2026-08-15 the repository contains the following Go code. Coverage is the
+As of 2026-08-16 the repository contains the following Go code. Coverage is the
 statement coverage reported by `go test -count=1 -cover ./...`, measured on that
 date.
 
@@ -38,9 +38,9 @@ date.
 | `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, and the login response classifier (JSON and widget HTML). No I/O | 96.7% |
 | `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, refresh with per-principal collapsing and CAS, the shared `TokenGate`, the request-time host guard, unverified-JWT `exp` parsing | 67.3% untagged, 88.2% with `-tags=fakegarmin` |
 | `internal/garmin/client` | The authenticated request layer: bounded wire and decompressed sizes, page and page-start caps, one bounded post-`401` retry that never replays a `POST` or `PATCH`, typed errors, and the exact-integer accessor an identifier is compared through | 94.3% |
-| `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the published exercise catalog with its compiled-in fallback, and FIT activity decoding through `github.com/muktihari/fit` | 90.7% |
+| `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the published exercise catalog with its compiled-in fallback, FIT activity decoding through `github.com/muktihari/fit`, and the training scores, thresholds and trends | 91.0% |
 | `internal/mcpserver` | Server, registry, stdio and Streamable HTTP transports, bearer middleware, session binding, origin and forwarded-header guards, elicitation confirmation, `server_info` | 89.3% |
-| `internal/tools` | 59 registered tools — 32 read-only, 22 write, 5 destructive — with contracts snapshot-tested against `compat/tools.json` | 85.8% |
+| `internal/tools` | 100 registered tools — 72 read-only, 23 write, 5 destructive — with contracts snapshot-tested against `compat/tools.json` | 86.8% |
 | `internal/policy` | Three tiers, explicit name lists validated against the registered set at start-up, the enablement-and-scope intersection, confirmation requirement | 91.7% |
 | `internal/identity` | Principal type, request context, and the bearer resolver that takes the principal only from a verified token | 97.7% |
 | `internal/oauthserver` | The authorization server: PKCE S256 only, exact issuer and redirect matching, single-use bound codes, hashed opaque tokens, rotating refresh with family revocation, consent | 92.4% |
@@ -56,7 +56,7 @@ date.
 | `internal/ratelimit` | The per-principal limiter and its handler middleware | 94.8% |
 | `internal/testkit` | Scripted fake Garmin service, fake clock, fixtures, synthetic FIT builder, transport guard | 91.5% |
 | `e2e` | Build tag `e2e`. `cli_test.go` builds the binary and drives it as a subprocess: version output, clean stdout on the stdio path, unknown command | n/a |
-| `live` | Build tag `garminlive`. The opt-in suite against the real Garmin service: one shared login; a read half behind three gates whose caller admits only reads and the GraphQL query documents the request layer itself renders; and a write half behind a fourth gate whose caller mutates only objects a verifying ownership ledger holds. Carries the FIT-against-summary agreement, tool-against-domain-client agreement, the read-only surface sweep, and the write and destructive surface end to end. Never in CI | n/a |
+| `live` | Build tag `garminlive`. The opt-in suite against the real Garmin service: one shared login; a read half behind three gates whose caller admits only reads and the GraphQL query documents the request layer itself renders; and a write half behind a fourth gate whose caller mutates only objects a verifying ownership ledger holds. Carries the FIT-against-summary agreement, tool-against-domain-client agreement, the read-only surface sweep in three halves (account, health, training), and the write and destructive surface end to end. Never in CI | n/a |
 
 Everything else in the repository is documentation, contract manifests
 (`compat/`), and CI, lint, pre-commit, GoReleaser, and container configuration.
@@ -264,8 +264,13 @@ the closest existing tool in `internal/tools` rather than inventing a shape.
      confirmation that fails closed.
    - Both name lists are validated at startup against the actually registered
      set, so a typo fails fast.
-5. Apply the configurable safety delay before write and destructive execution.
-   Skip it for dry-run style calls.
+5. **[TARGET]** A configurable safety delay before write and destructive
+   execution, skipped for dry-run style calls. **No such delay exists**: there is
+   no delay in `internal/tools`, none in the middleware chain, and no setting for
+   one in `config.Config`. Every write registered so far went in without it, so
+   adding one is a slice of its own, not a step in this procedure. Do not read
+   this step as a description of working behavior, and do not add a private
+   per-tool sleep to satisfy it.
 6. Write unit tests in `internal/tools/<name>_test.go` against the fake Garmin
    service from `internal/testkit`.
 7. Add fake-service integration coverage (tag `fakegarmin`) and E2E coverage
