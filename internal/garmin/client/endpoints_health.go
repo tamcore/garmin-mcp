@@ -213,11 +213,15 @@ func healthOps() []Op {
 }
 
 // knownEndpoints and knownOps are the allowlists Request.Validate checks, assembled
-// from the core, health and training halves. Functions, not vars: AGENTS.md allows no
-// package-level mutable state, and the per-request slice costs nothing beside the
-// round trip.
+// from the core, health, training and nutrition halves. Functions, not vars:
+// AGENTS.md allows no package-level mutable state, and the per-request slice costs
+// nothing beside the round trip.
 func knownEndpoints() []Endpoint {
-	return slices.Concat(coreEndpoints(), healthEndpoints(), trainingEndpoints())
+	return slices.Concat(
+		coreEndpoints(), healthEndpoints(), trainingEndpoints(), nutritionEndpoints(), challengesEndpoints(),
+	)
 }
 
-func knownOps() []Op { return slices.Concat(coreOps(), healthOps(), trainingOps()) }
+func knownOps() []Op {
+	return slices.Concat(coreOps(), healthOps(), trainingOps(), nutritionOps(), challengesOps())
+}
