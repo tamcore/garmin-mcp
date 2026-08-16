@@ -31,6 +31,11 @@ type stepResult struct {
 	query      url.Values
 	referer    string
 	serviceURL string
+
+	// codeDelivered records that this server asked Garmin to send an OTP and
+	// Garmin accepted the request. It resolves the delivery uncertainty the
+	// classification reports from the page alone.
+	codeDelivered bool
 }
 
 // loginRequest is the JSON credential body of the mobile and portal APIs. It is
@@ -212,13 +217,84 @@ func (a *Authenticator) runWidgetLogin(ctx context.Context, creds Credentials) (
 		return stepResult{}, transportError(protocol.OpWidgetLogin, protocol.EndpointWidgetSignIn, err)
 	}
 
+	class := protocol.ClassifyWidgetLogin(a.tokens.response(raw))
+	delivered, err := a.requestWidgetMFACode(ctx, sess, class, signInURL)
+	if err != nil {
+		return stepResult{}, err
+	}
 	return stepResult{
-		session:    sess,
-		class:      protocol.ClassifyWidgetLogin(a.tokens.response(raw)),
-		query:      signInQuery,
-		referer:    signInURL,
-		serviceURL: a.hosts.WidgetServiceURL(),
+		session:       sess,
+		class:         class,
+		query:         signInQuery,
+		referer:       signInURL,
+		serviceURL:    a.hosts.WidgetServiceURL(),
+		codeDelivered: delivered,
 	}, nil
+}
+
+// requestWidgetMFACode asks Garmin to deliver an email or SMS OTP, and reports
+// whether Garmin accepted the request.
+//
+// The widget page's own JavaScript makes this call when the user clicks "request a
+// new code". Without it this server prompts for a code that may never have been
+// sent, which is the whole of upstream GH-386.
+//
+// Nothing is requested unless the page says there is something to request: an
+// authenticator app has no code to deliver, and a page that already names where a
+// code went has had one sent, so asking again would send the account a second
+// message and spend a rate-limit budget for nothing.
+//
+// A failure here is deliberately not fatal, which is a divergence from upstream —
+// upstream raises. The login is still usable: the account may have received a code
+// from the sign-in POST anyway, and the caller is told delivery is uncertain rather
+// than being refused a login that would have worked. Exactly one request is made
+// and it is never retried, so a refusal cannot become a storm.
+func (a *Authenticator) requestWidgetMFACode(
+	ctx context.Context,
+	sess *session,
+	class protocol.Classification,
+	referer string,
+) (bool, error) {
+	if class.Outcome() != protocol.OutcomeMFARequired {
+		return false, nil
+	}
+	request, ok := class.WidgetMFA()
+	if !ok || !request.Deliverable() {
+		return false, nil
+	}
+
+	header := htmlPageHeaders(protocol.UserAgentDesktop, referer)
+	header.Set("Accept", "application/json, text/plain, */*")
+	target := withQuery(a.hosts.WidgetRequestMFACodeURL(), url.Values{
+		"clientId": {request.ClientID()},
+	})
+
+	raw, err := sess.postJSON(ctx, target, header, widgetMFACodeRequest{
+		CustomerGUID: request.CustomerGUID(),
+		MFAMethod:    request.Method(),
+		Locale:       request.Locale(),
+	})
+	if err != nil {
+		// A cancelled or timed-out context is the caller giving up, not Garmin
+		// refusing. Swallowing it would build an MFA transaction and hand back a
+		// challenge for a login nobody is waiting on any more.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return false, transportError(protocol.OpWidgetRequestMFACode,
+				protocol.EndpointWidgetRequestMFACode, err)
+		}
+		return false, nil
+	}
+	return statusError(protocol.OpWidgetRequestMFACode,
+		protocol.EndpointWidgetRequestMFACode, a.tokens.response(raw)) == nil, nil
+}
+
+// widgetMFACodeRequest is the delivery request body. Source: the json= payload of
+// _widget_request_mfa_code. The client id is a query parameter rather than a body
+// field, which is upstream's shape and not an oversight here.
+type widgetMFACodeRequest struct {
+	CustomerGUID string `json:"customerGuid"`
+	MFAMethod    string `json:"mfaMethod"`
+	Locale       string `json:"locale"`
 }
 
 // widgetCSRF GETs the widget sign-in page and returns its _csrf form value.

@@ -19,6 +19,12 @@ const (
 // Widget page titles the classifier keys on. They are reproduced here so a test
 // can script the exact MFA variant it wants.
 const (
+	// FakeCustomerGUID is the account identifier the widget fixtures declare. It
+	// is all zeroes on purpose: the real field names an account.
+	FakeCustomerGUID = "00000000-0000-0000-0000-000000000000"
+	// FakeWidgetClientID is the SSO client the widget fixtures are rendered for.
+	FakeWidgetClientID = "GarminConnect"
+
 	// WidgetTitleTOTPMFA is the authenticator-app MFA page title.
 	WidgetTitleTOTPMFA = "Enter MFA code for login"
 	// WidgetTitleEmailMFA is the email one-time-code page title, whose delivery
@@ -121,6 +127,26 @@ func WidgetMFAHTML(title string) string {
 	return widgetDocument(title,
 		`<form method="post"><input type="hidden" name="_csrf" value="fake-csrf-mfa" />`+
 			`<input name="mfa-code" value="" /></form>`)
+}
+
+// WidgetMFAVarsHTML is a widget MFA page that also declares the inline JS variables
+// Garmin's real page carries, which is what drives the explicit code-delivery
+// request.
+//
+// The customer GUID is an all-zero UUID: the field identifies an account, so no
+// fixture carries a plausible one. codeSentTo empty means the sign-in POST did not
+// already deliver a code.
+func WidgetMFAVarsHTML(title, method, codeSentTo string) string {
+	return widgetDocument(title,
+		`<form method="post"><input type="hidden" name="_csrf" value="fake-csrf-mfa" />`+
+			`<input name="mfa-code" value="" /></form>`+
+			`<script>`+
+			`var customerGuid = "`+FakeCustomerGUID+`";`+
+			`var mfaMethod = "`+method+`";`+
+			`var locale = "en_US";`+
+			`var clientId = "`+FakeWidgetClientID+`";`+
+			`var codeSentTo = "`+codeSentTo+`";`+
+			`</script>`)
 }
 
 // WidgetErrorHTML is a widget page whose title states an account or credential

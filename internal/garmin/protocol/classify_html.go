@@ -95,12 +95,11 @@ func ClassifyWidgetSignInPage(r Response) Classification {
 // POST, using the page title heuristics upstream relies on.
 // Source: _widget_web_login step 3 and _complete_mfa_widget.
 //
-// Documented gap: upstream 0.3.10 no longer decides MFA from the title alone. It
-// also parses the page's inline JS variables (mfaMethod, customerGuid, locale,
-// clientId, codeSentTo) and requires a non-empty mfaMethod before treating an
-// "authentication application" page as an MFA challenge, then explicitly requests
-// code delivery. That variable parsing and the per-method delivery request are
-// not implemented here; only PathWidgetRequestMFACode is ported.
+// The page's inline JS variables (mfaMethod, customerGuid, locale, clientId,
+// codeSentTo) are parsed as well as the title, because the title says only that some
+// MFA is required while the variables say which method and whether a code is already
+// on its way. Classification.WidgetMFA carries them; requesting delivery is the auth
+// package's job, since this package performs no I/O.
 func ClassifyWidgetLogin(r Response) Classification {
 	f := newWidgetFields(r, contextLoginPOST)
 	if f.outcome != OutcomeUnknown {
@@ -123,9 +122,7 @@ func ClassifyWidgetLogin(r Response) Classification {
 		f.outcome = OutcomeAccountRestricted
 	case containsAnyWordPhrase(title, titleHintsMFA[:]...):
 		f.outcome = OutcomeMFARequired
-		f.mfaMethod = MFAMethodEmail
-		// Scraped HTML cannot confirm that Garmin actually sent an OTP.
-		f.mfaDeliveryUncertain = containsWordPhrase(title, titleHintMFAUncertainOTP)
+		applyWidgetMFAVars(&f, r, title)
 	case f.pageTitle == titleSuccess:
 		if ticket, ok := ExtractServiceTicket(r.body()); ok {
 			f.outcome = OutcomeSuccess
@@ -154,4 +151,36 @@ func newWidgetFields(r Response, ctx statusContext) classificationFields {
 		}
 	}
 	return f
+}
+
+// applyWidgetMFAVars records what the page says about code delivery.
+//
+// The parsed method outranks the title guess: a title matching "authentication
+// application" is an authenticator app, which has nothing to deliver, and guessing
+// email for it would make this server ask Garmin to send a message it never sends.
+// A page carrying no variables keeps the old behaviour, which is to guess email and
+// admit the delivery is unconfirmed.
+func applyWidgetMFAVars(f *classificationFields, r Response, title string) {
+	request, ok := parseWidgetMFAVars(string(r.body()))
+	if !ok {
+		// No variables: the title is all there is, so the previous rule stands
+		// unchanged rather than being tightened on a page this server cannot read
+		// any better than it could before.
+		f.mfaMethod = MFAMethodEmail
+		f.mfaDeliveryUncertain = containsWordPhrase(title, titleHintMFAUncertainOTP)
+		return
+	}
+
+	f.widgetMFA, f.widgetMFAFound = request, true
+	if method := request.Method(); method != "" {
+		f.mfaMethod = method
+	} else {
+		f.mfaMethod = MFAMethodEmail
+	}
+	// Uncertainty is about a code that should arrive and might not. An
+	// authenticator app has no code in flight, so reporting its delivery as
+	// uncertain would tell the caller to wait for a message Garmin never sends;
+	// a page naming where a code went has confirmed delivery itself. What is left
+	// uncertain is exactly the deliverable case, until the auth package asks.
+	f.mfaDeliveryUncertain = request.Deliverable()
 }

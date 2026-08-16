@@ -125,12 +125,12 @@
 //
 // # Documented gaps
 //
-//   - Widget MFA variable parsing. Upstream 0.3.10 parses the widget page's
-//     inline JS variables (customerGuid, mfaMethod, locale, clientId, codeSentTo)
-//     and explicitly requests email or SMS code delivery via
-//     protocol.PathWidgetRequestMFACode. The protocol package ports only the wire
-//     constant, so this package cannot build that request and does not send it;
-//     Pending.MFADeliveryUncertain reports the uncertainty instead.
+//   - Widget MFA code delivery is no longer a gap: the page's inline JS variables
+//     are parsed by the protocol package and requestWidgetMFACode asks Garmin to
+//     send an email or SMS code before the caller is prompted for one. What
+//     remains deliberate is the handling of a failed request — it does not fail
+//     the login, because a code may have arrived from the sign-in POST anyway, and
+//     Pending.MFADeliveryUncertain then reports that delivery is unconfirmed.
 //   - MFA transaction binding. A pending transaction is bound to its principal
 //     only. It is not bound to the browser session, the OAuth client, the redirect
 //     URI, the requested resource or a PKCE challenge, so a capability that leaks

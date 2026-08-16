@@ -36,6 +36,8 @@ type classificationFields struct {
 	serviceTicket        string
 	mfaMethod            string
 	mfaDeliveryUncertain bool
+	widgetMFA            WidgetMFARequest
+	widgetMFAFound       bool
 	csrfToken            string
 	pageTitle            string
 	retryAfter           time.Duration
@@ -65,6 +67,14 @@ func (c Classification) Status() int { return c.f().status }
 // ServiceTicket is the extracted CAS service ticket on success, or "". It is a
 // credential: never put it in a log line or an error message.
 func (c Classification) ServiceTicket() string { return c.f().serviceTicket }
+
+// WidgetMFA is what the widget page declared about delivering a code, and whether
+// it declared anything at all. A page carrying no inline variables reports false,
+// so a caller never builds a delivery request out of empty strings.
+func (c Classification) WidgetMFA() (WidgetMFARequest, bool) {
+	f := c.f()
+	return f.widgetMFA, f.widgetMFAFound
+}
 
 // MFAMethod is the delivery method Garmin last used, on OutcomeMFARequired.
 func (c Classification) MFAMethod() string { return c.f().mfaMethod }

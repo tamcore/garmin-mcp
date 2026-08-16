@@ -478,7 +478,7 @@ closed silently.
       Done: login, MFA continuation, DI exchange over the candidate client IDs,
       session validation, refresh with rotation and CAS, host selection, the
       request-time host guard, and the fallback classification, all under
-      `-tags=fakegarmin`. **Not done: explicit widget MFA code delivery, a
+      `-tags=fakegarmin`, and explicit widget MFA code delivery. **Not done: a
       distinct rejected-OTP outcome, and the `JWT_WEB` fallback.** The item stays
       unchecked until those close.
 - [x] `garmin-mcp serve --transport=stdio` binds exactly one principal from
@@ -548,13 +548,13 @@ evidence, and the operations documentation, which is real remaining work.
       and the largest remaining modules are nutrition (14), challenges (8),
       devices (5) and weight management (5).
 - [ ] Every required contract has passing name/schema/behavior tests, or a
-      documented exclusion with evidence. The implemented 80 do; the rest have no
+      documented exclusion with evidence. The implemented 95 do; the rest have no
       handler yet. The documented exclusions are in `docs/parity.md` and in the
       ADR 0006 register.
-- [ ] 0.3.2 to 0.3.10 behavior differences affecting those contracts are
-      reconciled and recorded. See `docs/upstream-pins.md`: 9 of the 10 numbered
-      requirements are landed. Only explicit widget MFA code delivery is
-      outstanding.
+- [x] 0.3.2 to 0.3.10 behavior differences affecting those contracts are
+      reconciled and recorded. See `docs/upstream-pins.md`: **all 10** numbered
+      requirements are landed. Explicit widget MFA code delivery was the last and
+      closed on 2026-08-16.
 
 ## Commands to run and report at every milestone
 
@@ -1217,14 +1217,15 @@ source.
   ADR 0001.
 - Phase-0 evidence comes from one residential source IP. Datacenter and CI egress
   may be scored differently by Cloudflare. See ADR 0001.
-- The widget MFA path is incomplete. `ClassifyWidgetLogin` decides from the HTTP
-  status and the page title only; the inline-JS variables in the widget page are
-  not parsed, so the delivery method stays the hardcoded default and the explicit
-  code-delivery request is never sent. `PathWidgetRequestMFACode`,
-  `EndpointWidgetRequestMFACode` and `Hosts.WidgetRequestMFACodeURL` exist and
-  nothing calls them. `Pending.MFADeliveryUncertain()` and
-  `Result.MFADeliveryUncertain()` signal the uncertainty honestly. There is still
-  no outcome distinct from `OutcomeInvalidCredentials` for a rejected OTP.
+- The widget MFA path now parses the page's inline JS variables and requests code
+  delivery. `ClassifyWidgetLogin` reads `customerGuid`, `mfaMethod`, `locale`,
+  `clientId` and `codeSentTo`, the parsed method outranks the title guess, and
+  `Authenticator.requestWidgetMFACode` POSTs `PathWidgetRequestMFACode` when the
+  method is email or SMS and no code has been sent yet. A confirmed delivery
+  clears `MFADeliveryUncertain`, which now means the code may not have been sent
+  rather than that this server never asked. A failed request does not fail the
+  login, deliberately, and is never retried. What remains: there is still no
+  outcome distinct from `OutcomeInvalidCredentials` for a rejected OTP.
 - The `JWT_WEB` cookie fallback after a failed DI exchange is not implemented.
   Upstream consumes the CAS ticket through the web front end when the DI exchange
   fails; this project requires the DI token set and reports

@@ -34,12 +34,11 @@ type mfaTarget struct {
 // selected strategy, the login query, the Referer and the CAS service URL — is
 // kept in the registry. Nothing goes to the client except the opaque capability.
 //
-// Documented gap: upstream 0.3.10 also asks Garmin to deliver an email or SMS
-// code explicitly (PathWidgetRequestMFACode), driven by the widget page's inline
-// JS variables (customerGuid, mfaMethod, locale, clientId, codeSentTo). That
-// variable parsing is not implemented in the protocol package, so the delivery
-// request is not made here either; MFADeliveryUncertain reports the uncertainty
-// instead.
+// Delivery: the widget strategy asks Garmin to send an email or SMS code before
+// this point, driven by the page's inline JS variables, and records the outcome on
+// the step. A confirmed delivery clears the uncertainty the page alone leaves, so
+// MFADeliveryUncertain now means the code may not have been sent rather than that
+// this server never asked.
 func (a *Authenticator) beginMFA(principal string, strategy StrategyName, step stepResult) (Result, error) {
 	method := step.class.MFAMethod()
 	if method == "" {
@@ -50,7 +49,7 @@ func (a *Authenticator) beginMFA(principal string, strategy StrategyName, step s
 		Principal:            principal,
 		Strategy:             strategy,
 		MFAMethod:            method,
-		MFADeliveryUncertain: step.class.MFADeliveryUncertain(),
+		MFADeliveryUncertain: step.class.MFADeliveryUncertain() && !step.codeDelivered,
 		CSRFToken:            step.class.CSRFToken(),
 		Cookies:              step.session.cookiesFor(a.hosts.SSOBase()),
 		Query:                step.query,

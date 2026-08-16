@@ -123,6 +123,10 @@ const (
 	OpPortalLogin Op = "portal_login"
 	// OpWidgetLogin is the embedded widget credential POST (strategy 3).
 	OpWidgetLogin Op = "widget_login"
+	// OpWidgetRequestMFACode asks Garmin to deliver an email or SMS OTP for a
+	// widget session, which is what the page's own JavaScript does when the user
+	// clicks "Request a new code". Source: _widget_request_mfa_code.
+	OpWidgetRequestMFACode Op = "widget_request_mfa_code"
 	// OpWidgetSignInPage is a widget embed or sign-in GET, fetched for cookies
 	// and the CSRF token.
 	OpWidgetSignInPage Op = "widget_signin_page"
@@ -142,6 +146,7 @@ var knownOps = [...]Op{
 	OpMobileLogin,
 	OpPortalLogin,
 	OpWidgetLogin,
+	OpWidgetRequestMFACode,
 	OpWidgetSignInPage,
 	OpVerifyMFA,
 	OpRequestMFACode,

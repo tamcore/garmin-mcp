@@ -214,7 +214,7 @@ func TestExportedMethodSetsArePinned(t *testing.T) {
 			want: []string{
 				"CSRFToken", "Err", "GoString", "LogValue", "MFADeliveryUncertain",
 				"MFAMethod", "MarshalJSON", "Outcome", "PageTitle", "ResponseStatusType",
-				"RetryAfter", "ServiceTicket", "Status", "String",
+				"RetryAfter", "ServiceTicket", "Status", "String", "WidgetMFA",
 			},
 		},
 	}
