@@ -9,6 +9,7 @@ import (
 
 	"github.com/tamcore/garmin-mcp/internal/config"
 	"github.com/tamcore/garmin-mcp/internal/mcpserver"
+	"github.com/tamcore/garmin-mcp/internal/resources"
 )
 
 // serverName is the programmatic MCP server name and serverTitle its display name.
@@ -109,6 +110,9 @@ func (d *dependencies) serverDeps(instructions string) mcpserver.Deps {
 		Registrars:   d.tools.registrars(),
 		Instructions: instructions,
 		SafetyDelay:  d.cfg.SafetyDelay,
+		// The published documents are constants: they reach no Garmin endpoint and
+		// carry nothing of the caller's, so they need no dependency of their own.
+		ResourceRegistrars: []mcpserver.ResourceRegistrar{resources.NewRegistrar()},
 	}
 }
 

@@ -40,6 +40,7 @@ date.
 | `internal/garmin/client` | The authenticated request layer: bounded wire and decompressed sizes, page and page-start caps, one bounded post-`401` retry that never replays a `POST` or `PATCH`, typed errors, and the exact-integer accessor an identifier is compared through | 94.3% |
 | `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the published exercise catalog with its compiled-in fallback, FIT activity decoding through `github.com/muktihari/fit`, and the training scores, thresholds and trends | 91.0% |
 | `internal/mcpserver` | Server, registry, stdio and Streamable HTTP transports, bearer middleware, session binding, origin and forwarded-header guards, elicitation confirmation, `server_info` | 89.3% |
+| `internal/resources` | The five constant MCP documents — four workout templates and the structure reference — with the manifest contract, the render, and the check that this server's own upload path accepts every template | 95.7% |
 | `internal/tools` | 100 registered tools — 72 read-only, 23 write, 5 destructive — with contracts snapshot-tested against `compat/tools.json` | 86.8% |
 | `internal/policy` | Three tiers, explicit name lists validated against the registered set at start-up, the enablement-and-scope intersection, confirmation requirement | 91.7% |
 | `internal/identity` | Principal type, request context, and the bearer resolver that takes the principal only from a verified token | 97.7% |
@@ -86,8 +87,7 @@ to the configured database, and refuses with a configuration error when no
 database path is set rather than guessing a location. The
 `cmd.ErrNotImplemented` sentinel has been removed; no command returns it.
 
-There is still **no** MCP resource of any kind (the five upstream
-workout-template resources are unimplemented), no `LoginTransport` type (the
+There is still no `LoginTransport` type (the
 auth package uses a one-method `Doer` transport interface instead), no
 `garminlive` command — the tag carries a test suite in `live/`, not a
 subcommand — no fuzz target, no MCP conformance job, and no
@@ -182,7 +182,7 @@ internal/
   garmin/api/            domain clients: activity, analysis, profile, workout, gear, downloads  exists (health, nutrition, training, challenges, devices beyond get_devices still to come)
   mcpserver/             server, transports, middleware wiring                 exists
   tools/                 one file or domain file per MCP tool + register.go    exists (47 tools)
-  resources/             MCP resource templates and handlers                   planned (all 5 upstream resources unimplemented)
+  resources/             the five constant MCP documents and their registrar   exists
   mcplog/                structured MCP logging, level mapping, transport sink  exists
   ratelimit/             limiter + handler middleware, keyed per principal     exists
   identity/              principal and request-context resolution              exists

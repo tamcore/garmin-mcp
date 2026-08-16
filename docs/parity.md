@@ -1118,11 +1118,41 @@ registered, and `internal/tools/manifest_status_test.go` asserts it keeps the
 
 | URI | Status | Effect | Sensitivity | Scope | Upstream | Summary |
 | --- | --- | --- | --- | --- | --- | --- |
-| `workout://templates/simple-run` | not-implemented | read-only | ordinary | `garmin:workouts:read` | workout_templates.py:303 | Simple run workout template (warmup, run, cooldown) |
-| `workout://templates/interval-running` | not-implemented | read-only | ordinary | `garmin:workouts:read` | workout_templates.py:312 | Interval running workout template with repeat groups |
-| `workout://templates/tempo-run` | not-implemented | read-only | ordinary | `garmin:workouts:read` | workout_templates.py:321 | Tempo run workout template with heart rate zone target |
-| `workout://templates/strength-circuit` | not-implemented | read-only | ordinary | `garmin:workouts:read` | workout_templates.py:330 | Strength training circuit template |
-| `workout://reference/structure` | not-implemented | read-only | ordinary | `garmin:workouts:read` | workout_templates.py:339 | Reference guide for workout JSON structure |
+| `workout://templates/simple-run` | **implemented** | read-only | ordinary | `garmin:workouts:read` | workout_templates.py:303 | Simple run workout template (warmup, run, cooldown) |
+| `workout://templates/interval-running` | **implemented** | read-only | ordinary | `garmin:workouts:read` | workout_templates.py:312 | Interval running workout template with repeat groups |
+| `workout://templates/tempo-run` | **implemented** | read-only | ordinary | `garmin:workouts:read` | workout_templates.py:321 | Tempo run workout template with heart rate zone target |
+| `workout://templates/strength-circuit` | **implemented** | read-only | ordinary | `garmin:workouts:read` | workout_templates.py:330 | Strength training circuit template |
+| `workout://reference/structure` | **implemented** | read-only | ordinary | `garmin:workouts:read` | workout_templates.py:339 | Reference guide for workout JSON structure |
+
+### The five resources are served, with two deliberate differences
+
+All five live in `internal/resources`, are compiled in, and reach no Garmin
+endpoint. They are registered through `mcpserver.AddResource` rather than as tools,
+which is why they carry no tier: a resource that varied by principal or read Garmin
+would be a tool, and the tier gate, the confirmation gate and the rate limiter all
+key off tools deliberately. On the remote transport the HTTP layer authenticates
+every request before dispatch, so a resource read still needs a verified bearer
+token.
+
+**The template contents are this server's, not upstream's byte-for-byte.** The URIs,
+names, descriptions and `text/plain` media type match the manifest exactly, and the
+step, condition, target and sport vocabularies were read from the pinned upstream's
+own structure reference — they agree with the constants `internal/tools` builds
+workouts from. The step counts, durations, distances and descriptions inside each
+template were written here. A caller who expects a byte-identical document to
+upstream's will not get one; a caller who expects a valid Garmin workout will.
+
+**Each template is checked against this server's own upload path.**
+`TestEveryTemplateIsAValidWorkoutDocument` parses every template through
+`api.ParseWorkoutDocument`, and `TestEveryTemplateCarriesTheEnvelopeGarminExpects`
+asserts the one-segment envelope and that no `stepOrder` repeats across a document,
+nested repeat groups included. Upstream publishes its templates without that check.
+A template the server that ships it would reject is worse than no template: the
+caller follows the example and reads the failure as their own mistake.
+
+The structure reference is generated from the same constants the templates use, so
+the two cannot drift; `TestTheReferenceDescribesTheVocabularyTheTemplatesUse` fails
+if a template uses a value the reference does not list.
 
 ## Extraction method
 

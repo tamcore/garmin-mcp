@@ -534,15 +534,19 @@ evidence, and the operations documentation, which is real remaining work.
       [MCP conformance is blocked](#mcp-conformance-is-blocked). This item cannot
       close without an upstream change, and it is not a to-do this repository can
       pick up.
-- [ ] Documentation covers remote deployment, reverse proxy/TLS, security
-      assumptions, backup/restore, migrations, and key rotation. `docs/` has no
-      operations document.
+- [x] Documentation covers remote deployment, reverse proxy/TLS, security
+      assumptions, backup/restore, migrations, and key rotation.
+      `docs/operations.md` covers all six across its eight sections. This entry
+      claimed the document did not exist long after it was added in `1307f39`;
+      the claim, not the work, was the gap.
 
 ## M3 — full Taxuspt parity
 
 - [ ] The generated parity matrix accounts for every tool and resource at the
-      pinned Taxuspt commit. `docs/parity.md` carries per-tool status, and 58 of
-      the 138 tools and all 5 resources are still `not-implemented`.
+      pinned Taxuspt commit. `docs/parity.md` carries per-tool status. **All 5
+      resources are served**; 43 of the 138 tools are still `not-implemented`,
+      and the largest remaining modules are nutrition (14), challenges (8),
+      devices (5) and weight management (5).
 - [ ] Every required contract has passing name/schema/behavior tests, or a
       documented exclusion with evidence. The implemented 80 do; the rest have no
       handler yet. The documented exclusions are in `docs/parity.md` and in the
@@ -1267,6 +1271,36 @@ setting that parses and validates but never reaches the middleware fails the bui
 What it deliberately is not: a second confirmation. Destructive tools already require
 elicitation that fails closed. The delay's value is on the write tier, which has no
 interactive gate, and there the cancellation window is the only one a caller gets.
+
+## The five MCP resources are served
+
+`internal/resources` publishes all five documents the pinned upstream declares:
+four workout templates and the structure reference. They are compiled in, reach no
+Garmin endpoint, and carry nothing of the caller's, so they are registered through
+`mcpserver.AddResource` rather than as tools and hold no tier.
+
+Why they are not gated like tools, deliberately rather than by omission: the rate
+limiter and the logging middleware both scope themselves to `tools/call`, and
+`internal/ratelimit/middleware.go` states the reason — reading a resource costs the
+Garmin account nothing, so charging a budget for it would only make discovery
+unreliable. That reasoning holds exactly for a constant document. The gate that does
+apply on remote is the HTTP layer's, which authenticates every `POST`, `GET` and
+`DELETE` before dispatch, so a resource read still needs a verified bearer token.
+Principal resolution already ran for every method, not only tool calls.
+
+What is pinned by tests: the manifest set in both directions, each resource's name,
+description and media type against the manifest, that every document renders and
+parses, that every template is accepted by this server's own upload path, that no
+`stepOrder` repeats inside a document, and that the structure reference lists every
+value the templates use. At the server layer: listing and reading over a session, an
+unknown URI refused, a duplicate URI refused before it reaches the SDK — whose own
+`AddResource` replaces on conflict — a scheme-less URI refused before the SDK panics
+on it, and a nil registrar refused at construction.
+
+The one thing not claimed: byte-identical template contents. The contract fields and
+the vocabulary are upstream's; the step counts, durations and descriptions inside
+each template were written here. `docs/parity.md` says so rather than implying
+equivalence that was never verified.
 
 ## Next task
 

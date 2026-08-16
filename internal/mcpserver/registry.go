@@ -1,7 +1,9 @@
 package mcpserver
 
 import (
+	"context"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -135,12 +137,17 @@ type ToolRegistrar interface {
 // It is not safe for concurrent use and does not need to be: registration happens
 // once, inside New, before any transport is connected.
 type Registry struct {
-	server *mcp.Server
-	specs  map[string]ToolSpec
+	server    *mcp.Server
+	specs     map[string]ToolSpec
+	resources map[string]ResourceSpec
 }
 
 func newRegistry(server *mcp.Server) *Registry {
-	return &Registry{server: server, specs: make(map[string]ToolSpec)}
+	return &Registry{
+		server:    server,
+		specs:     make(map[string]ToolSpec),
+		resources: make(map[string]ResourceSpec),
+	}
 }
 
 // Names returns the registered tool names, sorted, as a fresh slice.
@@ -205,4 +212,120 @@ func AddTool[In, Out any](registry *Registry, spec ToolSpec, handler mcp.ToolHan
 	mcp.AddTool(registry.server, tool, handler)
 	registry.specs[spec.Name] = spec
 	return nil
+}
+
+// A ResourceSpec is one MCP resource's declared contract.
+//
+// Every resource this server serves is a constant document: it reads nothing from
+// Garmin and nothing from the caller's account, which is why there is no tier field
+// here. A resource is read-only by construction, and the day one is not, it belongs
+// in a tool instead — the tier gate, the confirmation gate and the rate limiter all
+// key off tools, deliberately.
+type ResourceSpec struct {
+	// URI is the resource identifier clients read, and must carry a scheme. The
+	// SDK panics on a scheme-less URI, so it is checked here first.
+	URI string
+
+	// Name is the programmatic name, and Title the display name.
+	Name  string
+	Title string
+
+	// Description tells a model what the document is for.
+	Description string
+
+	// MIMEType is the media type of the served text.
+	MIMEType string
+}
+
+func (s ResourceSpec) validate() error {
+	switch {
+	case s.URI == "":
+		return fmt.Errorf("a resource declares no URI: %w", ErrInvalidResourceSpec)
+	case !isAbsoluteURI(s.URI):
+		return fmt.Errorf("resource %q is not a parsable absolute URI, which the SDK "+
+			"panics on: %w", s.URI, ErrInvalidResourceSpec)
+	case s.Name == "":
+		return fmt.Errorf("resource %q declares no name: %w", s.URI, ErrInvalidResourceSpec)
+	case s.MIMEType == "":
+		return fmt.Errorf("resource %q declares no MIME type: %w", s.URI, ErrInvalidResourceSpec)
+	}
+	return nil
+}
+
+// A ResourceRegistrar registers resources with the server. It is separate from
+// ToolRegistrar because the two surfaces are gated differently and a reader should
+// not have to check which one a registrar meant.
+type ResourceRegistrar interface {
+	RegisterResources(registry *Registry) error
+}
+
+// ResourceURIs returns the registered resource URIs, sorted, as a fresh slice.
+func (r *Registry) ResourceURIs() []string {
+	uris := make([]string, 0, len(r.resources))
+	for uri := range r.resources {
+		uris = append(uris, uri)
+	}
+	slices.Sort(uris)
+	return uris
+}
+
+// ResourceSpecOf returns the recorded spec for uri, and whether it exists.
+func (r *Registry) ResourceSpecOf(uri string) (ResourceSpec, bool) {
+	spec, ok := r.resources[uri]
+	return spec, ok
+}
+
+// AddResource registers one constant document and records its spec.
+//
+// The handler is given the spec rather than the request, because a resource here
+// serves the same bytes to every caller: handing it the request would invite a
+// resource that varies by principal, which is a tool.
+func AddResource(registry *Registry, spec ResourceSpec, body func() string) error {
+	if registry == nil {
+		return fmt.Errorf("registry is nil: %w", ErrMissingDependency)
+	}
+	if body == nil {
+		return fmt.Errorf("resource %q has no body: %w", spec.URI, ErrInvalidResourceSpec)
+	}
+	if err := spec.validate(); err != nil {
+		return err
+	}
+	if _, exists := registry.resources[spec.URI]; exists {
+		return fmt.Errorf("resource %q is already registered: %w", spec.URI, ErrDuplicateResource)
+	}
+
+	resource := &mcp.Resource{
+		URI:         spec.URI,
+		Name:        spec.Name,
+		Title:       spec.Title,
+		Description: spec.Description,
+		MIMEType:    spec.MIMEType,
+	}
+	// The document is rendered once, here, and the same string is served to every
+	// reader. Rendering per read would rebuild the maps and re-marshal the JSON on
+	// every call, and resource reads are deliberately not rate limited — the
+	// limiter charges tools/call only, because a constant document costs the Garmin
+	// account nothing. Constant to serve must also mean constant to produce.
+	rendered := body()
+	registry.server.AddResource(resource, func(
+		_ context.Context, _ *mcp.ReadResourceRequest,
+	) (*mcp.ReadResourceResult, error) {
+		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{
+			URI:      spec.URI,
+			MIMEType: spec.MIMEType,
+			Text:     rendered,
+		}}}, nil
+	})
+	registry.resources[spec.URI] = spec
+	return nil
+}
+
+// isAbsoluteURI reports whether raw parses as an absolute URI with a scheme.
+//
+// A substring check for "://" is not enough: the SDK parses the URI itself and
+// panics on one it cannot parse, so a spec carrying something like "x://%" would
+// take the process down at start-up rather than being refused here.
+func isAbsoluteURI(raw string) bool {
+	parsed, err := url.Parse(raw)
+	return err == nil && parsed.IsAbs()
 }

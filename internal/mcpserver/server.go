@@ -92,6 +92,10 @@ type Deps struct {
 	// rejected rather than skipped.
 	Registrars []ToolRegistrar
 
+	// ResourceRegistrars contribute constant documents. A nil entry is a wiring
+	// mistake and is rejected rather than skipped.
+	ResourceRegistrars []ResourceRegistrar
+
 	// Confirmer overrides how destructive confirmation is obtained. Leave it nil
 	// in production to use MCP elicitation over the calling client's session.
 	Confirmer policy.Confirmer
@@ -129,6 +133,11 @@ func (d Deps) validate() error {
 	for i, registrar := range d.Registrars {
 		if registrar == nil {
 			return fmt.Errorf("registrar %d is nil: %w", i, ErrMissingDependency)
+		}
+	}
+	for i, registrar := range d.ResourceRegistrars {
+		if registrar == nil {
+			return fmt.Errorf("resource registrar %d is nil: %w", i, ErrMissingDependency)
 		}
 	}
 	return nil
@@ -220,6 +229,16 @@ func (s *Server) registerTools() error {
 	for i, registrar := range s.deps.Registrars {
 		if err := registrar.RegisterTools(s.registry); err != nil {
 			return fmt.Errorf("registrar %d: %w", i, err)
+		}
+	}
+	return s.registerResources()
+}
+
+// registerResources adds every constant document its registrars contribute.
+func (s *Server) registerResources() error {
+	for i, registrar := range s.deps.ResourceRegistrars {
+		if err := registrar.RegisterResources(s.registry); err != nil {
+			return fmt.Errorf("resource registrar %d: %w", i, err)
 		}
 	}
 	return nil

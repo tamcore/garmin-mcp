@@ -19,6 +19,13 @@ var (
 	// ErrDuplicateTool reports that two registrars claimed the same tool name.
 	ErrDuplicateTool = errors.New("mcpserver: duplicate tool name")
 
+	// ErrInvalidResourceSpec reports a resource spec with a missing or malformed
+	// field.
+	ErrInvalidResourceSpec = errors.New("mcpserver: invalid resource spec")
+
+	// ErrDuplicateResource reports that two registrars claimed the same resource URI.
+	ErrDuplicateResource = errors.New("mcpserver: duplicate resource URI")
+
 	// ErrAnnotationMismatch reports annotations that contradict the declared
 	// tier, or a tool that claims a closed world. Garmin is an open-world API, and
 	// a destructive tool that advertises itself as read-only would mislead every

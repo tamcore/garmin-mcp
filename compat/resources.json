@@ -81,7 +81,7 @@
   "counts": {
     "resources": 5,
     "byStatus": {
-      "not-implemented": 5
+      "implemented": 5
     },
     "byEffect": {
       "read-only": 5
@@ -108,7 +108,7 @@
   "resources": [
     {
       "uri": "workout://templates/simple-run",
-      "status": "not-implemented",
+      "status": "implemented",
       "name": "get_simple_run_template",
       "description": "Simple run workout template (warmup, run, cooldown)\n\nA basic running workout structure suitable for easy runs.\nModify the endConditionValue to adjust durations.",
       "mimeType": "text/plain",
@@ -139,20 +139,25 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredUri": ""
+        "package": "internal/resources",
+        "handler": "documents",
+        "file": "internal/resources/resources.go",
+        "registeredUri": "workout://templates/simple-run"
       },
       "tests": {
-        "unit": [],
-        "integration": [],
+        "unit": [
+          "internal/resources/resources_test.go",
+          "internal/resources/fidelity_test.go"
+        ],
+        "integration": [
+          "internal/mcpserver/resource_test.go"
+        ],
         "conformance": []
       }
     },
     {
       "uri": "workout://templates/interval-running",
-      "status": "not-implemented",
+      "status": "implemented",
       "name": "get_interval_template",
       "description": "Interval running workout template with repeat groups\n\nDemonstrates RepeatGroupDTO for interval training.\nIncludes 6x400m intervals with 2min recovery.",
       "mimeType": "text/plain",
@@ -183,20 +188,25 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredUri": ""
+        "package": "internal/resources",
+        "handler": "documents",
+        "file": "internal/resources/resources.go",
+        "registeredUri": "workout://templates/interval-running"
       },
       "tests": {
-        "unit": [],
-        "integration": [],
+        "unit": [
+          "internal/resources/resources_test.go",
+          "internal/resources/fidelity_test.go"
+        ],
+        "integration": [
+          "internal/mcpserver/resource_test.go"
+        ],
         "conformance": []
       }
     },
     {
       "uri": "workout://templates/tempo-run",
-      "status": "not-implemented",
+      "status": "implemented",
       "name": "get_tempo_template",
       "description": "Tempo run workout template with heart rate zone target\n\nDemonstrates targeting a specific heart rate zone.\n20min tempo block at HR zone 4.",
       "mimeType": "text/plain",
@@ -227,20 +237,25 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredUri": ""
+        "package": "internal/resources",
+        "handler": "documents",
+        "file": "internal/resources/resources.go",
+        "registeredUri": "workout://templates/tempo-run"
       },
       "tests": {
-        "unit": [],
-        "integration": [],
+        "unit": [
+          "internal/resources/resources_test.go",
+          "internal/resources/fidelity_test.go"
+        ],
+        "integration": [
+          "internal/mcpserver/resource_test.go"
+        ],
         "conformance": []
       }
     },
     {
       "uri": "workout://templates/strength-circuit",
-      "status": "not-implemented",
+      "status": "implemented",
       "name": "get_strength_template",
       "description": "Strength training circuit template\n\nCircuit-style strength workout with repeat groups.\n3 rounds of 10min work + 2min rest.",
       "mimeType": "text/plain",
@@ -271,20 +286,25 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredUri": ""
+        "package": "internal/resources",
+        "handler": "documents",
+        "file": "internal/resources/resources.go",
+        "registeredUri": "workout://templates/strength-circuit"
       },
       "tests": {
-        "unit": [],
-        "integration": [],
+        "unit": [
+          "internal/resources/resources_test.go",
+          "internal/resources/fidelity_test.go"
+        ],
+        "integration": [
+          "internal/mcpserver/resource_test.go"
+        ],
         "conformance": []
       }
     },
     {
       "uri": "workout://reference/structure",
-      "status": "not-implemented",
+      "status": "implemented",
       "name": "get_structure_reference",
       "description": "Reference guide for workout JSON structure\n\nDocuments valid values for step types, conditions, targets, and sports.\nUse this to understand what values are valid in workout definitions.",
       "mimeType": "text/plain",
@@ -315,14 +335,19 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredUri": ""
+        "package": "internal/resources",
+        "handler": "documents",
+        "file": "internal/resources/resources.go",
+        "registeredUri": "workout://reference/structure"
       },
       "tests": {
-        "unit": [],
-        "integration": [],
+        "unit": [
+          "internal/resources/resources_test.go",
+          "internal/resources/fidelity_test.go"
+        ],
+        "integration": [
+          "internal/mcpserver/resource_test.go"
+        ],
         "conformance": []
       }
     }
