@@ -26,10 +26,16 @@ type StrengthWrites struct {
 	req     requester
 	details *ActivityDetails
 	writes  *ActivityWrites
+
+	// catalog is the strength catalog every write validates against. A nil
+	// catalog is the compiled-in subset, so a client built without one still
+	// refuses a category Garmin does not recognize.
+	catalog *ExerciseCatalog
 }
 
-// NewStrengthWrites returns a strength write client over the request layer.
-func NewStrengthWrites(rc *client.Client) (*StrengthWrites, error) {
+// NewStrengthWrites returns a strength write client over the request layer,
+// validating against catalog. A nil catalog selects the compiled-in subset.
+func NewStrengthWrites(rc *client.Client, catalog *ExerciseCatalog) (*StrengthWrites, error) {
 	req, err := newRequester(rc)
 	if err != nil {
 		return nil, err
@@ -42,7 +48,7 @@ func NewStrengthWrites(rc *client.Client) (*StrengthWrites, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &StrengthWrites{req: req, details: details, writes: writes}, nil
+	return &StrengthWrites{req: req, details: details, writes: writes, catalog: catalog}, nil
 }
 
 // StrengthActivityTypeKey is the activity type a strength session is recorded
@@ -127,7 +133,7 @@ func (s *StrengthWrites) ReplaceSets(
 		return ExerciseSets{}, err
 	}
 
-	valid, err := validateSets(req, sets)
+	valid, err := validateSets(req, sets, s.catalog)
 	if err != nil {
 		return ExerciseSets{}, err
 	}
@@ -144,7 +150,9 @@ func (s *StrengthWrites) ReplaceSets(
 }
 
 // validateSets validates and bounds a caller-supplied set list.
-func validateSets(req client.Request, sets []StrengthSet) ([]StrengthSet, error) {
+func validateSets(
+	req client.Request, sets []StrengthSet, catalog *ExerciseCatalog,
+) ([]StrengthSet, error) {
 	switch {
 	case len(sets) == 0:
 		return nil, invalid(req, fmt.Errorf("%w: a set list needs at least one set",
@@ -156,7 +164,7 @@ func validateSets(req client.Request, sets []StrengthSet) ([]StrengthSet, error)
 
 	valid := make([]StrengthSet, 0, len(sets))
 	for _, set := range sets {
-		checked, err := set.validate()
+		checked, err := set.validate(catalog)
 		if err != nil {
 			return nil, invalid(req, err)
 		}
@@ -281,7 +289,7 @@ func (s *StrengthWrites) Create(
 	req := writeRequest(client.OpCreateStrengthActivity, client.EndpointActivity,
 		http.MethodPost, client.PathActivityPrefix, client.EffectUnsafeWrite)
 
-	sets, err := activity.Plan.Build()
+	sets, err := activity.Plan.Build(s.catalog)
 	if err != nil {
 		return CreatedStrengthActivity{}, invalid(req, err)
 	}

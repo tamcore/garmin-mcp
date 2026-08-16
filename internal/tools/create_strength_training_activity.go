@@ -97,7 +97,7 @@ func registerCreateStrengthTrainingActivity(registry *mcpserver.Registry, svc *s
 	handler := func(
 		ctx context.Context, _ *mcp.CallToolRequest, in createStrengthTrainingActivityInput,
 	) (*mcp.CallToolResult, CreatedStrengthActivityResult, error) {
-		activity, err := buildStrengthActivity(in, svc.bounds.MaxExerciseSets)
+		activity, err := buildStrengthActivity(in, svc.bounds.MaxExerciseSets, svc.catalog)
 		if err != nil {
 			return nil, CreatedStrengthActivityResult{}, err
 		}
@@ -121,9 +121,9 @@ func registerCreateStrengthTrainingActivity(registry *mcpserver.Registry, svc *s
 }
 
 // buildStrengthActivity validates every argument and composes the request model.
-func buildStrengthActivity(in createStrengthTrainingActivityInput, limit int) (
-	api.StrengthActivity, error,
-) {
+func buildStrengthActivity(
+	in createStrengthTrainingActivityInput, limit int, catalog *api.ExerciseCatalog,
+) (api.StrengthActivity, error) {
 	name, err := parseRequiredText(argNameName, in.Name, maxNameArgumentLen)
 	if err != nil {
 		return api.StrengthActivity{}, err
@@ -137,7 +137,7 @@ func buildStrengthActivity(in createStrengthTrainingActivityInput, limit int) (
 	if err != nil {
 		return api.StrengthActivity{}, err
 	}
-	sets, err := parsePlannedSets(in.Sets, limit)
+	sets, err := parsePlannedSets(in.Sets, limit, catalog)
 	if err != nil {
 		return api.StrengthActivity{}, err
 	}
@@ -151,13 +151,15 @@ func buildStrengthActivity(in createStrengthTrainingActivityInput, limit int) (
 }
 
 // parsePlannedSets validates the whole plan before any of it is dispatched.
-func parsePlannedSets(entries []plannedSetInput, limit int) ([]api.PlannedSet, error) {
+func parsePlannedSets(
+	entries []plannedSetInput, limit int, catalog *api.ExerciseCatalog,
+) ([]api.PlannedSet, error) {
 	if err := boundedCount(argNameSets, len(entries), min(limit, maxStrengthSets)); err != nil {
 		return nil, err
 	}
 	out := make([]api.PlannedSet, 0, len(entries))
 	for _, entry := range entries {
-		set, err := parsePlannedSet(entry)
+		set, err := parsePlannedSet(entry, catalog)
 		if err != nil {
 			return nil, err
 		}
@@ -167,7 +169,9 @@ func parsePlannedSets(entries []plannedSetInput, limit int) ([]api.PlannedSet, e
 }
 
 // parsePlannedSet validates one planned set and its placement in time.
-func parsePlannedSet(entry plannedSetInput) (api.PlannedSet, error) {
+func parsePlannedSet(
+	entry plannedSetInput, catalog *api.ExerciseCatalog,
+) (api.PlannedSet, error) {
 	kind, err := parseSetKind(optionalTextArg(entry.Kind, string(api.SetActive)))
 	if err != nil {
 		return api.PlannedSet{}, err
@@ -175,7 +179,7 @@ func parsePlannedSet(entry plannedSetInput) (api.PlannedSet, error) {
 	if err := validatePlannedMeasurements(entry); err != nil {
 		return api.PlannedSet{}, err
 	}
-	if err := validateExerciseNaming(entry.Category, entry.ExerciseName); err != nil {
+	if err := validateExerciseNaming(catalog, entry.Category, entry.ExerciseName); err != nil {
 		return api.PlannedSet{}, err
 	}
 	start, err := plannedStart(entry.StartTime)

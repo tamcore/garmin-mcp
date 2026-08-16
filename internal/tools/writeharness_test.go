@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tamcore/garmin-mcp/internal/garmin/api"
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 	"github.com/tamcore/garmin-mcp/internal/identity"
 	"github.com/tamcore/garmin-mcp/internal/mcpserver"
@@ -106,8 +107,19 @@ func enabledWrites() writeOptions {
 func newWriteHarness(t *testing.T, script testkit.Script, opts writeOptions) harness {
 	t.Helper()
 
+	return newWriteHarnessWithCatalog(t, script, opts, nil)
+}
+
+// newWriteHarnessWithCatalog is newWriteHarness with an explicit strength
+// catalog, which is how a write test drives the tools against a fetched catalog.
+func newWriteHarnessWithCatalog(
+	t *testing.T, script testkit.Script, opts writeOptions, catalog *api.ExerciseCatalog,
+) harness {
+	t.Helper()
+
 	fake := testkit.NewServer(t, script)
-	server := newWriteServer(t, newRegistrar(t, fake, tools.Bounds{}, client.Limits{}), opts)
+	server := newWriteServer(t,
+		newRegistrar(t, fake, tools.Bounds{}, client.Limits{}, catalog), opts)
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	ctx, cancel := context.WithCancel(context.Background())

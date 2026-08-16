@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/tamcore/garmin-mcp/internal/cmd"
+	"github.com/tamcore/garmin-mcp/internal/garmin/api"
 	"github.com/tamcore/garmin-mcp/internal/tools"
 )
 
@@ -60,7 +61,13 @@ func garminCatalog() []cmd.ToolEntry {
 // validated against the registered set before the server starts, so a tool that
 // is registered but untiered fails at start-up rather than at first call.
 func garminTools(deps cmd.ToolDeps) (cmd.ToolSet, error) {
-	registrar, err := tools.New(tools.Deps{Client: deps.Client, Caller: deps.Caller})
+	// Read once at start-up, shared for the process lifetime, and never able to
+	// fail one: it carries its own deadline and falls back. See docs/parity.md.
+	catalog := api.LoadExerciseCatalog(context.Background())
+
+	registrar, err := tools.New(tools.Deps{
+		Client: deps.Client, Caller: deps.Caller, ExerciseCatalog: catalog,
+	})
 	if err != nil {
 		return cmd.ToolSet{}, err
 	}

@@ -14,7 +14,7 @@ import (
 func newStrengthWrites(t *testing.T, h harness) *api.StrengthWrites {
 	t.Helper()
 
-	writes, err := api.NewStrengthWrites(h.rc)
+	writes, err := api.NewStrengthWrites(h.rc, api.BuiltinExerciseCatalog())
 	if err != nil {
 		t.Fatalf("NewStrengthWrites() = %v", err)
 	}

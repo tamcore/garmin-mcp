@@ -60,8 +60,9 @@ type StrengthSet struct {
 	ExerciseName string
 }
 
-// validate reports whether one set may be written.
-func (s StrengthSet) validate() (StrengthSet, error) {
+// validate reports whether one set may be written, against the catalog in force.
+// A nil catalog is the compiled-in subset.
+func (s StrengthSet) validate(catalog *ExerciseCatalog) (StrengthSet, error) {
 	switch {
 	case s.Kind != SetActive && s.Kind != SetRest:
 		return StrengthSet{}, fmt.Errorf("%w: a set must be ACTIVE or REST",
@@ -76,7 +77,7 @@ func (s StrengthSet) validate() (StrengthSet, error) {
 	if s.Kind == SetRest {
 		return s.validateRest()
 	}
-	return s.validateActive()
+	return s.validateActive(catalog)
 }
 
 // validateRest refuses the fields a rest set must not carry, so a rest never
@@ -94,7 +95,7 @@ func (s StrengthSet) validateRest() (StrengthSet, error) {
 
 // validateActive checks the repetitions, the weight and the exercise of an
 // active set.
-func (s StrengthSet) validateActive() (StrengthSet, error) {
+func (s StrengthSet) validateActive(catalog *ExerciseCatalog) (StrengthSet, error) {
 	switch {
 	case s.Repetitions < 0 || s.Repetitions > MaxRepetitions:
 		return StrengthSet{}, fmt.Errorf("%w: repetitions must be between 0 and 1000",
@@ -103,7 +104,7 @@ func (s StrengthSet) validateActive() (StrengthSet, error) {
 		return StrengthSet{}, fmt.Errorf("%w: weight must be between 0 and 1000 kg",
 			client.ErrValidation)
 	}
-	if err := ValidateExercise(s.Category, s.ExerciseName); err != nil {
+	if err := catalog.Validate(s.Category, s.ExerciseName); err != nil {
 		return StrengthSet{}, err
 	}
 	return StrengthSet{
@@ -156,12 +157,13 @@ type SetPlan struct {
 	Sets []PlannedSet
 }
 
-// Build resolves the plan into the sets that will be written.
+// Build resolves the plan into the sets that will be written, validating every
+// exercise against catalog. A nil catalog is the compiled-in subset.
 //
 // The receiver is not modified and the result is freshly allocated. A plan that
 // produces no set, or more than MaxStrengthSets, is refused rather than
 // truncated: a truncated strength session is a wrong one.
-func (p SetPlan) Build() ([]StrengthSet, error) {
+func (p SetPlan) Build(catalog *ExerciseCatalog) ([]StrengthSet, error) {
 	if p.Start.IsZero() {
 		return nil, fmt.Errorf("%w: a set plan needs a start time", client.ErrValidation)
 	}
@@ -169,7 +171,7 @@ func (p SetPlan) Build() ([]StrengthSet, error) {
 	cursor := p.Start.UTC()
 	built := make([]StrengthSet, 0, len(p.Sets))
 	for _, planned := range p.Sets {
-		expanded, next, err := expandPlanned(p.Start.UTC(), cursor, planned)
+		expanded, next, err := expandPlanned(p.Start.UTC(), cursor, planned, catalog)
 		if err != nil {
 			return nil, err
 		}
@@ -189,7 +191,7 @@ func (p SetPlan) Build() ([]StrengthSet, error) {
 // expandPlanned expands one planned set into its occurrences and reports where
 // the next set starts.
 func expandPlanned(
-	planStart, cursor time.Time, planned PlannedSet,
+	planStart, cursor time.Time, planned PlannedSet, catalog *ExerciseCatalog,
 ) ([]StrengthSet, time.Time, error) {
 	repeat, err := plannedRepeat(planned)
 	if err != nil {
@@ -199,7 +201,7 @@ func expandPlanned(
 
 	out := make([]StrengthSet, 0, repeat*2)
 	for range repeat {
-		set, err := plannedSet(planned, at).validate()
+		set, err := plannedSet(planned, at).validate(catalog)
 		if err != nil {
 			return nil, cursor, err
 		}
@@ -209,7 +211,7 @@ func expandPlanned(
 		if planned.RestSeconds > 0 {
 			rest, restErr := StrengthSet{
 				Kind: SetRest, Start: at, DurationSeconds: planned.RestSeconds,
-			}.validate()
+			}.validate(catalog)
 			if restErr != nil {
 				return nil, cursor, restErr
 			}

@@ -102,7 +102,7 @@ func registerSetActivityStrengthExerciseSets(registry *mcpserver.Registry, svc *
 	handler := func(
 		ctx context.Context, _ *mcp.CallToolRequest, in setActivityStrengthExerciseSetsInput,
 	) (*mcp.CallToolResult, ExerciseSetList, error) {
-		sets, err := parseStrengthSets(in.Sets, svc.bounds.MaxExerciseSets)
+		sets, err := parseStrengthSets(in.Sets, svc.bounds.MaxExerciseSets, svc.catalog)
 		if err != nil {
 			return nil, ExerciseSetList{}, err
 		}
@@ -125,13 +125,15 @@ func registerSetActivityStrengthExerciseSets(registry *mcpserver.Registry, svc *
 // parseStrengthSets validates the whole list before any of it is dispatched, because
 // the write replaces everything: a half-validated list would replace a real session
 // with a wrong one.
-func parseStrengthSets(entries []exerciseSetInput, limit int) ([]api.StrengthSet, error) {
+func parseStrengthSets(
+	entries []exerciseSetInput, limit int, catalog *api.ExerciseCatalog,
+) ([]api.StrengthSet, error) {
 	if err := boundedCount(argNameSets, len(entries), min(limit, maxStrengthSets)); err != nil {
 		return nil, err
 	}
 	out := make([]api.StrengthSet, 0, len(entries))
 	for _, entry := range entries {
-		set, err := parseStrengthSet(entry)
+		set, err := parseStrengthSet(entry, catalog)
 		if err != nil {
 			return nil, err
 		}
@@ -141,7 +143,9 @@ func parseStrengthSets(entries []exerciseSetInput, limit int) ([]api.StrengthSet
 }
 
 // parseStrengthSet validates one absolutely-timed set.
-func parseStrengthSet(entry exerciseSetInput) (api.StrengthSet, error) {
+func parseStrengthSet(
+	entry exerciseSetInput, catalog *api.ExerciseCatalog,
+) (api.StrengthSet, error) {
 	kind, err := parseSetKind(entry.Kind)
 	if err != nil {
 		return api.StrengthSet{}, err
@@ -153,7 +157,7 @@ func parseStrengthSet(entry exerciseSetInput) (api.StrengthSet, error) {
 	if err := validateSetMeasurements(entry); err != nil {
 		return api.StrengthSet{}, err
 	}
-	if err := validateExerciseNaming(entry.Category, entry.ExerciseName); err != nil {
+	if err := validateExerciseNaming(catalog, entry.Category, entry.ExerciseName); err != nil {
 		return api.StrengthSet{}, err
 	}
 
@@ -190,15 +194,16 @@ func validateSetMeasurements(entry exerciseSetInput) error {
 	return inRange(argNameWeightGrams, entry.WeightGrams, 0, maxWeightGrams)
 }
 
-// validateExerciseNaming validates a named category against the closed catalog.
-func validateExerciseNaming(category, name string) error {
+// validateExerciseNaming validates a named category against the closed catalog in
+// force, which is the fetched one when the start-up read succeeded.
+func validateExerciseNaming(catalog *api.ExerciseCatalog, category, name string) error {
 	if category == "" {
 		return nil
 	}
 	if len(category) > maxExerciseKeyLen || len(name) > maxExerciseKeyLen {
 		return invalidArgument("category and exercise_name must be short Garmin keys")
 	}
-	if err := api.ValidateExercise(category, name); err != nil {
+	if err := catalog.Validate(category, name); err != nil {
 		return invalidArgument(
 			"category must be a Garmin exercise category from get_exercise_types")
 	}

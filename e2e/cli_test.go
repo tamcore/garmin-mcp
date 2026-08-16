@@ -32,6 +32,30 @@ func buildBinary(t *testing.T) string {
 	return bin
 }
 
+// blackholeProxy keeps the start-up catalog read off the public service: nothing
+// listens there, so it fails at once and the binary falls back. A loopback
+// destination is never proxied, so a deployment under test is unaffected.
+const blackholeProxy = "http://127.0.0.1:1"
+
+// offlineEnv keeps a started binary off the public network. The bypass lists are
+// cleared too: an inherited NO_PROXY of "*" would route around the blackhole.
+func offlineEnv() []string {
+	return []string{
+		"HTTPS_PROXY=" + blackholeProxy,
+		"https_proxy=" + blackholeProxy,
+		"NO_PROXY=",
+		"no_proxy=",
+	}
+}
+
+// offlineCommand builds a command for the binary with the offline environment
+// already applied, so no started process can reach the public service.
+func offlineCommand(bin string, args ...string) *exec.Cmd {
+	command := exec.Command(bin, args...)
+	command.Env = append(os.Environ(), offlineEnv()...)
+	return command
+}
+
 // run executes the binary and reports its streams and exit code separately, so a
 // test can assert that stdout stayed clean while stderr carried the reason.
 func run(t *testing.T, bin string, args ...string) (stdout, stderr string, code int) {
@@ -45,8 +69,8 @@ func run(t *testing.T, bin string, args ...string) (stdout, stderr string, code 
 func runWithEnv(t *testing.T, bin string, env []string, args ...string) (stdout, stderr string, code int) {
 	t.Helper()
 
-	cmd := exec.Command(bin, args...)
-	cmd.Env = append(os.Environ(), env...)
+	cmd := offlineCommand(bin, args...)
+	cmd.Env = append(cmd.Env, env...)
 
 	var out, errOut bytes.Buffer
 	cmd.Stdout = &out

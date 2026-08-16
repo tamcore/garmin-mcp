@@ -31,7 +31,10 @@ const (
 // a failure rather than a pass.
 func answersLocally() map[string]string {
 	return map[string]string{
-		tools.ToolGetExerciseTypes: "serves the compiled-in exercise catalog",
+		tools.ToolGetExerciseTypes: "answers from the strength catalog this process " +
+			"loaded before the sweep started: the published catalog is read once at " +
+			"start-up, by a dedicated anonymous request that never goes through this " +
+			"suite's caller, and the compiled-in subset answers when that read failed",
 	}
 }
 
@@ -65,7 +68,7 @@ func accountShapes() map[string][]string {
 		tools.ToolGetDevices:           {"devices", keyCount, keyTruncated},
 		tools.ToolGetSleepData:         {argDate, keyHasData},
 		tools.ToolGetUserSummary:       {argDate},
-		tools.ToolGetExerciseTypes:     {"categories", keyCount},
+		tools.ToolGetExerciseTypes:     {"categories", keyCount, "source", "exercise_count"},
 		tools.ToolGetWorkouts:          {keyWorkouts, keyCount, keyTruncated},
 		tools.ToolGetWorkoutByID:       {argWorkoutID},
 		tools.ToolDownloadWorkout:      {"id", "format", "media_type", "bytes", "uri"},

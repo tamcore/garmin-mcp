@@ -155,6 +155,13 @@ type Deps struct {
 
 	// Bounds are the per-tool result bounds. The zero value means the defaults.
 	Bounds Bounds
+
+	// ExerciseCatalog is the strength catalog this process serves and validates
+	// against. It is loaded once, before the server starts, and is immutable
+	// afterwards, so every concurrent tool call reads the same snapshot. A nil
+	// catalog selects the compiled-in subset, which is what every test that does
+	// not exercise the fetch uses.
+	ExerciseCatalog *api.ExerciseCatalog
 }
 
 func (d Deps) validate() error {
@@ -174,6 +181,7 @@ type service struct {
 	caller     client.Caller
 	bounds     Bounds
 	limits     client.Limits
+	catalog    *api.ExerciseCatalog
 	profile    *api.Profile
 	activities *api.Activities
 	wellness   *api.Wellness
@@ -193,9 +201,10 @@ func newService(deps Deps) (*service, error) {
 	}
 
 	built := &service{
-		caller: deps.Caller,
-		bounds: deps.Bounds.resolved(),
-		limits: deps.Client.Limits(),
+		caller:  deps.Caller,
+		bounds:  deps.Bounds.resolved(),
+		limits:  deps.Client.Limits(),
+		catalog: deps.ExerciseCatalog,
 	}
 	if err := built.buildClients(deps.Client); err != nil {
 		return nil, err
@@ -248,7 +257,7 @@ func (s *service) buildWriteClients(rc *client.Client) error {
 	if s.workouts, err = api.NewWorkouts(rc); err != nil {
 		return fmt.Errorf("building the workout client: %w", err)
 	}
-	if s.strength, err = api.NewStrengthWrites(rc); err != nil {
+	if s.strength, err = api.NewStrengthWrites(rc, s.catalog); err != nil {
 		return fmt.Errorf("building the strength write client: %w", err)
 	}
 	return nil

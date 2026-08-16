@@ -8,26 +8,14 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 )
 
-// The strength-exercise catalog.
+// The strength-exercise catalog: the published one read by [LoadExerciseCatalog],
+// and the compiled-in subset it falls back to. Which answered is reported by
+// [ExerciseCatalog.Source]; why the published document is preferred, and what the
+// one web-tier read is allowed to do, is in docs/parity.md.
 //
-// Garmin validates a strength set against its own FIT enum: exercises[].category
-// is the parent and exercises[].name is the sub-category, an unknown value is
-// rejected with 400 "Invalid Sub-Category Passed", and a null name is always
-// accepted under a known parent. A caller therefore needs to know which
-// categories exist, and which names live under them, before it writes a set.
-//
-// The catalog is compiled in rather than fetched. Garmin publishes it at
-// connect.garmin.com/web-data/exercises/Exercises.json, which is the web tier,
-// not the API tier this package addresses, and nothing here may widen its host
-// boundary to reach it.
-//
-// It is a documented subset, not a mirror: the categories are the FIT
-// exercise_category enum, and each one carries the common names of that
-// category. Garmin stays the authority — a name this catalog omits may still be
-// valid, and a name it lists is still rejected if Garmin's enum disagrees.
-// ValidateExercise reflects that: it refuses an unknown category, because the
-// parent set is closed, and accepts an unlisted name under a known category
-// rather than pretending to know Garmin's full enum.
+// Garmin validates a strength set against its own FIT enum — an unknown category
+// is a 400, a null name under a known category is accepted — which is why
+// [ExerciseCatalog.Validate] closes the category set and leaves names open.
 
 // ExerciseType is one exercise name with the label a user reads.
 type ExerciseType struct {
@@ -35,6 +23,22 @@ type ExerciseType struct {
 	Name string `json:"name"`
 	// DisplayName is the human-readable label derived from the key.
 	DisplayName string `json:"displayName"`
+	// PrimaryMuscles are the muscle groups the published catalog names as
+	// primary. It is empty for the compiled-in subset, which has no such data.
+	PrimaryMuscles []string `json:"primaryMuscles,omitempty"`
+	// SecondaryMuscles are the muscle groups the published catalog names as
+	// secondary. It is empty for the compiled-in subset.
+	SecondaryMuscles []string `json:"secondaryMuscles,omitempty"`
+}
+
+// clone returns a copy no caller can use to reach another caller's slices.
+func (e ExerciseType) clone() ExerciseType {
+	return ExerciseType{
+		Name:             e.Name,
+		DisplayName:      e.DisplayName,
+		PrimaryMuscles:   copyKeys(e.PrimaryMuscles),
+		SecondaryMuscles: copyKeys(e.SecondaryMuscles),
+	}
 }
 
 // ExerciseCategory is one strength category and the exercises under it.
@@ -49,118 +53,142 @@ type ExerciseCategory struct {
 	Exercises []ExerciseType `json:"exercises"`
 }
 
-// catalogRow is one category and the exercise names this package lists for it. A
-// row with no names is a valid parent this subset does not enumerate.
-type catalogRow struct {
-	category string
-	names    []string
-}
-
-// exerciseCatalog is the compiled-in catalog. It is an array rather than a map so
-// there is no package-level mutable state: nothing can insert a category at
-// runtime, and the order is the source order.
-var exerciseCatalog = [...]catalogRow{
-	{"BENCH_PRESS", []string{"BARBELL_BENCH_PRESS", "CLOSE_GRIP_BARBELL_BENCH_PRESS",
-		"DUMBBELL_BENCH_PRESS", "INCLINE_DUMBBELL_BENCH_PRESS"}},
-	{"CALF_RAISE", []string{"SEATED_CALF_RAISE", "SINGLE_LEG_CALF_RAISE", "STANDING_CALF_RAISE"}},
-	{"CARDIO", []string{"HIGH_KNEES", "JUMPING_JACKS", "MOUNTAIN_CLIMBER"}},
-	{"CARRY", []string{"FARMERS_CARRY", "FARMERS_WALK", "SUITCASE_CARRY", "WAITER_CARRY"}},
-	{"CHOP", []string{"CABLE_WOOD_CHOP"}},
-	{"CORE", []string{"BIRD_DOG", "DEAD_BUG", "RUSSIAN_TWIST"}},
-	{"CRUNCH", []string{"BICYCLE_CRUNCH", "CABLE_CRUNCH", "CRUNCH"}},
-	{"CURL", []string{"BARBELL_BICEPS_CURL", "DUMBBELL_BICEPS_CURL", "HAMMER_CURL", "PREACHER_CURL"}},
-	{"DEADLIFT", []string{"BARBELL_DEADLIFT", "ROMANIAN_DEADLIFT", "SINGLE_LEG_DEADLIFT", "SUMO_DEADLIFT"}},
-	{"FLYE", []string{"CABLE_CROSSOVER", "DUMBBELL_FLYE", "INCLINE_DUMBBELL_FLYE"}},
-	{"HIP_RAISE", []string{"BARBELL_HIP_THRUST", "GLUTE_BRIDGE", "SINGLE_LEG_GLUTE_BRIDGE"}},
-	{"HIP_STABILITY", []string{"CLAM_SHELL", "LATERAL_BAND_WALK"}},
-	{"HIP_SWING", []string{"KETTLEBELL_SWING", "SINGLE_ARM_KETTLEBELL_SWING"}},
-	{"HYPEREXTENSION", []string{"BACK_EXTENSION", "HYPEREXTENSION"}},
-	{"LATERAL_RAISE", []string{"BENT_OVER_LATERAL_RAISE", "FRONT_RAISE", "LATERAL_RAISE"}},
-	{"LEG_CURL", []string{"GOOD_MORNING", "LEG_CURL", "SEATED_LEG_CURL"}},
-	{"LEG_RAISE", []string{"HANGING_LEG_RAISE", "LYING_LEG_RAISE"}},
-	{"LUNGE", []string{"REVERSE_LUNGE", "SIDE_LUNGE", "WALKING_LUNGE"}},
-	{"OLYMPIC_LIFT", []string{"CLEAN", "CLEAN_AND_JERK", "POWER_CLEAN", "SNATCH"}},
-	{"PLANK", []string{"PLANK", "SIDE_PLANK"}},
-	{"PLYO", []string{"BOX_JUMP", "BURPEE", "JUMP_SQUAT"}},
-	{"PULL_UP", []string{"CHIN_UP", "NEUTRAL_GRIP_PULL_UP", "PULL_UP", "WIDE_GRIP_PULL_UP"}},
-	{"PUSH_UP", []string{"DECLINE_PUSH_UP", "DIAMOND_PUSH_UP", "PUSH_UP", "WIDE_GRIP_PUSH_UP"}},
-	{"ROW", []string{"BARBELL_ROW", "DUMBBELL_ROW", "INVERTED_ROW", "SEATED_CABLE_ROW"}},
-	{"RUN", []string{"RUN", "TREADMILL_RUN"}},
-	{"SHOULDER_PRESS", []string{"ARNOLD_PRESS", "BARBELL_SHOULDER_PRESS", "DUMBBELL_SHOULDER_PRESS"}},
-	{"SHOULDER_STABILITY", []string{"EXTERNAL_ROTATION", "FACE_PULL"}},
-	{"SHRUG", []string{"BARBELL_SHRUG", "DUMBBELL_SHRUG"}},
-	{"SIT_UP", []string{"SIT_UP", "V_UP", "WEIGHTED_SIT_UP"}},
-	{"SQUAT", []string{"BACK_SQUAT", "FRONT_SQUAT", "GOBLET_SQUAT", "OVERHEAD_SQUAT", "SPLIT_SQUAT"}},
-	{"TOTAL_BODY", []string{"BURPEE", "MAN_MAKER", "THRUSTER"}},
-	{"TRICEPS_EXTENSION", []string{"OVERHEAD_TRICEPS_EXTENSION", "SKULL_CRUSHER", "TRICEPS_PRESSDOWN"}},
-	{"WARM_UP", []string{"ARM_CIRCLES", "LEG_SWINGS"}},
-	{"UNKNOWN", nil},
-}
-
-// ExerciseTypes returns the whole catalog, ordered by category, with the count
-// of exercises each category lists. The result is freshly built, so no caller
-// can mutate what another caller reads.
-func ExerciseTypes() []ExerciseCategory {
-	categories := make([]ExerciseCategory, 0, len(exerciseCatalog))
-	for _, row := range exerciseCatalog {
-		categories = append(categories, buildCategory(row.category, row.names))
-	}
-	sort.Slice(categories, func(i, j int) bool {
-		return categories[i].Category < categories[j].Category
-	})
-	return categories
-}
-
-// buildCategory renders one catalog row.
-func buildCategory(category string, names []string) ExerciseCategory {
-	exercises := make([]ExerciseType, 0, len(names))
-	for _, name := range names {
-		exercises = append(exercises, ExerciseType{Name: name, DisplayName: displayLabel(name)})
+// clone returns a deep copy of one category.
+func (c ExerciseCategory) clone() ExerciseCategory {
+	exercises := make([]ExerciseType, 0, len(c.Exercises))
+	for _, exercise := range c.Exercises {
+		exercises = append(exercises, exercise.clone())
 	}
 	return ExerciseCategory{
-		Category:    category,
-		DisplayName: displayLabel(category),
-		Count:       len(exercises),
+		Category:    c.Category,
+		DisplayName: c.DisplayName,
+		Count:       c.Count,
 		Exercises:   exercises,
 	}
 }
 
-// ExerciseCategories returns the recognized category keys, ordered.
-func ExerciseCategories() []string {
-	keys := make([]string, 0, len(exerciseCatalog))
-	for _, row := range exerciseCatalog {
-		keys = append(keys, row.category)
+// CatalogSource names which catalog answered a read, so a caller can tell the
+// published catalog from the compiled-in fallback.
+type CatalogSource string
+
+const (
+	// CatalogSourceWeb is the catalog Garmin publishes at [ExerciseCatalogURL].
+	CatalogSourceWeb CatalogSource = "garmin_web_catalog"
+	// CatalogSourceBuiltin is the compiled-in subset.
+	CatalogSourceBuiltin CatalogSource = "built_in_subset"
+)
+
+// ExerciseCatalog is one immutable catalog snapshot.
+//
+// It is built once and never mutated, so any number of concurrent tool calls may
+// read the same value. Every accessor hands back a fresh copy, so no caller can
+// reach what another caller reads.
+type ExerciseCatalog struct {
+	source     CatalogSource
+	categories []ExerciseCategory
+	index      map[string]int
+	exercises  int
+}
+
+// newExerciseCatalog builds a snapshot from category rows. The rows are consumed,
+// not retained: everything the snapshot holds is freshly allocated here.
+func newExerciseCatalog(source CatalogSource, rows map[string][]ExerciseType) *ExerciseCatalog {
+	keys := make([]string, 0, len(rows))
+	for key := range rows {
+		keys = append(keys, key)
 	}
 	sort.Strings(keys)
+
+	categories := make([]ExerciseCategory, 0, len(keys))
+	index := make(map[string]int, len(keys))
+	total := 0
+	for position, key := range keys {
+		category := buildCategory(key, rows[key])
+		categories = append(categories, category)
+		index[key] = position
+		total += category.Count
+	}
+	return &ExerciseCatalog{
+		source: source, categories: categories, index: index, exercises: total,
+	}
+}
+
+// buildCategory renders one category with its exercises ordered by name.
+func buildCategory(category string, exercises []ExerciseType) ExerciseCategory {
+	sorted := make([]ExerciseType, 0, len(exercises))
+	for _, exercise := range exercises {
+		sorted = append(sorted, exercise.clone())
+	}
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
+
+	return ExerciseCategory{
+		Category:    category,
+		DisplayName: displayLabel(category),
+		Count:       len(sorted),
+		Exercises:   sorted,
+	}
+}
+
+// resolve reports the catalog to read. A nil catalog is the compiled-in subset,
+// so every caller that has not been given one still validates against something.
+func (c *ExerciseCatalog) resolve() *ExerciseCatalog {
+	if c == nil {
+		return BuiltinExerciseCatalog()
+	}
+	return c
+}
+
+// Source reports which catalog this snapshot came from.
+func (c *ExerciseCatalog) Source() CatalogSource { return c.resolve().source }
+
+// ExerciseCount reports how many exercises the snapshot carries in total.
+func (c *ExerciseCatalog) ExerciseCount() int { return c.resolve().exercises }
+
+// Types returns the whole catalog, ordered by category. The result is freshly
+// built, so no caller can mutate what another caller reads.
+func (c *ExerciseCatalog) Types() []ExerciseCategory {
+	resolved := c.resolve()
+	out := make([]ExerciseCategory, 0, len(resolved.categories))
+	for _, category := range resolved.categories {
+		out = append(out, category.clone())
+	}
+	return out
+}
+
+// Categories returns the recognized category keys, ordered.
+func (c *ExerciseCatalog) Categories() []string {
+	resolved := c.resolve()
+	keys := make([]string, 0, len(resolved.categories))
+	for _, category := range resolved.categories {
+		keys = append(keys, category.Category)
+	}
 	return keys
 }
 
-// LookupExerciseCategory returns one catalog row and whether the category is
-// recognized.
-func LookupExerciseCategory(category string) (ExerciseCategory, bool) {
-	key := normalizeExerciseKey(category)
-	for _, row := range exerciseCatalog {
-		if row.category == key {
-			return buildCategory(row.category, row.names), true
-		}
+// Lookup returns one category and whether it is recognized.
+func (c *ExerciseCatalog) Lookup(category string) (ExerciseCategory, bool) {
+	resolved := c.resolve()
+	position, known := resolved.index[normalizeExerciseKey(category)]
+	if !known {
+		return ExerciseCategory{}, false
 	}
-	return ExerciseCategory{}, false
+	return resolved.categories[position].clone(), true
 }
 
 // MaxExerciseKeyLen bounds an exercise or category key, so a hostile value
 // cannot reach Garmin or a log line at length.
 const MaxExerciseKeyLen = 64
 
-// ValidateExercise reports whether a category and an optional exercise name may
-// be written.
+// Validate reports whether a category and an optional exercise name may be
+// written.
 //
-// The category must be one Garmin knows, because that set is closed and an
+// The category must be one this catalog knows, because that set is closed and an
 // unknown parent is a guaranteed 400. An empty name is valid — Garmin accepts a
-// null name under a known parent — and a name this subset does not list is
-// accepted after a lexical check, because the catalog is not a mirror of
+// null name under a known parent — and a name the catalog does not list is
+// accepted after a lexical check, because no catalog here is a mirror of
 // Garmin's full enum and refusing an unlisted name would refuse valid work.
-func ValidateExercise(category, name string) error {
-	if _, known := LookupExerciseCategory(category); !known {
+func (c *ExerciseCatalog) Validate(category, name string) error {
+	if _, known := c.Lookup(category); !known {
 		return fmt.Errorf("%w: exercise category is not one Garmin recognizes",
 			client.ErrValidation)
 	}
@@ -193,6 +221,16 @@ func isExerciseKey(value string) bool {
 		}
 	}
 	return true
+}
+
+// copyKeys returns a copy of a key list, or nil for an empty one.
+func copyKeys(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, len(in))
+	copy(out, in)
+	return out
 }
 
 // displayLabel renders an enum key as a readable label: BARBELL_BENCH_PRESS

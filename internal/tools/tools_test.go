@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tamcore/garmin-mcp/internal/garmin/api"
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
 	"github.com/tamcore/garmin-mcp/internal/identity"
@@ -76,7 +77,24 @@ func newHarnessWith(
 	t.Helper()
 
 	fake := testkit.NewServer(t, script)
-	server := newServer(t, newRegistrar(t, fake, bounds, limits))
+	return startHarness(t, fake, newRegistrar(t, fake, bounds, limits, nil))
+}
+
+// newCatalogHarness is newHarness with an explicit strength catalog, which is how
+// a test drives the tools against a fetched catalog instead of the compiled-in one.
+func newCatalogHarness(t *testing.T, script testkit.Script, catalog *api.ExerciseCatalog) harness {
+	t.Helper()
+
+	fake := testkit.NewServer(t, script)
+	return startHarness(t, fake,
+		newRegistrar(t, fake, tools.Bounds{}, client.Limits{}, catalog))
+}
+
+// startHarness runs one registrar over an in-memory MCP session.
+func startHarness(t *testing.T, fake *testkit.Server, registrar *tools.Registrar) harness {
+	t.Helper()
+
+	server := newServer(t, registrar)
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -105,6 +123,7 @@ func newHarnessWith(
 
 func newRegistrar(
 	t *testing.T, fake *testkit.Server, bounds tools.Bounds, limits client.Limits,
+	catalog *api.ExerciseCatalog,
 ) *tools.Registrar {
 	t.Helper()
 
@@ -119,9 +138,10 @@ func newRegistrar(
 	}
 
 	registrar, err := tools.New(tools.Deps{
-		Client: rc,
-		Caller: caller{doer: fake.Doer()},
-		Bounds: bounds,
+		Client:          rc,
+		Caller:          caller{doer: fake.Doer()},
+		Bounds:          bounds,
+		ExerciseCatalog: catalog,
 	})
 	if err != nil {
 		t.Fatalf("tools.New() = %v", err)

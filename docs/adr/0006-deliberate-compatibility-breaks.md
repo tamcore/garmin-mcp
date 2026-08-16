@@ -54,7 +54,6 @@ Entries are added by the phase that makes the break. Every one is mirrored in
 | `get_scheduled_workouts` and `get_training_plan_workouts` read the calendar through GraphQL | Not registered | The API layer builds no GraphQL request shape | House engineering standards; a stub is not parity | Both are absent from `tools/list` |
 | `get_activity_fit_data` parses a FIT file | Not registered | This server does no FIT parsing | House engineering standards; a stub is not parity | Absent from `tools/list` |
 | `set_activity_description` accepts an empty description, which clears it | An empty string is refused, at the tool layer and again by `api.requireText` with `client.ErrValidation` | Strict typed models for writes; an empty write field is rejected rather than sent | House engineering standards | A description cannot be cleared through this server |
-| `get_exercise_types` reads Garmin's web-tier exercise catalog | A documented compiled-in subset of the FIT `exercise_category` enum is served instead. The category is checked against a closed set; an exercise name gets a lexical check only, with Garmin authoritative | That host is outside the client's domain allowlist, and widening the allowlist for a static catalog adds SSRF and drift surface for no gain | Credential and tenant security above the pinned Taxuspt contract | The catalog can lag Garmin. An unlisted but well-formed exercise name is passed through rather than refused |
 | `get_workout_by_id` accepts the numeric identifier and the UUID form that adaptive Garmin Coach plans use | The numeric identifier only | The UUID path needs the Garmin Coach surface this server does not implement | House engineering standards | A Garmin Coach workout cannot be fetched by UUID. The input schema and the description both say so |
 
 ### Additions beyond the pinned contract
@@ -68,7 +67,7 @@ entry in `internal/tools/contract_test.go`.
 | Tool | Tier | What it adds |
 |------|------|--------------|
 | `update_workout` | write | Updates a workout in place. The body's `workoutId` is forced to the path id, so existing calendar schedules stay valid |
-| `get_exercise_types` | read-only | Serves the compiled-in strength exercise catalog |
+| `get_exercise_types` | read-only | Serves the strength exercise catalog Garmin publishes, read once at start-up from a compiled-in URL by an anonymous, bounded request, with the compiled-in FIT subset as the fallback. The result names which one answered |
 | `set_activity_strength_exercise_sets` | write | Replaces the exercise sets of a strength activity, then re-reads and compares them position by position |
 | `create_strength_training_activity` | write | Creates a completed strength activity, replaces its sets, then re-reads the summary and checks the stored activity identifier |
 | `delete_activity` | destructive | Deletes an activity |

@@ -1,13 +1,19 @@
 package tools_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
+	"github.com/tamcore/garmin-mcp/internal/garmin/api"
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 	"github.com/tamcore/garmin-mcp/internal/testkit"
 	"github.com/tamcore/garmin-mcp/internal/tools"
 )
+
+// argExercises is the exercise-list argument of the strength builder.
+const argExercises = "exercises"
 
 // builderScript answers every builder's upload with one saved workout.
 func builderScript() testkit.Script {
@@ -154,7 +160,7 @@ func TestCreateStrengthWorkoutBuildsRepsStepsWithRests(t *testing.T) {
 
 	h.call(t, tools.ToolCreateStrengthWorkout, map[string]any{
 		argName: "Push day",
-		"exercises": []any{map[string]any{
+		argExercises: []any{map[string]any{
 			argName:        testExerciseName,
 			argSets:        3,
 			argReps:        8,
@@ -184,7 +190,7 @@ func TestCreateStrengthWorkoutRefusesACategoryTheCatalogDoesNotKnow(t *testing.T
 
 	h.callError(t, tools.ToolCreateStrengthWorkout, map[string]any{
 		argName: "Bad category",
-		"exercises": []any{map[string]any{
+		argExercises: []any{map[string]any{
 			argName:        "SOMETHING",
 			argSets:        3,
 			argReps:        8,
@@ -208,7 +214,139 @@ func TestGetExerciseTypesServesTheCompiledCatalogWithoutCallingGarmin(t *testing
 	if count, _ := out["count"].(float64); count == 0 {
 		t.Error("the catalog is empty")
 	}
+	if source, _ := out["source"].(string); source != "built_in_subset" {
+		t.Errorf("source = %q, want the compiled-in fallback to name itself", source)
+	}
 	if len(h.fake.Requests()) != 0 {
 		t.Errorf("the catalog read reached Garmin: %v", h.recordedMethods())
+	}
+}
+
+// The category and exercise only the synthetic published document carries.
+const (
+	webOnlyCategory = "BANDED_EXERCISES"
+	webOnlyExercise = "AB_TWIST"
+)
+
+// fetchedCatalog builds a snapshot from a synthetic published document.
+//
+// The document is generated here, from this project's own compiled-in rows plus
+// synthetic filler — Garmin's document is not a fixture. The compiled-in rows are
+// present because api.ParseExerciseCatalog refuses a document it cannot recognize
+// as Garmin's taxonomy, which is the check that keeps a fabricated catalog from
+// reaching a write.
+func fetchedCatalog(t *testing.T) *api.ExerciseCatalog {
+	t.Helper()
+
+	type entry struct {
+		Primary   []string `json:"primaryMuscles"`
+		Secondary []string `json:"secondaryMuscles"`
+	}
+	categories := map[string]map[string]map[string]entry{
+		webOnlyCategory: {argExercises: {webOnlyExercise: {
+			Primary: []string{"ABS"}, Secondary: []string{"OBLIQUES"},
+		}}},
+	}
+	for _, category := range api.BuiltinExerciseCatalog().Types() {
+		exercises := map[string]entry{}
+		for _, exercise := range category.Exercises {
+			exercises[exercise.Name] = entry{Primary: []string{"CHEST"}}
+		}
+		if len(exercises) == 0 {
+			continue
+		}
+		categories[category.Category] = map[string]map[string]entry{argExercises: exercises}
+	}
+	for index := range 40 {
+		exercises := map[string]entry{}
+		for position := range 3 {
+			exercises[fmt.Sprintf("SYNTHETIC_MOVEMENT_%d_%d", index, position)] = entry{
+				Primary: []string{"CHEST"},
+			}
+		}
+		categories[fmt.Sprintf("SYNTHETIC_CATEGORY_%d", index)] = map[string]map[string]entry{
+			argExercises: exercises,
+		}
+	}
+
+	raw, err := json.Marshal(map[string]any{"categories": categories})
+	if err != nil {
+		t.Fatalf("encode the synthetic document: %v", err)
+	}
+	catalog, err := api.ParseExerciseCatalog(raw)
+	if err != nil {
+		t.Fatalf("api.ParseExerciseCatalog() = %v", err)
+	}
+	return catalog
+}
+
+// TestGetExerciseTypesServesTheFetchedCatalogAndNamesIt is what a caller needs to
+// tell a full catalog from the fallback: the source, the counts, and the muscle
+// groups the compiled-in subset never had.
+func TestGetExerciseTypesServesTheFetchedCatalogAndNamesIt(t *testing.T) {
+	h := newCatalogHarness(t, readScript(), fetchedCatalog(t))
+
+	out := h.call(t, tools.ToolGetExerciseTypes, nil)
+
+	if source, _ := out["source"].(string); source != "garmin_web_catalog" {
+		t.Errorf("source = %q, want the fetched catalog to name itself", source)
+	}
+	if count, _ := out["exercise_count"].(float64); count <= builtinExerciseCount {
+		t.Errorf("exercise_count = %v, want more than the compiled-in subset carries", count)
+	}
+	if len(h.fake.Requests()) != 0 {
+		t.Errorf("the catalog read reached Garmin: %v", h.recordedMethods())
+	}
+
+	categories, _ := out["categories"].([]any)
+	muscles, found := 0, false
+	for _, raw := range categories {
+		category, _ := raw.(map[string]any)
+		if category["category"] != webOnlyCategory {
+			continue
+		}
+		found = true
+		exercises, _ := category["exercises"].([]any)
+		for _, item := range exercises {
+			exercise, _ := item.(map[string]any)
+			primary, _ := exercise["primary_muscles"].([]any)
+			muscles += len(primary)
+		}
+	}
+	if !found {
+		t.Fatalf("the fetched category %q is absent from the result", webOnlyCategory)
+	}
+	if muscles == 0 {
+		t.Error("no muscle group reached the result")
+	}
+}
+
+// builtinExerciseCount is how many exercises the compiled-in subset carries. A
+// fetched result has to beat it, or the fetch bought nothing.
+const builtinExerciseCount = 98
+
+// TestStrengthWritesAcceptACategoryOnlyTheFetchedCatalogKnows is the other half
+// of the fetch: the categories it adds validate, so a caller is not refused work
+// Garmin accepts.
+func TestStrengthWritesAcceptACategoryOnlyTheFetchedCatalogKnows(t *testing.T) {
+	h := newWriteHarnessWithCatalog(t, builderScript(), enabledWrites(), fetchedCatalog(t))
+
+	h.call(t, tools.ToolCreateStrengthWorkout, map[string]any{
+		argName: "Banded day",
+		argExercises: []any{map[string]any{
+			argName:        webOnlyExercise,
+			argSets:        3,
+			argReps:        10,
+			argRestSeconds: 60,
+			argCategory:    webOnlyCategory,
+		}},
+	})
+
+	steps := uploadedSteps(t, h)
+	group, _ := steps[0].(map[string]any)
+	nested, _ := group["workoutSteps"].([]any)
+	set, _ := nested[0].(map[string]any)
+	if got := set[argCategory]; got != webOnlyCategory {
+		t.Errorf("category = %v, want the fetched category", got)
 	}
 }

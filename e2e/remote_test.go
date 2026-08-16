@@ -17,7 +17,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -101,7 +100,7 @@ func launchRemote(t *testing.T, dir, configPath string) {
 		t.Fatalf("create the server log: %v", err)
 	}
 
-	cmd := exec.Command(bin, "serve", "--config", configPath)
+	cmd := offlineCommand(bin, "serve", "--config", configPath)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	if err := cmd.Start(); err != nil {

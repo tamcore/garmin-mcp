@@ -35,7 +35,7 @@ the tag changes nothing.
 | `internal/cmd` | 74.3% | 77.4% |
 | `internal/config` | 90.8% | |
 | `internal/cryptostore` | 89.9% | |
-| `internal/garmin/api` | 89.9% | 89.9% |
+| `internal/garmin/api` | 90.7% | 90.7% |
 | `internal/garmin/auth` | 67.3% | 88.2% |
 | `internal/garmin/client` | 94.3% | 94.6% |
 | `internal/garmin/protocol` | 96.7% | |
@@ -52,11 +52,11 @@ the tag changes nothing.
 | `internal/store` | 83.8% | |
 | `internal/testkit` | 91.5% | |
 | `internal/tokenlink` | 80.0% | |
-| `internal/tools` | 83.5% | 83.6% |
+| `internal/tools` | 85.8% | 85.8% |
 | `migrations` | 100.0% | |
 
 One package sits under the 80% review rule: `internal/cmd` at 74.3%.
-`internal/tools` left the list with this slice, rising from 77.0% to 83.5%.
+`internal/tools` left the list earlier and stands at 85.8%.
 CI enforces a per-package floor with an explicit exception list, so a package
 that drops under the floor fails the build unless it is named there.
 
@@ -278,6 +278,64 @@ that drops under the floor fails the build unless it is named there.
 - [x] `internal/tools` registers **32 read-only, 22 write and 5 destructive
       tools, including the server's own `server_info`**, which is 59 tools on the
       wire. The calendar tools arrived with the GraphQL request shape.
+- [x] `get_exercise_types` serves the catalog Garmin publishes rather than the
+      compiled-in subset. The document at the compiled-in URL
+      `https://connect.garmin.com/web-data/exercises/Exercises.json` is read once
+      per process, as the server is assembled in `cmd/garmin-mcp`, and the
+      immutable snapshot is shared by every tool call and every strength-write
+      validation for the process lifetime — in memory only, refetched on restart.
+      The compiled-in subset stays as the **fallback**: a timeout, a refused
+      connection, a TLS failure, a redirect, a non-200, a truncated or oversized
+      body, malformed JSON, a document with no categories, and a document smaller
+      than the subset itself each land on it, and none of them can fail a
+      start-up. The result reports which catalog answered and the muscle groups
+      the published document carries. The published document is preferred to the
+      vendored FIT profile because the two sets differ in both directions: it
+      holds values Garmin's own client writes that the enum cannot express, and
+      it holds muscle data the enum has no field for.
+
+      The read is anonymous by construction — its own dedicated transport, never
+      the process-wide default, no jar, no token, no cookie, and exactly two
+      compiled-in headers, `Accept` and `User-Agent`. A test pins that whole
+      header set rather than only the absence of a credential, and an end-to-end
+      test records what the binary actually asked to reach.
+
+      It is bounded twice: 4 MiB on the wire, and — because a byte cap does not
+      bound what a document expands into — 256 categories, 1024 exercises per
+      category, 8192 exercises, 64 muscles per list and 2 MiB rendered. The
+      document is walked as a stream, categories, exercises and muscle arrays
+      alike, so each bound is applied at the key or element that crosses it and a
+      hostile body is refused before it is materialized rather than after. One
+      rule everywhere: over a bound a document is refused, never truncated.
+
+      Every bound is measured against the published document (2026-08-16), and the
+      one that was not cost a regression: `MaxCatalogMuscles` was set to 8 without
+      being measured, Garmin publishes 10, and refuse-never-trim then made a
+      running server serve the 98-exercise fallback until the live drift detector
+      caught it. Observed against each bound: 198,082 wire bytes (21.2x), 47
+      categories (5.4x), 131 exercises in the largest category (7.8x), 1510
+      exercises (5.4x), 10 muscles in the longest list out of a vocabulary of 18
+      (6.4x), 225,666 rendered bytes (9.3x) — the rendered cap being the tightest.
+      The recognition floor of 50% sits against a measured 64.3%, which tolerates
+      14 of the 63 recognized names disappearing. `docs/parity.md` carries the
+      table. The offline guard the suite lacked is now
+      `TestAMuscleListAtGarminsObservedMaximumLoads`: it carries Garmin's observed
+      muscle shape without the network, so a bound below reality fails in CI rather
+      than in production, which the credentialed drift detector cannot do.
+
+      Ambiguity is refused for the same reason: two keys that normalize to one
+      (including empty and whitespace-only keys, which are recorded before they
+      are judged), a structural member carried twice, and data after the top-level
+      document each would let the order a document happens to carry things in
+      decide what gets served.
+
+      A count-only plausibility gate would still admit a fabricated catalog, whose
+      categories would then become the closed set strength writes validate
+      against, so a fetched document must also be recognizable as Garmin's
+      taxonomy: every compiled-in category except the FIT `UNKNOWN` sentinel, and
+      at least half of the compiled-in exercise names under their own parent —
+      measured at 33 of 33 and 63 of 98 (64%). That is recognition, not
+      authentication; the trust anchor is TLS to connect.garmin.com.
 - [x] Activity file decoding moved to `github.com/muktihari/fit` (ADR 0007). The
       hand-rolled container decoder shipped two defects that only real files
       exposed: session segments collapsed to a single sample, because these
@@ -606,9 +664,26 @@ coordinate, credential or raw payload.** It does not claim the readings are
 correct — that is what the FIT cross-check and the domain-client agreement checks
 are for, and neither covers the wellness surface.
 
-`get_exercise_types` is the one read-only tool that legitimately reaches no
-endpoint: it serves the compiled-in exercise catalog. It is named in
-`answersLocally` with that reason, and dispatching a request would now fail it.
+`get_exercise_types` is the one read-only tool that legitimately dispatches
+nothing through `readOnlyCaller`: it answers from the strength catalog the process
+loaded before the sweep started. That load is the published-catalog read, and it
+runs on its own anonymous client rather than through the suite's caller, so the
+`answersLocally` assertion still holds after the fetch landed — it was verified,
+not assumed. Its reason in `live/shapes_test.go` was rewritten to say that, and
+`live/exercisecatalog_test.go` is the drift detector for the URL itself: it fails
+when the published document stops answering, stops carrying muscle groups, or
+shrinks past a floor.
+
+That drift test is gated like every other request this suite makes, and so is the
+start-up read the two environments perform: `gatedExerciseCatalog` checks the
+acknowledgement itself rather than trusting its callers, because it is the one
+place in the suite that contacts Garmin outside the authenticated session. A
+build tag alone therefore dispatches nothing — verified by running
+`go test -tags=garminlive ./live/...` with no acknowledgement and no credentials
+through a recording proxy, which observed no connection at all, and by a
+gate-free test that counts fetch **attempts** rather than inspecting the returned
+catalog, since an unreachable network would otherwise make a leak look like a
+pass. `TestEverySweptToolDeclaresItsShape` stays gate-free and network-free.
 
 On the first run the account held **zero** activities and an empty workout
 library, so everything needing one skipped — including the FIT cross-check, the
@@ -948,11 +1023,21 @@ them.
 - **`set_activity_description` cannot clear a description with an empty string.**
   `api.requireText` refuses an empty write field with `client.ErrValidation`, and
   the tool layer rejects it before that.
-- **`get_exercise_types` serves a compiled-in subset** of the FIT
-  `exercise_category` enum rather than fetching Garmin's web-tier catalog,
-  because that host is outside the client's allowlist. Categories are validated
-  against a closed set; an exercise name gets a lexical check only, with Garmin
-  authoritative.
+- **`get_exercise_types` reads Garmin's published catalog once at start-up**,
+  from the compiled-in URL
+  `https://connect.garmin.com/web-data/exercises/Exercises.json`, and serves that
+  immutable snapshot for the process lifetime. The compiled-in subset of the FIT
+  `exercise_category` enum remains **only as the fallback** for a read that
+  failed, and the result names which catalog answered in a `source` field. The
+  published document is preferred over the vendored FIT profile because the two
+  sets differ in both directions: the web catalog carries values Garmin's own
+  client writes that the enum cannot express — bare category-name entries, and
+  names with a leading digit such as `_3_WAY_CALF_RAISE` — and it carries muscle
+  groups, which the enum has no equivalent for. The read is anonymous, bounded,
+  refuses a redirect, refuses a document smaller than the compiled-in subset, and
+  cannot fail a start-up. Categories are validated against a closed set — the
+  fetched catalog merged over the compiled-in one, so the fetch only widens it —
+  and an exercise name gets a lexical check only, with Garmin authoritative.
 - **`get_workout_by_id` serves the numeric identifier only.** The UUID form that
   adaptive Garmin Coach plans use is not served.
 - **`decoupling_percent` carries the opposite sign to upstream's

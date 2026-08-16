@@ -194,12 +194,32 @@ func (e *env) buildDomainClients(rest *client.Client) error {
 	return nil
 }
 
+// liveExerciseCatalog reads the published catalog the way the binary does at
+// start-up, which is what makes get_exercise_types answer from memory in the sweep.
+func liveExerciseCatalog() *api.ExerciseCatalog {
+	return gatedExerciseCatalog(api.LoadExerciseCatalog)
+}
+
+// gatedExerciseCatalog decides whether the published catalog may be read at all.
+// The loader is a parameter so a test can assert that decision rather than its
+// outcome, which an unreachable network would make indistinguishable.
+func gatedExerciseCatalog(
+	load func(context.Context) *api.ExerciseCatalog,
+) *api.ExerciseCatalog {
+	if skip := gate(); skip != "" {
+		return api.BuiltinExerciseCatalog()
+	}
+	return load(context.Background())
+}
+
 // buildMCPSession stands up the real server, the real registry and a real MCP client
 // over an in-memory transport, so a tool call in this suite takes the same path a
 // client's call takes: the middleware chain, the policy, the registry and the
 // request layer.
 func (e *env) buildMCPSession(rest *client.Client, caller client.Caller) error {
-	registrar, err := tools.New(tools.Deps{Client: rest, Caller: caller})
+	registrar, err := tools.New(tools.Deps{
+		Client: rest, Caller: caller, ExerciseCatalog: liveExerciseCatalog(),
+	})
 	if err != nil {
 		return fmt.Errorf("building the tool registrar: %w", err)
 	}

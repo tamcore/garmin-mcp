@@ -32,17 +32,24 @@ type ExerciseCategory struct {
 type ExerciseType struct {
 	Name        string `json:"name" jsonschema:"Garmin's exercise key, e.g. BARBELL_BENCH_PRESS"`
 	DisplayName string `json:"display_name" jsonschema:"the human-readable label"`
+	// The muscle groups exist in the published catalog only. The compiled-in
+	// fallback has never carried them, so both lists are omitted there.
+	PrimaryMuscles   []string `json:"primary_muscles,omitempty" jsonschema:"the primary muscle groups"`
+	SecondaryMuscles []string `json:"secondary_muscles,omitempty" jsonschema:"the secondary muscle groups"`
 }
 
 // An ExerciseCatalog is the whole strength catalog this server validates against.
 type ExerciseCatalog struct {
-	Categories []ExerciseCategory `json:"categories" jsonschema:"the categories, ordered by key"`
-	Count      int                `json:"count" jsonschema:"how many categories this result carries"`
+	Source        string             `json:"source" jsonschema:"which catalog answered"`
+	Categories    []ExerciseCategory `json:"categories" jsonschema:"the categories, ordered by key"`
+	Count         int                `json:"count" jsonschema:"how many categories this result carries"`
+	ExerciseCount int                `json:"exercise_count" jsonschema:"how many exercises this result carries in total"`
 }
 
-// LogValue reports the catalog size, never a movement.
+// LogValue reports the catalog size and which catalog answered, never a movement.
 func (c ExerciseCatalog) LogValue() slog.Value {
-	return shape("exerciseCatalog", slog.Int("categories", len(c.Categories)))
+	return shape("exerciseCatalog",
+		slog.String("source", c.Source), slog.Int("categories", len(c.Categories)))
 }
 
 func getExerciseTypesContract() Contract {
@@ -51,9 +58,11 @@ func getExerciseTypesContract() Contract {
 			Name:  ToolGetExerciseTypes,
 			Title: "Get the strength exercise catalog",
 			Description: "read the strength categories and exercise keys this server accepts. " +
-				"The category set is closed and an unknown category is refused before any " +
-				"write; an exercise name this catalog does not list is still accepted, " +
-				"because the catalog is a documented subset rather than a mirror",
+				"The result names which catalog answered: the catalog Garmin publishes, " +
+				"read once at start-up and carrying muscle groups, or the compiled-in " +
+				"subset it falls back to. The category set is closed and an unknown " +
+				"category is refused before any write; an exercise name the catalog does " +
+				"not list is still accepted, because neither catalog mirrors Garmin's enum",
 			Tier:        policy.TierReadOnly,
 			Category:    categoryOrdinary,
 			Annotations: readOnlyAnnotations(),
@@ -62,23 +71,28 @@ func getExerciseTypesContract() Contract {
 	}
 }
 
-func registerGetExerciseTypes(registry *mcpserver.Registry, _ *service) error {
+func registerGetExerciseTypes(registry *mcpserver.Registry, svc *service) error {
 	handler := func(_ context.Context, _ *mcp.CallToolRequest, _ noArguments) (
 		*mcp.CallToolResult, ExerciseCatalog, error,
 	) {
-		return nil, newExerciseCatalog(api.ExerciseTypes()), nil
+		return nil, newExerciseCatalog(svc.catalog), nil
 	}
 	return mcpserver.AddTool(registry, getExerciseTypesContract().Registration(), handler)
 }
 
-// newExerciseCatalog copies the compiled-in catalog into the result model.
-func newExerciseCatalog(categories []api.ExerciseCategory) ExerciseCatalog {
+// newExerciseCatalog copies the catalog in force into the result model and names
+// which catalog that was. A nil catalog is the compiled-in subset.
+func newExerciseCatalog(catalog *api.ExerciseCatalog) ExerciseCatalog {
+	categories := catalog.Types()
 	out := make([]ExerciseCategory, 0, len(categories))
 	for _, category := range categories {
 		exercises := make([]ExerciseType, 0, len(category.Exercises))
 		for _, exercise := range category.Exercises {
 			exercises = append(exercises, ExerciseType{
-				Name: exercise.Name, DisplayName: exercise.DisplayName,
+				Name:             exercise.Name,
+				DisplayName:      exercise.DisplayName,
+				PrimaryMuscles:   exercise.PrimaryMuscles,
+				SecondaryMuscles: exercise.SecondaryMuscles,
 			})
 		}
 		out = append(out, ExerciseCategory{
@@ -88,7 +102,12 @@ func newExerciseCatalog(categories []api.ExerciseCategory) ExerciseCatalog {
 			Exercises:   exercises,
 		})
 	}
-	return ExerciseCatalog{Categories: out, Count: len(out)}
+	return ExerciseCatalog{
+		Source:        string(catalog.Source()),
+		Categories:    out,
+		Count:         len(out),
+		ExerciseCount: catalog.ExerciseCount(),
+	}
 }
 
 // strengthExercise is one exercise of a built strength workout.
@@ -165,7 +184,7 @@ func registerCreateStrengthWorkout(registry *mcpserver.Registry, svc *service) e
 	handler := func(ctx context.Context, _ *mcp.CallToolRequest, in createStrengthWorkoutInput) (
 		*mcp.CallToolResult, SavedWorkoutResult, error,
 	) {
-		document, err := buildStrengthWorkout(in)
+		document, err := buildStrengthWorkout(in, svc.catalog)
 		if err != nil {
 			return nil, SavedWorkoutResult{}, err
 		}
@@ -174,8 +193,11 @@ func registerCreateStrengthWorkout(registry *mcpserver.Registry, svc *service) e
 	return mcpserver.AddTool(registry, createStrengthWorkoutContract().Registration(), handler)
 }
 
-// buildStrengthWorkout composes the strength document.
-func buildStrengthWorkout(in createStrengthWorkoutInput) (api.WorkoutDocument, error) {
+// buildStrengthWorkout composes the strength document, validating every named
+// category against the catalog in force.
+func buildStrengthWorkout(
+	in createStrengthWorkoutInput, catalog *api.ExerciseCatalog,
+) (api.WorkoutDocument, error) {
 	name, err := parseRequiredText(argNameName, in.Name, maxNameArgumentLen)
 	if err != nil {
 		return api.WorkoutDocument{}, err
@@ -186,7 +208,7 @@ func buildStrengthWorkout(in createStrengthWorkoutInput) (api.WorkoutDocument, e
 
 	builder := newWorkoutBuilder(name, strengthSport())
 	for _, exercise := range in.Exercises {
-		if err := addStrengthExercise(builder, exercise); err != nil {
+		if err := addStrengthExercise(builder, exercise, catalog); err != nil {
 			return api.WorkoutDocument{}, err
 		}
 	}
@@ -194,7 +216,9 @@ func buildStrengthWorkout(in createStrengthWorkoutInput) (api.WorkoutDocument, e
 }
 
 // addStrengthExercise validates one exercise and appends its sets and rests.
-func addStrengthExercise(builder *workoutBuilder, exercise strengthExercise) error {
+func addStrengthExercise(
+	builder *workoutBuilder, exercise strengthExercise, catalog *api.ExerciseCatalog,
+) error {
 	movement, err := parseRequiredText(argNameName, exercise.Name, maxExerciseKeyLen)
 	if err != nil {
 		return err
@@ -203,7 +227,7 @@ func addStrengthExercise(builder *workoutBuilder, exercise strengthExercise) err
 		return err
 	}
 	if exercise.Category != "" {
-		if err := api.ValidateExercise(exercise.Category, movement); err != nil {
+		if err := catalog.Validate(exercise.Category, movement); err != nil {
 			return invalidArgument(
 				"category must be a Garmin exercise category from get_exercise_types")
 		}

@@ -231,7 +231,9 @@ func (w *writeEnv) buildDomainClients(rest *client.Client) error {
 // write guard and the read-only server keeps its own caller, so a write tool cannot
 // be reached through the read-only session even by mistake.
 func (w *writeEnv) buildMCPSession(rest *client.Client, caller client.Caller) error {
-	registrar, err := tools.New(tools.Deps{Client: rest, Caller: caller})
+	registrar, err := tools.New(tools.Deps{
+		Client: rest, Caller: caller, ExerciseCatalog: liveExerciseCatalog(),
+	})
 	if err != nil {
 		return fmt.Errorf("building the write tool registrar: %w", err)
 	}

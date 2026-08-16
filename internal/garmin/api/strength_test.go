@@ -42,7 +42,7 @@ func TestSetPlanExpandsRepeatsAndRestSpacing(t *testing.T) {
 			RestSeconds: 90, Category: categorySquat, ExerciseName: exerciseBackSquat,
 		}},
 	}
-	built, err := plan.Build()
+	built, err := plan.Build(api.BuiltinExerciseCatalog())
 	if err != nil {
 		t.Fatalf("Build() = %v", err)
 	}
@@ -92,7 +92,7 @@ func TestSetPlanHonorsExplicitOffsetsAndAbsoluteStarts(t *testing.T) {
 			{Repetitions: 5, DurationSeconds: 30, Category: categoryPushUp, StartTime: &absolute},
 		},
 	}
-	built, err := plan.Build()
+	built, err := plan.Build(api.BuiltinExerciseCatalog())
 	if err != nil {
 		t.Fatalf("Build() = %v", err)
 	}
@@ -158,7 +158,7 @@ func TestSetPlanRefusesWhatGarminWouldReject(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			if _, err := plan.Build(); !errors.Is(err, client.ErrValidation) {
+			if _, err := plan.Build(api.BuiltinExerciseCatalog()); !errors.Is(err, client.ErrValidation) {
 				t.Errorf("Build() = %v, want ErrValidation", err)
 			}
 		})
@@ -171,7 +171,8 @@ func TestSetPlanRefusesWhatGarminWouldReject(t *testing.T) {
 func TestExerciseCatalogIsUsableForAStrengthStep(t *testing.T) {
 	t.Parallel()
 
-	catalog := api.ExerciseTypes()
+	builtin := api.BuiltinExerciseCatalog()
+	catalog := builtin.Types()
 	if len(catalog) < 20 {
 		t.Fatalf("%d categories, want the FIT category set", len(catalog))
 	}
@@ -181,14 +182,14 @@ func TestExerciseCatalogIsUsableForAStrengthStep(t *testing.T) {
 				catalog[index-1].Category, catalog[index].Category)
 		}
 	}
-	if len(api.ExerciseCategories()) != len(catalog) {
+	if len(builtin.Categories()) != len(catalog) {
 		t.Errorf("%d category keys for %d catalog rows",
-			len(api.ExerciseCategories()), len(catalog))
+			len(builtin.Categories()), len(catalog))
 	}
 
-	squat, ok := api.LookupExerciseCategory("squat")
+	squat, ok := builtin.Lookup("squat")
 	if !ok {
-		t.Fatal("LookupExerciseCategory(squat) reported no such category")
+		t.Fatal("Lookup(squat) reported no such category")
 	}
 	if squat.Count != len(squat.Exercises) || squat.Count == 0 {
 		t.Errorf("Count = %d for %d exercises", squat.Count, len(squat.Exercises))
@@ -197,8 +198,8 @@ func TestExerciseCatalogIsUsableForAStrengthStep(t *testing.T) {
 		t.Errorf("DisplayName = %q, want Squat", squat.DisplayName)
 	}
 	for _, exercise := range squat.Exercises {
-		if err := api.ValidateExercise(squat.Category, exercise.Name); err != nil {
-			t.Errorf("ValidateExercise(%q, %q) = %v", squat.Category, exercise.Name, err)
+		if err := builtin.Validate(squat.Category, exercise.Name); err != nil {
+			t.Errorf("Validate(%q, %q) = %v", squat.Category, exercise.Name, err)
 		}
 		if exercise.DisplayName == "" || exercise.DisplayName == exercise.Name {
 			t.Errorf("exercise %q renders no display name", exercise.Name)
@@ -212,16 +213,16 @@ func TestExerciseCatalogIsUsableForAStrengthStep(t *testing.T) {
 func TestValidateExerciseKeepsTheCategoryClosedAndTheNameOpen(t *testing.T) {
 	t.Parallel()
 
-	if err := api.ValidateExercise(categorySquat, ""); err != nil {
+	if err := api.BuiltinExerciseCatalog().Validate(categorySquat, ""); err != nil {
 		t.Errorf("an empty name under a known category = %v, want it accepted", err)
 	}
-	if err := api.ValidateExercise(categorySquat, "SOME_UNLISTED_SQUAT"); err != nil {
+	if err := api.BuiltinExerciseCatalog().Validate(categorySquat, "SOME_UNLISTED_SQUAT"); err != nil {
 		t.Errorf("an unlisted name under a known category = %v, want it accepted", err)
 	}
-	if err := api.ValidateExercise("UNASSIGNED", ""); !errors.Is(err, client.ErrValidation) {
+	if err := api.BuiltinExerciseCatalog().Validate("UNASSIGNED", ""); !errors.Is(err, client.ErrValidation) {
 		t.Errorf("an unknown category = %v, want ErrValidation", err)
 	}
-	if err := api.ValidateExercise(categorySquat, "back squat; drop table"); !errors.Is(
+	if err := api.BuiltinExerciseCatalog().Validate(categorySquat, "back squat; drop table"); !errors.Is(
 		err, client.ErrValidation) {
 		t.Errorf("a name outside the key charset = %v, want ErrValidation", err)
 	}

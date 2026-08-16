@@ -557,7 +557,7 @@ documented-exclusion entry in `internal/tools/contract_test.go` instead.
 | Tool | Tier | Beyond the pinned commit, from | What it does |
 | --- | --- | --- | --- |
 | `update_workout` | write | [Taxuspt/garmin_mcp#214](https://github.com/Taxuspt/garmin_mcp/pull/214) | Updates a workout in place. The body's `workoutId` is forced to the path id, so existing calendar schedules stay valid. |
-| `get_exercise_types` | read-only | [Taxuspt/garmin_mcp#214](https://github.com/Taxuspt/garmin_mcp/pull/214) | Serves the compiled-in strength exercise catalog. |
+| `get_exercise_types` | read-only | [Taxuspt/garmin_mcp#214](https://github.com/Taxuspt/garmin_mcp/pull/214) | Serves the strength exercise catalog Garmin publishes, read once at start-up, and the compiled-in subset when that read fails. The result names which one answered. |
 | `set_activity_strength_exercise_sets` | write | [Taxuspt/garmin_mcp#208](https://github.com/Taxuspt/garmin_mcp/pull/208) | Replaces the exercise sets of a strength activity, then re-reads and compares them position by position. |
 | `create_strength_training_activity` | write | [Taxuspt/garmin_mcp#208](https://github.com/Taxuspt/garmin_mcp/pull/208) | Creates a completed strength activity, replaces its sets, then re-reads the summary and checks the stored activity identifier. |
 | `delete_activity` | destructive | `python-garminconnect` `delete_activity`; no upstream pull request | Deletes an activity. |
@@ -643,18 +643,100 @@ An empty string is refused, at the tool layer and again in the API layer, where
 field. A caller that wants to clear a description cannot do it through this
 server.
 
-### `get_exercise_types` serves a compiled-in catalog
+### `get_exercise_types` reads the published catalog, and keeps a compiled-in fallback
 
-Upstream reads Garmin's web-tier exercise catalog. That host is outside this
-client's domain allowlist, and widening the allowlist for a static catalog is not
-worth the SSRF and drift surface. This server therefore serves a **documented
-subset of the FIT `exercise_category` enum**, compiled in.
+This server reads the catalog Garmin publishes at
+`https://connect.garmin.com/web-data/exercises/Exercises.json` once, at server
+start-up, and serves that immutable snapshot for the process lifetime. The
+compiled-in **documented subset of the FIT `exercise_category` enum** remains, as
+the fallback that answers whenever that read fails. Every result names which one
+answered, in a `source` field: `garmin_web_catalog` or `built_in_subset`.
+
+Why the published document rather than the vendored FIT profile: the two sets are
+not the same and neither contains the other. The published catalog carries values
+Garmin's own web application writes that the FIT enum cannot express — the bare
+category-name entries such as `BENCH_PRESS` under `BENCH_PRESS`, and names with a
+leading digit such as `_3_WAY_CALF_RAISE` — so an enum-only catalog would refuse
+valid exercises. It also carries the muscle groups of every exercise, which the
+enum has no equivalent for; they are surfaced per exercise and are absent for the
+fallback.
+
+The read is narrow by construction:
+
+- **One compiled-in URL.** No configuration and no caller contributes a host, a
+  path or a query, so the exception cannot be widened into a general fetcher.
+- **Anonymous, on a dedicated client.** Its own `http.Transport` and connection
+  pool, never `http.DefaultTransport`, no cookie jar, and no contact with the
+  authenticated client, the token store or the refresher. Compression is disabled
+  so the transport adds no header of its own: the request carries exactly `Accept`
+  and `User-Agent`, both compiled in, and a test pins that whole header set rather
+  than only the absence of a credential.
+- **No redirect.** The 3xx is handed back unfollowed and refused by the status
+  check, so the read cannot be moved to another host.
+- **Bounded twice, and bounded while reading.** The response body is capped, and
+  — because a byte cap does not bound what a document expands into — so are the
+  categories, the exercises, the muscle lists and the rendered result. The
+  document is walked as a stream, categories, exercises **and muscle arrays
+  alike**, so each bound is applied at the key or element that crosses it and
+  nothing beyond the accepted structure is ever held. One rule everywhere: over a
+  bound the document is **refused, never truncated**, so a low-memory deployment
+  falls back instead of dying at start-up and a part-served catalog can never
+  disagree with what Garmin published.
+
+  Every bound is set from the published document as measured on 2026-08-16, not
+  invented. `MaxCatalogMuscles` was the exception — it was set to 8 without being
+  measured, Garmin publishes 10, and under the refuse-never-trim rule that made a
+  running server fall back to the 98-exercise subset until the live drift detector
+  caught it:
+
+  | Bound | Value | Observed in the published document | Headroom |
+  | --- | --- | --- | --- |
+  | Response body | 4 MiB | 198,082 bytes | 21.2x |
+  | Categories | 256 | 47 | 5.4x |
+  | Exercises per category | 1024 | 131 (`PLANK`) | 7.8x |
+  | Exercises in total | 8192 | 1510 | 5.4x |
+  | Muscle groups per list | 64 | 10 (`TOTAL_BODY`/`MAN_MAKERS`), from a vocabulary of 18 distinct groups | 6.4x over the longest list, 3.6x over the entire vocabulary |
+  | Rendered result | 2 MiB | 225,666 bytes | 9.3x |
+
+  The muscle bound is the loosest relative to observation on purpose: a muscle key
+  is bounded at 64 bytes, so even a full list costs about 4 KB, and the rendered
+  cap is the backstop that actually limits what a caller receives. The tightest is
+  the rendered cap at 9.3x, which Garmin would have to grow the catalog nine-fold
+  to cross. `TestAMuscleListAtGarminsObservedMaximumLoads` carries the observed
+  muscle shape offline, so a bound set below reality fails in CI rather than in
+  production — the live drift detector needs an account and an acknowledgement and
+  cannot protect CI.
+
+- **Unambiguous structure.** Two raw keys that normalize to one (`SQUAT` and
+  ` squat `, and equally `""` and `"   "`, which are recorded before they are
+  judged) are refused rather than resolved, because resolving them would depend on
+  the order the document happens to carry them in. A structural member carried
+  twice — two `categories` blocks, or two `exercises` blocks in one category — is
+  refused for the same reason: the second block starts a fresh collision set, so a
+  key could appear in both and the later one would silently win. Data after the
+  top-level document is refused rather than ignored, so a recognized prefix
+  followed by a second value or by garbage is never served.
+- **Recognizable as Garmin's taxonomy.** A count-only gate would admit a
+  fabricated document of invented categories, and those categories would then
+  become the closed set that strength writes validate against. A fetched document
+  must therefore carry every compiled-in category except the FIT `UNKNOWN`
+  sentinel, and reproduce at least **half** of the compiled-in exercise names
+  under their own parent. Measured on 2026-08-16: 33 of 33 required categories,
+  and 63 of 98 names (64.3%). The floor tolerates **14 of those 63 names
+  disappearing** before a legitimate document would be refused — Garmin renaming
+  or dropping a fifth of the names this project compiled in. This is recognition,
+  not authentication: the trust anchor is the TLS connection to
+  `connect.garmin.com`. What it buys is that a document which is not the catalog
+  cannot replace the compiled-in subset.
+
+No failure can stop a server from starting.
 
 The validation is asymmetric on purpose: the **category** is checked against a
 closed set and an unknown category is refused, while an **exercise name** gets a
 lexical check only — upper-case ASCII, digits and underscore, bounded in length.
 Garmin remains authoritative for names, so a name this server does not list is
-passed through rather than rejected.
+passed through rather than rejected. The fetched catalog is merged over the
+compiled-in one, so the fetch can only widen what validates, never narrow it.
 
 ### `decoupling_percent` carries the opposite sign to upstream's `hr_drift_pct`
 
