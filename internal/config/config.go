@@ -91,6 +91,10 @@ const (
 	DefaultMaxResponseBytes int64 = 8 << 20
 	// DefaultRequestTimeout bounds one outbound Garmin call.
 	DefaultRequestTimeout = 30 * time.Second
+	// DefaultSafetyDelay is the pause before a write or destructive tool runs.
+	// Zero, so no deployment starts waiting because it upgraded: the delay is a
+	// deliberate operator choice, not a default cost on every write.
+	DefaultSafetyDelay time.Duration = 0
 	// DefaultSessionTimeout closes an idle Streamable HTTP session.
 	DefaultSessionTimeout = 30 * time.Minute
 	// DefaultReadRateLimitPerMinute bounds read tools per principal.
@@ -115,6 +119,10 @@ const (
 	MaxRequestBytesCap int64 = 8 << 20
 	// MaxResponseBytesCap is the largest accepted response-body bound.
 	MaxResponseBytesCap int64 = 64 << 20
+	// MaxSafetyDelay is the largest accepted pre-write pause. A delay longer than
+	// this outlives the patience of every MCP client, so the call would be
+	// abandoned rather than delayed, which is not what the setting is for.
+	MaxSafetyDelay = 5 * time.Minute
 	// MinRequestTimeout is the smallest accepted outbound request timeout.
 	MinRequestTimeout = time.Second
 	// MaxRequestTimeout is the largest accepted outbound request timeout.
@@ -218,6 +226,10 @@ type Config struct {
 	MaxResponseBytes int64
 	// RequestTimeout bounds one outbound Garmin call.
 	RequestTimeout time.Duration
+
+	// SafetyDelay pauses a write or destructive tool call before it runs, after
+	// every gate has allowed it. Zero disables the pause entirely.
+	SafetyDelay time.Duration
 	// SessionTimeout closes an idle Streamable HTTP session. It bounds how long
 	// a session identifier stays addressable, and it is unused in stdio mode.
 	SessionTimeout time.Duration
@@ -245,6 +257,7 @@ func Default() Config {
 		MaxRequestBytes:         DefaultMaxRequestBytes,
 		MaxResponseBytes:        DefaultMaxResponseBytes,
 		RequestTimeout:          DefaultRequestTimeout,
+		SafetyDelay:             DefaultSafetyDelay,
 		SessionTimeout:          DefaultSessionTimeout,
 		ReadRateLimitPerMinute:  DefaultReadRateLimitPerMinute,
 		WriteRateLimitPerMinute: DefaultWriteRateLimitPerMinute,

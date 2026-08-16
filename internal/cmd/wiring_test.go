@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tamcore/garmin-mcp/internal/config"
 	"github.com/tamcore/garmin-mcp/internal/identity"
@@ -149,5 +150,26 @@ func TestWiredLoggerHasASinkAndItIsNotStdout(t *testing.T) {
 	}
 	if deps.logger.Sink() == nil {
 		t.Error("the logger has no sink")
+	}
+}
+
+// TestServeCarriesTheSafetyDelayIntoTheServer proves the operator's setting reaches
+// the middleware that enforces it.
+//
+// A setting that parses, validates and is never passed on is the failure this
+// catches: every unit below would still pass, and every write would still run
+// immediately, while `doctor` reported the delay the operator configured.
+func TestServeCarriesTheSafetyDelayIntoTheServer(t *testing.T) {
+	cfg := localConfig(t)
+	cfg.SafetyDelay = 7 * time.Second
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("the test configuration does not validate: %v", err)
+	}
+
+	deps := buildDependencies(t, cfg)
+
+	if got := deps.serverDeps("").SafetyDelay; got != cfg.SafetyDelay {
+		t.Errorf("the server was built with a %v safety delay, want the configured %v",
+			got, cfg.SafetyDelay)
 	}
 }

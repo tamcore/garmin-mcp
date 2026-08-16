@@ -201,6 +201,20 @@ func TestValidateRejectsUnsafeConfigurations(t *testing.T) {
 			field:    keyRequestTimeout,
 		},
 		{
+			name:     "safety delay is negative",
+			base:     Default,
+			mutate:   func(c *Config) { c.SafetyDelay = -time.Second },
+			sentinel: ErrInvalidConfig,
+			field:    keySafetyDelay,
+		},
+		{
+			name:     "safety delay exceeds the cap",
+			base:     Default,
+			mutate:   func(c *Config) { c.SafetyDelay = MaxSafetyDelay + time.Second },
+			sentinel: ErrInvalidConfig,
+			field:    keySafetyDelay,
+		},
+		{
 			name:     "request bytes is negative",
 			base:     Default,
 			mutate:   func(c *Config) { c.MaxRequestBytes = -1 },

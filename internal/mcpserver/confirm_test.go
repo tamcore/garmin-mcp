@@ -105,7 +105,7 @@ func TestDestructiveToolRunsOnlyAfterAnAcceptedConfirmation(t *testing.T) {
 			if req.Params.Message == "" {
 				t.Error("the elicitation must tell the user what it is confirming")
 			}
-			return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirm": true}}, nil
+			return &mcp.ElicitResult{Action: actionAccept, Content: map[string]any{fieldConfirm: true}}, nil
 		},
 	})
 
@@ -138,7 +138,7 @@ func TestWriteToolDoesNotRequireConfirmation(t *testing.T) {
 	session := connectClient(t, ctx, server, &mcp.ClientOptions{
 		ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
 			asked++
-			return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirm": true}}, nil
+			return &mcp.ElicitResult{Action: actionAccept, Content: map[string]any{fieldConfirm: true}}, nil
 		},
 	})
 

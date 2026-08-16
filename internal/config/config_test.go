@@ -171,3 +171,27 @@ func TestTransportsListsEveryKnownTransport(t *testing.T) {
 		t.Error("Transports() exposes shared package state")
 	}
 }
+
+// TestSafetyDelayDefaultsToDisabled pins the decision that upgrading changes no
+// deployment's timing. The delay is an operator's deliberate choice; a non-zero
+// default would make every write slower for everyone who never asked for one.
+func TestSafetyDelayDefaultsToDisabled(t *testing.T) {
+	t.Parallel()
+
+	if got := Default().SafetyDelay; got != 0 {
+		t.Errorf("Default().SafetyDelay = %v, want 0 so the pause is opt-in", got)
+	}
+	if err := Default().Validate(); err != nil {
+		t.Errorf("the default configuration does not validate: %v", err)
+	}
+	// Zero must stay valid: it is how the delay is turned off.
+	cfg := Default()
+	cfg.SafetyDelay = 0
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("a zero delay was rejected, so the setting cannot be disabled: %v", err)
+	}
+	cfg.SafetyDelay = MaxSafetyDelay
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("the documented maximum was rejected: %v", err)
+	}
+}

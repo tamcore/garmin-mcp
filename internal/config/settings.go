@@ -46,6 +46,7 @@ const (
 	keyRequestTimeout         = "request-timeout"
 	keyReadRateLimit          = "read-rate-limit"
 	keyWriteRateLimit         = "write-rate-limit"
+	keySafetyDelay            = "safety-delay"
 	keyLogLevel               = "log-level"
 	keyLogFormat              = "log-format"
 )
@@ -210,6 +211,10 @@ var settingTable = [...]setting{
 	{
 		key: keyRequestTimeout, flag: keyRequestTimeout, kind: kindDuration, def: DefaultRequestTimeout,
 		usage: "timeout for one outbound Garmin call",
+	},
+	{
+		key: keySafetyDelay, flag: keySafetyDelay, kind: kindDuration, def: DefaultSafetyDelay,
+		usage: "pause before each write or destructive tool call; 0 disables it",
 	},
 	{
 		key: keyReadRateLimit, flag: keyReadRateLimit, kind: kindInt, def: DefaultReadRateLimitPerMinute,

@@ -264,13 +264,13 @@ the closest existing tool in `internal/tools` rather than inventing a shape.
      confirmation that fails closed.
    - Both name lists are validated at startup against the actually registered
      set, so a typo fails fast.
-5. **[TARGET]** A configurable safety delay before write and destructive
-   execution, skipped for dry-run style calls. **No such delay exists**: there is
-   no delay in `internal/tools`, none in the middleware chain, and no setting for
-   one in `config.Config`. Every write registered so far went in without it, so
-   adding one is a slice of its own, not a step in this procedure. Do not read
-   this step as a description of working behavior, and do not add a private
-   per-tool sleep to satisfy it.
+5. Nothing. The configurable safety delay is **not** a per-tool concern: it lives
+   in the policy middleware, applies to the whole write and destructive tiers, and
+   a new tool inherits it by being registered in the right tier. Never add a
+   private sleep to a handler. The setting is `safety-delay`, it defaults to `0`,
+   and `docs/configuration.md` states what it does and does not do. The "skip it
+   for dry-run calls" clause this step used to carry is gone with it: this server
+   has no dry-run mode to skip.
 6. Write unit tests in `internal/tools/<name>_test.go` against the fake Garmin
    service from `internal/testkit`.
 7. Add fake-service integration coverage (tag `fakegarmin`) and E2E coverage

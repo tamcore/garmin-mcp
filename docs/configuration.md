@@ -173,6 +173,36 @@ oauth-clients:
 | `request-timeout` | `--request-timeout` | `30s` | both | Between 1s and 10m. It bounds one outbound Garmin call. |
 | `read-rate-limit` | `--read-rate-limit` | `120` | both | 1 to 100000 read tool calls per principal per minute. |
 | `write-rate-limit` | `--write-rate-limit` | `30` | both | 1 to 100000 write tool calls per principal per minute. |
+| `safety-delay` | `--safety-delay` | `0` (disabled) | both | 0 to 5m. It pauses each write and destructive tool call after every gate has allowed it and before it runs. Zero disables the pause. See below. |
+
+#### The safety delay
+
+`safety-delay` inserts a pause before a write or destructive tool reaches Garmin.
+It is `0` by default: an upgrade changes no deployment's timing, and a delay is a
+choice an operator makes rather than a cost every write pays.
+
+What it does, precisely:
+
+- It applies to the **write and destructive tiers only**. A read changes nothing,
+  so there is nothing to reconsider during the pause and it would be latency with
+  no safety in it.
+- It runs **after every gate** — tier and scope, the rate limiter, and destructive
+  confirmation. A refused call never waits. Waiting to say no would cost the server
+  the wait and would teach a prober how long the gate takes.
+- The wait is **interruptible**, and that is the point rather than a detail. A
+  caller that cancels during the pause stops the call: the tool never runs and
+  nothing is sent to Garmin. A pause nothing can interrupt is latency, not safety.
+- It applies **once per tool call**, not once per item, so a batch tool waits once
+  however many objects it carries.
+
+What it does not do. It is not a second confirmation: destructive tools already
+require elicitation that fails closed, and this pause neither replaces nor
+strengthens that. Its value is on the **write** tier, which has no interactive gate
+at all — that is where the cancellation window is the only one a caller gets.
+
+The ceiling is 5 minutes. A longer pause outlives the patience of every MCP client,
+so the call would be abandoned rather than delayed, which is not what the setting is
+for.
 
 Every limit has a ceiling of its own, so an operator cannot disable a protection
 by raising it without bound. The burst allowance follows the rate: lowering a

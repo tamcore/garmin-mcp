@@ -203,13 +203,13 @@ func (s *Server) policyMiddleware() mcp.Middleware {
 					"This tool was refused: "+decision.Reason+"."), nil
 			}
 			if !decision.RequiresConfirmation {
-				return next(ctx, method, req)
+				return s.dispatch(ctx, method, req, decision, next)
 			}
 
 			outcome, pending, err := s.confirm(ctx, req, decision)
 			switch outcome {
 			case confirmationGranted:
-				return next(ctx, method, req)
+				return s.dispatch(ctx, method, req, decision, next)
 			case confirmationPending:
 				return s.awaitConfirmation(ctx, pending), nil
 			default:
@@ -218,6 +218,59 @@ func (s *Server) policyMiddleware() mcp.Middleware {
 			}
 		}
 	}
+}
+
+// dispatch applies the operator's safety delay, then runs the tool.
+//
+// It is reached only after every gate has allowed the call, which is the whole
+// design of the pause: a refused call must not wait, both because waiting to say no
+// costs the server the wait and because a prober would learn the gate's timing from
+// it.
+//
+// A read never waits. Reads change nothing, so there is nothing to reconsider during
+// the pause and the delay would be latency with no safety in it.
+func (s *Server) dispatch(
+	ctx context.Context, method string, req mcp.Request,
+	decision policy.Decision, next mcp.MethodHandler,
+) (mcp.Result, error) {
+	if err := s.awaitSafetyDelay(ctx, decision); err != nil {
+		return s.deny(ctx, "the safety delay was interrupted before the tool ran",
+			"This tool did not run: the configured safety delay was interrupted, "+
+				"so nothing was sent to Garmin."), nil
+	}
+	return next(ctx, method, req)
+}
+
+// awaitSafetyDelay waits out the configured pause for a write or destructive call.
+//
+// The wait is interruptible, and that is the point rather than a detail: a pause
+// nothing can interrupt is latency, not safety. When the caller cancels during it,
+// this returns the cancellation and the tool never runs.
+func (s *Server) awaitSafetyDelay(ctx context.Context, decision policy.Decision) error {
+	if s.deps.SafetyDelay <= 0 || decision.Tier == policy.TierReadOnly {
+		return nil
+	}
+	// The pause is not logged as its own field: the call's recorded latency already
+	// contains it, and mcplog's field set is an allowlist worth keeping small.
+	return s.sleep(ctx, s.deps.SafetyDelay)
+}
+
+// sleep waits for d, or until the context ends. It is the injected seam in tests.
+func (s *Server) sleep(ctx context.Context, d time.Duration) error {
+	if s.deps.Sleep != nil {
+		return s.deps.Sleep(ctx, d)
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+	}
+	// A select whose cases are both ready picks one at random, so the timer can win
+	// a race a cancellation had already entered. Without this recheck a caller that
+	// cancelled a whisker before the pause elapsed would still have its write sent.
+	return ctx.Err()
 }
 
 // awaitConfirmation records that the call is waiting on the user and returns the

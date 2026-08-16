@@ -271,6 +271,10 @@ func (c Config) validateLimits() error {
 				"must be between 1 and "+strconv.FormatInt(bound.max, 10), ErrInvalidConfig))
 		}
 	}
+	if c.SafetyDelay < 0 || c.SafetyDelay > MaxSafetyDelay {
+		errs = append(errs, newFieldError(keySafetyDelay,
+			"must be between 0 and "+MaxSafetyDelay.String(), ErrInvalidConfig))
+	}
 	if c.RequestTimeout < MinRequestTimeout || c.RequestTimeout > MaxRequestTimeout {
 		errs = append(errs, newFieldError(keyRequestTimeout,
 			"must be between "+MinRequestTimeout.String()+" and "+MaxRequestTimeout.String(),

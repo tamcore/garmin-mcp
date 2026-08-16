@@ -18,6 +18,7 @@
 package mcpserver
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -105,6 +106,14 @@ type Deps struct {
 	// Clock supplies the current time for latency measurement. Zero means
 	// time.Now.
 	Clock func() time.Time
+
+	// SafetyDelay pauses a write or destructive call after every gate has allowed
+	// it and before its handler runs. Zero disables the pause.
+	SafetyDelay time.Duration
+
+	// Sleep waits for a duration and reports why it stopped. Nil means a real,
+	// context-aware wait. It is the seam that keeps the tests instant.
+	Sleep func(ctx context.Context, d time.Duration) error
 }
 
 func (d Deps) validate() error {

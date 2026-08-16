@@ -41,6 +41,7 @@ type redactedConfig struct {
 	MaxRequestBytes        int64    `json:"maxRequestBytes"`
 	MaxResponseBytes       int64    `json:"maxResponseBytes"`
 	RequestTimeout         string   `json:"requestTimeout"`
+	SafetyDelay            string   `json:"safetyDelay"`
 	ReadRateLimit          int      `json:"readRateLimitPerMinute"`
 	WriteRateLimit         int      `json:"writeRateLimitPerMinute"`
 	LogLevel               string   `json:"logLevel"`
@@ -81,6 +82,7 @@ func (c Config) redacted() redactedConfig {
 		MaxRequestBytes:        c.MaxRequestBytes,
 		MaxResponseBytes:       c.MaxResponseBytes,
 		RequestTimeout:         c.RequestTimeout.String(),
+		SafetyDelay:            c.SafetyDelay.String(),
 		ReadRateLimit:          c.ReadRateLimitPerMinute,
 		WriteRateLimit:         c.WriteRateLimitPerMinute,
 		LogLevel:               c.LogLevel,
@@ -123,6 +125,7 @@ func (r redactedConfig) pairs() []string {
 		"maxRequestBytes:" + strconv.FormatInt(r.MaxRequestBytes, 10),
 		"maxResponseBytes:" + strconv.FormatInt(r.MaxResponseBytes, 10),
 		"requestTimeout:" + r.RequestTimeout,
+		"safetyDelay:" + r.SafetyDelay,
 		"readRateLimitPerMinute:" + strconv.Itoa(r.ReadRateLimit),
 		"writeRateLimitPerMinute:" + strconv.Itoa(r.WriteRateLimit),
 		"logLevel:" + quoteValue(r.LogLevel),
@@ -166,6 +169,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Bool("enableWriteTools", red.EnableWriteTools),
 		slog.Bool("enableDestructiveTools", red.EnableDestructiveTools),
 		slog.String("requestTimeout", red.RequestTimeout),
+		slog.String("safetyDelay", red.SafetyDelay),
 		slog.String("logLevel", red.LogLevel),
 		slog.String("logFormat", red.LogFormat),
 		slog.String("configFile", red.ConfigFile),

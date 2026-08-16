@@ -186,6 +186,7 @@ func withLimits(cfg Config, store *viper.Viper) Config {
 	out.MaxRequestBytes = store.GetInt64(keyMaxRequestBytes)
 	out.MaxResponseBytes = store.GetInt64(keyMaxResponseBytes)
 	out.RequestTimeout = store.GetDuration(keyRequestTimeout)
+	out.SafetyDelay = store.GetDuration(keySafetyDelay)
 	out.SessionTimeout = store.GetDuration(keySessionTimeout)
 	out.ReadRateLimitPerMinute = store.GetInt(keyReadRateLimit)
 	out.WriteRateLimitPerMinute = store.GetInt(keyWriteRateLimit)

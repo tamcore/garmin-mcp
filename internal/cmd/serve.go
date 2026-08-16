@@ -108,6 +108,7 @@ func (d *dependencies) serverDeps(instructions string) mcpserver.Deps {
 		Principals:   d.principals,
 		Registrars:   d.tools.registrars(),
 		Instructions: instructions,
+		SafetyDelay:  d.cfg.SafetyDelay,
 	}
 }
 

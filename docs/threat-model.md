@@ -402,12 +402,17 @@ describing it; and there is no backup or restore test.
 
 ### 11. Malicious tool arguments and accidental destructive actions
 
-Landed for the 47 registered tools. Each declares all four annotation hints and a
+Landed for the 100 registered tools. Each declares all four annotation hints and a
 strict schema, scope and operator policy are enforced before any Garmin call, the
 three tier name lists are validated against the registered set in both directions
 at start-up, allowlist and denylist are intersected with the tiers, and
-destructive confirmation fails closed. **Not landed:** the optional safety delay
-with progress notifications before write and destructive execution.
+destructive confirmation fails closed. The optional safety delay has landed as
+`safety-delay`, default `0`: it pauses write and destructive calls after every gate
+and before the handler, and the wait is interruptible, so a caller that cancels
+during it stops the call before anything reaches Garmin. **Not landed:** the
+progress notifications that were to accompany that delay. A paused call is
+indistinguishable from a slow one to the client, which blunts the delay for a human
+watching, and is part of why the setting is off by default.
 
 Every tool must have a strict JSON schema with ranges, formats, and defaults, and
 must declare all four annotation hints. Scope and operator policy must be
@@ -419,8 +424,10 @@ Allowlists and denylists must reject unknown names at startup and be intersected
 with scopes, never used to bypass them. Destructive operations must request MCP
 elicitation confirmation with a bounded timeout and **fail closed**: without
 confirmation the operation is refused and the refusal names the reason. An
-optional safety delay with progress notifications must precede write and
-destructive execution. This is also the control against prompt injection in
+optional safety delay must precede write and destructive execution, must be
+interruptible — a pause nothing can interrupt is latency rather than safety — and
+must sit after every gate so a refused call never waits. The progress notifications
+during that pause are still required and still missing. This is also the control against prompt injection in
 Garmin-sourced text: no model-authored argument may reach a destructive path
 without scope, enablement, and human confirmation.
 

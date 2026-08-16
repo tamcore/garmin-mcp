@@ -1239,25 +1239,34 @@ source.
   algorithm instead. A Go regenerator that fails CI on manifest drift is still
   deferred, so manifest drift against a new upstream pin cannot be diffed in CI.
 
-## Known gap: the write safety delay does not exist
+## The write safety delay exists
 
-`AGENTS.md` has instructed, since before the first write tool, that a configurable
-safety delay be applied before write and destructive execution. Nothing implements
-it. There is no delay in `internal/tools`, none in the `internal/mcpserver`
-middleware chain, and no setting for one in `config.Config`; `grep -rn "safety
-delay\|SafetyDelay" internal/` matches nothing outside documentation.
+`AGENTS.md` instructed for a long time that a configurable safety delay be applied
+before write and destructive execution, and nothing implemented it. All 23 write and
+5 destructive tools were registered under that instruction without one. It is now
+built, and the instruction that described it as a per-tool step is gone: a tool
+inherits the delay from its tier and must never carry a sleep of its own.
 
-All 23 write tools and 5 destructive tools were registered under that instruction and
-none of them applies a delay, so this is a documentation defect rather than a
-regression in any one slice. The step is now marked **[TARGET]** in `AGENTS.md`.
+Where it lives: `Server.awaitSafetyDelay` in `internal/mcpserver/middleware.go`,
+inside the policy middleware, after the tier and scope gate and after destructive
+confirmation. The setting is `config.Config.SafetyDelay`, flag `--safety-delay`,
+default `0`, ceiling `MaxSafetyDelay` of 5 minutes.
 
-What actually guards a write today: operator enablement intersected with a granted
-OAuth scope, elicitation confirmation that fails closed for destructive tools, and
-the per-principal rate limiter. A delay would add a cancellation window on top of
-those, which is what it was meant for.
+Four properties are pinned by tests in `internal/mcpserver/safetydelay_test.go`, and
+each was checked against a mutant that breaks it:
 
-Deciding whether to build it is open. If it is built it belongs in the middleware
-chain, beside the confirmation gate, never as a per-tool sleep.
+1. Writes and destructive calls wait; reads never do.
+2. Zero disables the pause, which is what every existing deployment gets.
+3. A cancellation during the wait stops the call: the handler never runs.
+4. A refused call never waits, so a refusal costs neither the server the wait nor
+   the prober the timing signal.
+
+`internal/cmd`'s `TestServeCarriesTheSafetyDelayIntoTheServer` pins the wiring, so a
+setting that parses and validates but never reaches the middleware fails the build.
+
+What it deliberately is not: a second confirmation. Destructive tools already require
+elicitation that fails closed. The delay's value is on the write tier, which has no
+interactive gate, and there the cancellation window is the only one a caller gets.
 
 ## Next task
 
