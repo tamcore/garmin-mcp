@@ -81,8 +81,8 @@
   "counts": {
     "tools": 138,
     "byStatus": {
-      "implemented": 95,
-      "not-implemented": 43
+      "implemented": 117,
+      "not-implemented": 21
     },
     "byEffect": {
       "destructive": 8,
@@ -2414,7 +2414,7 @@
     },
     {
       "name": "get_goals",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/challenges.py",
         "line": 237,
@@ -2476,10 +2476,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetGoals",
+        "file": "internal/tools/get_goals.go",
+        "registeredName": "get_goals"
       },
       "tests": {
         "unit": [],
@@ -2564,7 +2564,7 @@
     },
     {
       "name": "get_earned_badges",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/challenges.py",
         "line": 297,
@@ -2629,10 +2629,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetEarnedBadges",
+        "file": "internal/tools/get_earned_badges.go",
+        "registeredName": "get_earned_badges"
       },
       "tests": {
         "unit": [],
@@ -2642,7 +2642,7 @@
     },
     {
       "name": "get_adhoc_challenges",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/challenges.py",
         "line": 363,
@@ -2713,10 +2713,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetAdhocChallenges",
+        "file": "internal/tools/get_adhoc_challenges.go",
+        "registeredName": "get_adhoc_challenges"
       },
       "tests": {
         "unit": [],
@@ -2726,7 +2726,7 @@
     },
     {
       "name": "get_available_badge_challenges",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/challenges.py",
         "line": 412,
@@ -2803,10 +2803,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetAvailableBadgeChallenges",
+        "file": "internal/tools/badgechallengelists.go",
+        "registeredName": "get_available_badge_challenges"
       },
       "tests": {
         "unit": [],
@@ -2816,7 +2816,7 @@
     },
     {
       "name": "get_badge_challenges",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/challenges.py",
         "line": 445,
@@ -2893,10 +2893,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetBadgeChallenges",
+        "file": "internal/tools/badgechallengelists.go",
+        "registeredName": "get_badge_challenges"
       },
       "tests": {
         "unit": [],
@@ -2906,7 +2906,7 @@
     },
     {
       "name": "get_non_completed_badge_challenges",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/challenges.py",
         "line": 478,
@@ -2983,10 +2983,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetNonCompletedBadgeChallenges",
+        "file": "internal/tools/badgechallengelists.go",
+        "registeredName": "get_non_completed_badge_challenges"
       },
       "tests": {
         "unit": [],
@@ -2996,7 +2996,7 @@
     },
     {
       "name": "get_race_predictions",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/challenges.py",
         "line": 513,
@@ -3055,10 +3055,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetRacePredictions",
+        "file": "internal/tools/get_race_predictions.go",
+        "registeredName": "get_race_predictions"
       },
       "tests": {
         "unit": [],
@@ -3068,7 +3068,7 @@
     },
     {
       "name": "get_inprogress_virtual_challenges",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/challenges.py",
         "line": 552,
@@ -3145,10 +3145,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetInProgressVirtualChallenges",
+        "file": "internal/tools/get_inprogress_virtual_challenges.go",
+        "registeredName": "get_inprogress_virtual_challenges"
       },
       "tests": {
         "unit": [],
@@ -6699,7 +6699,7 @@
     },
     {
       "name": "get_nutrition_daily_food_log",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 32,
@@ -6765,10 +6765,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetNutritionDailyFoodLog",
+        "file": "internal/tools/get_nutrition_daily_food_log.go",
+        "registeredName": "get_nutrition_daily_food_log"
       },
       "tests": {
         "unit": [],
@@ -6778,7 +6778,7 @@
     },
     {
       "name": "get_nutrition_daily_meals",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 51,
@@ -6844,10 +6844,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetNutritionDailyMeals",
+        "file": "internal/tools/get_nutrition_daily_meals.go",
+        "registeredName": "get_nutrition_daily_meals"
       },
       "tests": {
         "unit": [],
@@ -6857,7 +6857,7 @@
     },
     {
       "name": "get_nutrition_daily_settings",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 71,
@@ -6923,10 +6923,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetNutritionDailySettings",
+        "file": "internal/tools/nutritionsettings.go",
+        "registeredName": "get_nutrition_daily_settings"
       },
       "tests": {
         "unit": [],
@@ -6936,7 +6936,7 @@
     },
     {
       "name": "set_nutrition_daily_settings",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 90,
@@ -7033,10 +7033,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerSetNutritionDailySettings",
+        "file": "internal/tools/nutritionsettings.go",
+        "registeredName": "set_nutrition_daily_settings"
       },
       "tests": {
         "unit": [],
@@ -7046,7 +7046,7 @@
     },
     {
       "name": "search_foods",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 144,
@@ -7124,10 +7124,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerSearchFoods",
+        "file": "internal/tools/search_foods.go",
+        "registeredName": "search_foods"
       },
       "tests": {
         "unit": [],
@@ -7137,7 +7137,7 @@
     },
     {
       "name": "get_custom_foods",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 220,
@@ -7210,10 +7210,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetCustomFoods",
+        "file": "internal/tools/get_custom_foods.go",
+        "registeredName": "get_custom_foods"
       },
       "tests": {
         "unit": [],
@@ -7223,7 +7223,7 @@
     },
     {
       "name": "get_custom_food_serving_units",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 253,
@@ -7282,10 +7282,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetCustomFoodServingUnits",
+        "file": "internal/tools/get_custom_food_serving_units.go",
+        "registeredName": "get_custom_food_serving_units"
       },
       "tests": {
         "unit": [],
@@ -7295,7 +7295,7 @@
     },
     {
       "name": "create_custom_food",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 269,
@@ -7440,10 +7440,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerCreateCustomFood",
+        "file": "internal/tools/customfoodwrites.go",
+        "registeredName": "create_custom_food"
       },
       "tests": {
         "unit": [],
@@ -7453,7 +7453,7 @@
     },
     {
       "name": "update_custom_food",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 376,
@@ -7616,10 +7616,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerUpdateCustomFood",
+        "file": "internal/tools/customfoodwrites.go",
+        "registeredName": "update_custom_food"
       },
       "tests": {
         "unit": [],
@@ -7629,7 +7629,7 @@
     },
     {
       "name": "delete_custom_food",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 518,
@@ -7695,10 +7695,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerDeleteCustomFood",
+        "file": "internal/tools/customfoodwrites.go",
+        "registeredName": "delete_custom_food"
       },
       "tests": {
         "unit": [],
@@ -7708,7 +7708,7 @@
     },
     {
       "name": "log_custom_food",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 546,
@@ -7799,10 +7799,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerLogCustomFood",
+        "file": "internal/tools/foodlogwrites.go",
+        "registeredName": "log_custom_food"
       },
       "tests": {
         "unit": [],
@@ -7812,7 +7812,7 @@
     },
     {
       "name": "log_food",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 637,
@@ -7909,10 +7909,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerLogFood",
+        "file": "internal/tools/foodlogwrites.go",
+        "registeredName": "log_food"
       },
       "tests": {
         "unit": [],
@@ -7922,7 +7922,7 @@
     },
     {
       "name": "delete_food_log",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 720,
@@ -7992,10 +7992,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerDeleteFoodLog",
+        "file": "internal/tools/foodlogwrites.go",
+        "registeredName": "delete_food_log"
       },
       "tests": {
         "unit": [],
@@ -8005,7 +8005,7 @@
     },
     {
       "name": "upsert_and_log",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/nutrition.py",
         "line": 745,
@@ -8120,10 +8120,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerUpsertAndLog",
+        "file": "internal/tools/upsert_and_log.go",
+        "registeredName": "upsert_and_log"
       },
       "tests": {
         "unit": [],

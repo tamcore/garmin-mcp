@@ -274,6 +274,14 @@ func exercisedWrites() []string {
 		tools.ToolDeleteWorkouts,
 		tools.ToolDownloadActivityFile,
 		tools.ToolRequestReload,
+		tools.ToolCreateCustomFood,
+		tools.ToolUpdateCustomFood,
+		tools.ToolDeleteCustomFood,
+		tools.ToolLogCustomFood,
+		tools.ToolLogFood,
+		tools.ToolUpsertAndLog,
+		tools.ToolDeleteFoodLog,
+		tools.ToolSetNutritionDailySettings,
 	}
 }
 

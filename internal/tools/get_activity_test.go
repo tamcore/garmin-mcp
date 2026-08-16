@@ -8,6 +8,10 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/testkit"
 )
 
+// metricElevation is the activity-detail group key this file's grouped-metric
+// assertions check.
+const metricElevation = "elevation"
+
 // activityRecord is the synthetic answer of the per-activity endpoint. duration
 // arrives as a string on purpose: Garmin sends the same field both ways. The start
 // coordinates are present because the tool must drop them.
@@ -68,17 +72,17 @@ func assertActivityGroups(t *testing.T, result map[string]any) {
 	t.Helper()
 
 	groups := map[string]map[string]float64{
-		"timing":     {"duration_seconds": 3000, "moving_seconds": 2980, "elapsed_seconds": 3060},
-		"distance":   {"distance_meters": 10000, "average_speed_mps": 3.33, "max_speed_mps": 4.1},
-		"heart_rate": {"average_bpm": 148, "max_bpm": 172, "min_bpm": 94},
-		"energy":     {"calories": 640, "bmr_calories": 90},
+		"timing":       {"duration_seconds": 3000, "moving_seconds": 2980, "elapsed_seconds": 3060},
+		metricDistance: {"distance_meters": 10000, "average_speed_mps": 3.33, "max_speed_mps": 4.1},
+		"heart_rate":   {"average_bpm": 148, "max_bpm": 172, "min_bpm": 94},
+		"energy":       {argCalories: 640, "bmr_calories": 90},
 		"run_metrics": {"average_cadence": 172.5, "max_cadence": 186, "stride_length_cm": 118.4,
 			"ground_contact_time_ms": 244, "vertical_oscillation_cm": 8.1, "steps": 8800},
 		"power": {"average_watts": 240, "max_watts": 410, "normalized_watts": 255},
 		"training": {"aerobic_training_effect": 3.4, "anaerobic_training_effect": 1.2,
 			"training_load": 128.5, "moderate_intensity_minutes": 12,
 			"vigorous_intensity_minutes": 34},
-		"elevation": {"gain_meters": 220, "loss_meters": 214, "max_meters": 610,
+		metricElevation: {"gain_meters": 220, "loss_meters": 214, "max_meters": 610,
 			"min_meters": 505},
 		"feedback": {"recovery_heart_rate_bpm": 118, "body_battery_impact": -21,
 			"workout_feel": 75, "workout_rpe": 60},
@@ -94,7 +98,7 @@ func assertActivityGroups(t *testing.T, result map[string]any) {
 	if got, _ := object(t, result, "training")["training_effect_label"].(string); got != "TEMPO" {
 		t.Errorf("training.training_effect_label = %q, want TEMPO", got)
 	}
-	if got, _ := object(t, result, "feedback")["device_manufacturer"].(string); got != "GARMIN" {
+	if got, _ := object(t, result, "feedback")["device_manufacturer"].(string); got != defaultFoodSource {
 		t.Errorf("feedback.device_manufacturer = %q, want GARMIN", got)
 	}
 }

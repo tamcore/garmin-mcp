@@ -250,6 +250,105 @@ func (g GearItem) LogValue() slog.Value {
 	)
 }
 
+// LogValue reports the shape of one gear default association.
+func (g GearDefault) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "gearDefault"),
+		slog.String("uuid", presence(g.UUID != nil)),
+		slog.String("activityTypePk", presence(g.ActivityTypePk.IsSet())),
+	)
+}
+
+// LogValue reports whether one gear item's usage statistics are set, never the
+// distance or activity count.
+func (s GearStats) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "gearStats"),
+		slog.String("totalActivities", presence(s.TotalActivities.IsSet())),
+		slog.String("totalDistance", presence(s.TotalDistance.IsSet())),
+	)
+}
+
+// LogValue reports the shape of one device's settings, never its alarm
+// schedule or device identity.
+func (s DeviceSettings) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "deviceSettings"),
+		slog.String("deviceId", presence(s.DeviceID.IsSet())),
+		slog.String("activityTracking", presence(s.ActivityTracking != nil)),
+		slog.Int("alarms", s.Alarms.Len()),
+	)
+}
+
+// LogValue reports the shape of the nested activity-tracking settings.
+func (a ActivityTracking) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "activityTracking"),
+		slog.String("moveAlertEnabled", presence(a.MoveAlertEnabled != nil)),
+		slog.String("highHrAlertEnabled", presence(a.HighHrAlertEnabled != nil)),
+	)
+}
+
+// LogValue reports the shape of one alarm, never its schedule or message.
+func (a DeviceAlarm) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "deviceAlarm"),
+		slog.String("alarmId", presence(a.AlarmID.IsSet())),
+		slog.String("alarmTime", presence(a.AlarmTime.IsSet())),
+		slog.Bool("enabled", a.Enabled()),
+	)
+}
+
+// LogValue reports the alarm count, never the alarms.
+func (r DeviceAlarmResult) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "deviceAlarmResult"),
+		slog.Int("alarms", len(r.Alarms)),
+		slog.Bool("truncated", r.Truncated),
+	)
+}
+
+// LogValue reports the shape of the last-used-device document, never the
+// account's numeric profile id.
+func (d DeviceLastUsed) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "deviceLastUsed"),
+		slog.String("userDeviceId", presence(d.UserDeviceID.IsSet())),
+		slog.String("lastUsedDeviceName", presence(d.LastUsedDeviceName != nil)),
+		slog.String("userProfileNumber", presence(d.UserProfileNumber.IsSet())),
+	)
+}
+
+// LogValue reports the shape of the primary-training-device document, never
+// which device is designated.
+func (p PrimaryTrainingDevice) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "primaryTrainingDevice"),
+		slog.String("primary", presence(p.Primary != nil)),
+		slog.Int("trainingDevices", len(p.TrainingDevices())),
+		slog.String("wearableDeviceCount", presence(p.Wearable != nil)),
+	)
+}
+
+// LogValue reports the shape of one training-device roster entry.
+func (t TrainingDeviceWeight) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "trainingDeviceWeight"),
+		slog.String("deviceId", presence(t.DeviceID.IsSet())),
+		slog.String("displayName", presence(t.DisplayName != nil)),
+	)
+}
+
+// LogValue reports the shape of one day of solar data, never the intensity or
+// battery figures.
+func (s DeviceSolarDay) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", "deviceSolarDay"),
+		slog.String("calendarDate", presence(s.CalendarDate != nil)),
+		slog.String("solarIntensityAvg", presence(s.SolarIntensityAvg.IsSet())),
+	)
+}
+
 // LogValue reports the shape of one workout entry, never the training in it.
 func (w WorkoutSummary) LogValue() slog.Value {
 	return slog.GroupValue(

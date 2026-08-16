@@ -62,7 +62,7 @@ func assertGearItem(t *testing.T, item map[string]any) {
 		"make_name":         "Synth",
 		"model_name":        "Runner",
 		"gear_type_name":    "Shoes",
-		"gear_status_name":  "active",
+		"gear_status_name":  valueActive,
 		"date_begin":        "2025-01-01T00:00:00.0",
 	}
 	for key, want := range texts {

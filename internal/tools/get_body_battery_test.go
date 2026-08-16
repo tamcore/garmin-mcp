@@ -132,7 +132,7 @@ func TestGetBodyBatteryBoundsTheWindow(t *testing.T) {
 	h := newToolHarnessWith(t, testkit.NewScript(), client.Limits{MaxDateRangeDays: 3})
 
 	advice := h.callError(t, ToolGetBodyBattery,
-		map[string]any{argStartDate: "2026-01-01", argEndDate: stressDate})
+		map[string]any{argStartDate: scoresStartDate, argEndDate: stressDate})
 	assertNoRawPayload(t, advice)
 	if !strings.Contains(advice, "window") && !strings.Contains(advice, "date") {
 		t.Errorf("the refusal %q does not say the window was the problem", advice)

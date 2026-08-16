@@ -278,7 +278,7 @@ func leakedObjects() string {
 	}
 	w.removeOutstanding()
 
-	lines := w.owned.outstanding()
+	lines := slices.Concat(w.owned.outstanding(), w.foods.outstanding())
 	if len(lines) == 0 {
 		return ""
 	}

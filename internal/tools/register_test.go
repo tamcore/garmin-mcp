@@ -89,12 +89,34 @@ var wantReadOnlyToolNames = []string{
 	tools.ToolGetRespirationTrend,
 	tools.ToolGetTrainingLoadTrend,
 	tools.ToolGetTrainingLoadBalance,
+
+	// Nutrition reads and the challenge surface.
+	tools.ToolGetNutritionDailyFoodLog,
+	tools.ToolGetNutritionDailyMeals,
+	tools.ToolGetNutritionDailySettings,
+	tools.ToolSearchFoods,
+	tools.ToolGetCustomFoods,
+	tools.ToolGetCustomFoodServingUnits,
+	tools.ToolGetEarnedBadges,
+	tools.ToolGetGoals,
+	tools.ToolGetAdhocChallenges,
+	tools.ToolGetAvailableBadgeChallenges,
+	tools.ToolGetBadgeChallenges,
+	tools.ToolGetNonCompletedBadgeChallenges,
+	tools.ToolGetRacePredictions,
+	tools.ToolGetInProgressVirtualChallenges,
 }
 
 // wantWriteToolNames is the write tier. Every one of them needs the operator's
 // enablement and the caller's write scope, so a default deployment refuses all of
 // them and a stdio deployment refuses them whatever the operator enabled.
 var wantWriteToolNames = []string{
+	tools.ToolSetNutritionDailySettings,
+	tools.ToolCreateCustomFood,
+	tools.ToolUpdateCustomFood,
+	tools.ToolLogCustomFood,
+	tools.ToolLogFood,
+	tools.ToolUpsertAndLog,
 	tools.ToolRequestReload,
 	"set_activity_name",
 	"set_activity_type",
@@ -123,6 +145,8 @@ var wantWriteToolNames = []string{
 // wantDestructiveToolNames is the destructive tier, which the server's confirmation
 // middleware covers because each tool declares itself destructive.
 var wantDestructiveToolNames = []string{
+	tools.ToolDeleteCustomFood,
+	tools.ToolDeleteFoodLog,
 	"delete_activity",
 	"delete_workout",
 	"delete_workouts",
@@ -151,6 +175,12 @@ var nonIdempotentTools = []string{
 	"create_run_workout",
 	"create_z2_walk_workout",
 	"create_strength_workout",
+	// Nutrition: a create and the three log writes. The manifest classifies each
+	// non-idempotent because a repeat adds a second food or a second log entry.
+	tools.ToolCreateCustomFood,
+	tools.ToolLogCustomFood,
+	tools.ToolLogFood,
+	tools.ToolUpsertAndLog,
 }
 
 // forbiddenArgumentNames are the argument names no tool may ever accept: an account

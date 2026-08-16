@@ -38,10 +38,10 @@ date.
 | `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, the login response classifier (JSON and widget HTML), and the widget MFA variable parse. No I/O | 96.5% |
 | `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, explicit widget MFA code delivery, refresh with per-principal collapsing and CAS, the shared `TokenGate`, the request-time host guard, unverified-JWT `exp` parsing | 66.1% untagged, 88.2% with `-tags=fakegarmin` |
 | `internal/garmin/client` | The authenticated request layer: bounded wire and decompressed sizes, page and page-start caps, one bounded post-`401` retry that never replays a `POST` or `PATCH`, typed errors, and the exact-integer accessor an identifier is compared through | 94.3% |
-| `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the published exercise catalog with its compiled-in fallback, FIT activity decoding through `github.com/muktihari/fit`, and the training scores, thresholds and trends | 91.0% |
+| `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the published exercise catalog with its compiled-in fallback, FIT activity decoding through `github.com/muktihari/fit`, the training scores, thresholds and trends, nutrition, challenges and badges, and the device inventory | 90.7% |
 | `internal/mcpserver` | Server, registry, stdio and Streamable HTTP transports, bearer middleware, session binding, origin and forwarded-header guards, elicitation confirmation, `server_info` | 89.3% |
 | `internal/resources` | The five constant MCP documents — four workout templates and the structure reference — with the manifest contract, the render, and the check that this server's own upload path accepts every template | 95.7% |
-| `internal/tools` | 100 registered tools — 72 read-only, 23 write, 5 destructive — with contracts snapshot-tested against `compat/tools.json` | 86.8% |
+| `internal/tools` | 122 registered tools — 86 read-only, 29 write, 7 destructive — with contracts snapshot-tested against `compat/tools.json` | 85.7% |
 | `internal/policy` | Three tiers, explicit name lists validated against the registered set at start-up, the enablement-and-scope intersection, confirmation requirement | 91.7% |
 | `internal/identity` | Principal type, request context, and the bearer resolver that takes the principal only from a verified token | 97.7% |
 | `internal/oauthserver` | The authorization server: PKCE S256 only, exact issuer and redirect matching, single-use bound codes, hashed opaque tokens, rotating refresh with family revocation, consent | 92.4% |
@@ -375,6 +375,40 @@ Rules the suite enforces on itself:
   guard are pinned by tests. The maintainer's own pre-existing activity and workout are untouchable
   by construction, and the read half additionally skips any object carrying the
   suite's prefix so the two halves cannot interfere.
+
+  **One documented exception, and it is the only one:**
+  `set_nutrition_daily_settings` writes an account-wide document that cannot be
+  created, so there is no owned object to bind it to. The guard admits that one
+  endpoint only for the exact date the running test declared it would write with
+  `foodLedger.allowSettingsDate` — every other date on that endpoint is refused
+  before the request leaves the process, so a defect in the tool under test that
+  computed the wrong date cannot overwrite a day the suite never intended. Beyond
+  that narrowing, safety is the caller's rather than the guard's: the test reads
+  the current value, skips with a reason when it cannot be read, writes a bounded
+  reversible delta, verifies it, and restores the original in a `t.Cleanup`.
+
+  Restoring the original *value* is not the same as restoring the original
+  *shape*. Garmin's settings document is normally set once and inherited across
+  days (`nutrition.py:108-109`: "settings are typically set once and inherited
+  across days, but Garmin accepts per-day overrides"), and neither this codebase
+  nor upstream exposes any way to delete or reset a per-day override once one
+  exists. A per-day PUT can therefore materialise a day-specific override where
+  the account previously inherited a shared default, and writing the same figure
+  back leaves that override in place: the account's structure changed even though
+  every figure reads the same afterward. Nothing can undo that, so the test does
+  not run by default — it additionally requires
+  `GARMIN_LIVE_NUTRITION_SETTINGS_ACK=i-accept-live-nutrition-settings-override`,
+  a fifth, narrower gate on top of the four above. A killed process still leaves
+  the account's goal *value* changed regardless of this gate's restore step,
+  which is a smaller blast radius than an unowned create but is not zero — do not
+  add a second endpoint to this exception without the same read-verify-restore
+  shape, the same per-date narrowing, and a line here saying so.
+
+  Custom foods carry a further limit: Garmin exposes no per-item GET for one, so
+  ownership is bound by a name search after the create. The start-of-suite
+  sweeper does sweep prefixed custom foods a killed run left behind, the same way
+  it sweeps workouts and activities, using that same name search rather than a
+  per-item fetch to recognise one.
 - **Every created object is removed.** Each create registers a `t.Cleanup`
   removal, so a failing assertion still cleans up; anything the ledger still
   holds when the suite ends is removed there; a removal that fails is reported

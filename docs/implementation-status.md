@@ -544,11 +544,12 @@ evidence, and the operations documentation, which is real remaining work.
 
 - [ ] The generated parity matrix accounts for every tool and resource at the
       pinned Taxuspt commit. `docs/parity.md` carries per-tool status. **All 5
-      resources are served**; 43 of the 138 tools are still `not-implemented`,
-      and the largest remaining modules are nutrition (14), challenges (8),
-      devices (5) and weight management (5).
+      resources are served**; 21 of the 138 tools are still `not-implemented`,
+      and one of those — `set_fit_download_dir` — is a documented refusal rather
+      than remaining work, so **20 tools remain**: devices (5), weight management
+      (5), courses (3), data management (3), women's health (3) and gear (1).
 - [ ] Every required contract has passing name/schema/behavior tests, or a
-      documented exclusion with evidence. The implemented 95 do; the rest have no
+      documented exclusion with evidence. The implemented 117 do; the rest have no
       handler yet. The documented exclusions are in `docs/parity.md` and in the
       ADR 0006 register.
 - [x] 0.3.2 to 0.3.10 behavior differences affecting those contracts are

@@ -284,15 +284,15 @@ See [Deliberate deviations](#deliberate-deviations).
 | `add_weigh_in` | not-implemented | write | health | `garmin:health:write` | non-idempotent | weight_management.py:156 |
 | `add_weigh_in_with_timestamps` | not-implemented | write | health | `garmin:health:write` | non-idempotent | weight_management.py:176 |
 | `count_activities` | **implemented** | read-only | ordinary | `garmin:activities:read` | idempotent | activity_management.py:812 |
-| `create_custom_food` | not-implemented | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:269 |
+| `create_custom_food` | **implemented** | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:269 |
 | `create_manual_activity` | **implemented** | write | health | `garmin:activities:write` | non-idempotent | activity_management.py:892 |
 | `create_run_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:392 |
 | `create_strength_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:484 |
 | `create_walk_run_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:344 |
 | `create_z2_walk_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:447 |
 | `delete_course` | not-implemented | destructive | location | `garmin:activities:destructive` | idempotent | courses.py:289 |
-| `delete_custom_food` | not-implemented | destructive | nutrition | `garmin:nutrition:destructive` | idempotent | nutrition.py:518 |
-| `delete_food_log` | not-implemented | destructive | nutrition | `garmin:nutrition:destructive` | idempotent | nutrition.py:720 |
+| `delete_custom_food` | **implemented** | destructive | nutrition | `garmin:nutrition:destructive` | idempotent | nutrition.py:518 |
+| `delete_food_log` | **implemented** | destructive | nutrition | `garmin:nutrition:destructive` | idempotent | nutrition.py:720 |
 | `delete_weigh_ins` | not-implemented | destructive | health | `garmin:health:destructive` | idempotent | weight_management.py:136 |
 | `delete_workout` | **implemented** | destructive | health | `garmin:workouts:destructive` | idempotent | workouts.py:996 |
 | `delete_workouts` | **implemented** | destructive | health | `garmin:workouts:destructive` | idempotent | workouts.py:1023 |
@@ -312,18 +312,18 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_activity_typed_splits` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:621 |
 | `get_activity_types` | **implemented** | read-only | ordinary | `garmin:activities:read` | idempotent | activity_management.py:942 |
 | `get_activity_weather` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_management.py:655 |
-| `get_adhoc_challenges` | not-implemented | read-only | ordinary | `garmin:challenges:read` | idempotent | challenges.py:363 |
+| `get_adhoc_challenges` | **implemented** | read-only | ordinary | `garmin:challenges:read` | idempotent | challenges.py:363 |
 | `get_all_day_events` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:687 |
 | `get_all_day_stress` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:671 |
-| `get_available_badge_challenges` | not-implemented | read-only | health | `garmin:challenges:read` | idempotent | challenges.py:412 |
-| `get_badge_challenges` | not-implemented | read-only | health | `garmin:challenges:read` | idempotent | challenges.py:445 |
+| `get_available_badge_challenges` | **implemented** | read-only | health | `garmin:challenges:read` | idempotent | challenges.py:412 |
+| `get_badge_challenges` | **implemented** | read-only | health | `garmin:challenges:read` | idempotent | challenges.py:445 |
 | `get_blood_pressure` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:309 |
 | `get_body_battery` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:247 |
 | `get_body_battery_events` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:293 |
 | `get_body_composition` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:115 |
 | `get_courses` | not-implemented | read-only | location | `garmin:activities:read` | idempotent | courses.py:173 |
-| `get_custom_food_serving_units` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:253 |
-| `get_custom_foods` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:220 |
+| `get_custom_food_serving_units` | **implemented** | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:253 |
+| `get_custom_foods` | **implemented** | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:220 |
 | `get_cycling_ftp` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:647 |
 | `get_daily_steps` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:172 |
 | `get_daily_weigh_ins` | not-implemented | read-only | health | `garmin:health:read` | idempotent | weight_management.py:86 |
@@ -332,36 +332,36 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_device_settings` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:95 |
 | `get_device_solar_data` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:229 |
 | `get_devices` | **implemented** | read-only | device | `garmin:devices:read` | idempotent | devices.py:23 |
-| `get_earned_badges` | not-implemented | read-only | ordinary | `garmin:challenges:read` | idempotent | challenges.py:297 |
+| `get_earned_badges` | **implemented** | read-only | ordinary | `garmin:challenges:read` | idempotent | challenges.py:297 |
 | `get_endurance_score` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:274 |
 | `get_fitnessage_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:487 |
 | `get_floors` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:326 |
 | `get_full_name` | **implemented** | read-only | profile | `garmin:profile:read` | idempotent | user_profile.py:22 |
 | `get_garmin_coach_workouts` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:1098 |
 | `get_gear` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | gear_management.py:42 |
-| `get_goals` | not-implemented | read-only | health | `garmin:health:read` | idempotent | challenges.py:237 |
+| `get_goals` | **implemented** | read-only | health | `garmin:health:read` | idempotent | challenges.py:237 |
 | `get_heart_rates` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:358 |
 | `get_heart_rates_summary` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:377 |
 | `get_hill_score` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:217 |
 | `get_hrv_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:431 |
 | `get_hrv_trend` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:998 |
 | `get_hydration_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:415 |
-| `get_inprogress_virtual_challenges` | not-implemented | read-only | health | `garmin:challenges:read` | idempotent | challenges.py:552 |
+| `get_inprogress_virtual_challenges` | **implemented** | read-only | health | `garmin:challenges:read` | idempotent | challenges.py:552 |
 | `get_lactate_threshold` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:675 |
 | `get_lifestyle_logging_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:703 |
 | `get_menstrual_calendar_data` | not-implemented | read-only | womens-health | `garmin:womens-health:read` | idempotent | womens_health.py:75 |
 | `get_menstrual_data_for_date` | not-implemented | read-only | womens-health | `garmin:womens-health:read` | idempotent | womens_health.py:60 |
 | `get_morning_training_readiness` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:867 |
-| `get_non_completed_badge_challenges` | not-implemented | read-only | health | `garmin:challenges:read` | idempotent | challenges.py:478 |
-| `get_nutrition_daily_food_log` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:32 |
-| `get_nutrition_daily_meals` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:51 |
-| `get_nutrition_daily_settings` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:71 |
+| `get_non_completed_badge_challenges` | **implemented** | read-only | health | `garmin:challenges:read` | idempotent | challenges.py:478 |
+| `get_nutrition_daily_food_log` | **implemented** | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:32 |
+| `get_nutrition_daily_meals` | **implemented** | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:51 |
+| `get_nutrition_daily_settings` | **implemented** | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:71 |
 | `get_personal_record` | **implemented** | read-only | health | `garmin:health:read` | idempotent | challenges.py:252 |
 | `get_power_duration_curve` | **implemented** | read-only | location | `garmin:activities:read` | idempotent | activity_analysis.py:1150 |
 | `get_pregnancy_summary` | not-implemented | read-only | womens-health | `garmin:womens-health:read` | idempotent | womens_health.py:49 |
 | `get_primary_training_device` | not-implemented | read-only | device | `garmin:devices:read` | idempotent | devices.py:177 |
 | `get_progress_summary_between_dates` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:161 |
-| `get_race_predictions` | not-implemented | read-only | health | `garmin:health:read` | idempotent | challenges.py:513 |
+| `get_race_predictions` | **implemented** | read-only | health | `garmin:health:read` | idempotent | challenges.py:513 |
 | `get_respiration_data` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:588 |
 | `get_respiration_summary` | **implemented** | read-only | health | `garmin:health:read` | idempotent | health_wellness.py:607 |
 | `get_respiration_trend` | **implemented** | read-only | health | `garmin:health:read` | idempotent | training.py:1227 |
@@ -392,14 +392,14 @@ See [Deliberate deviations](#deliberate-deviations).
 | `get_weigh_ins` | not-implemented | read-only | health | `garmin:health:read` | idempotent | weight_management.py:22 |
 | `get_workout_by_id` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:729 |
 | `get_workouts` | **implemented** | read-only | health | `garmin:workouts:read` | idempotent | workouts.py:707 |
-| `log_custom_food` | not-implemented | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:546 |
-| `log_food` | not-implemented | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:637 |
+| `log_custom_food` | **implemented** | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:546 |
+| `log_food` | **implemented** | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:637 |
 | `remove_gear_from_activity` | **implemented** | write | device | `garmin:devices:write` | idempotent | gear_management.py:182 |
 | `request_reload` | **implemented** | write | health | `garmin:health:write` | idempotent | training.py:778 |
 | `schedule_week` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workout_builders.py:522 |
 | `schedule_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:1154 |
 | `schedule_workouts` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:1212 |
-| `search_foods` | not-implemented | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:144 |
+| `search_foods` | **implemented** | read-only | nutrition | `garmin:nutrition:read` | idempotent | nutrition.py:144 |
 | `set_activity_description` | **implemented** | write | ordinary | `garmin:activities:write` | idempotent | activity_management.py:386 |
 | `set_activity_event_type` | **implemented** | write | ordinary | `garmin:activities:write` | idempotent | activity_management.py:416 |
 | `set_activity_feel` | **implemented** | write | health | `garmin:activities:write` | idempotent | activity_management.py:503 |
@@ -407,15 +407,15 @@ See [Deliberate deviations](#deliberate-deviations).
 | `set_activity_type` | **implemented** | write | ordinary | `garmin:activities:write` | idempotent | activity_management.py:341 |
 | `set_blood_pressure` | not-implemented | write | health | `garmin:health:write` | non-idempotent | data_management.py:75 |
 | `set_fit_download_dir` | not-implemented | external-side-effect | ordinary | `local:files:write` | idempotent | activity_analysis.py:1363 |
-| `set_nutrition_daily_settings` | not-implemented | write | nutrition | `garmin:nutrition:write` | idempotent | nutrition.py:90 |
+| `set_nutrition_daily_settings` | **implemented** | write | nutrition | `garmin:nutrition:write` | idempotent | nutrition.py:90 |
 | `set_perceived_effort` | **implemented** | write | health | `garmin:activities:write` | idempotent | activity_management.py:467 |
 | `unschedule_workout` | **implemented** | destructive | health | `garmin:workouts:destructive` | idempotent | workouts.py:1345 |
 | `unschedule_workouts` | **implemented** | destructive | health | `garmin:workouts:destructive` | idempotent | workouts.py:1381 |
-| `update_custom_food` | not-implemented | write | nutrition | `garmin:nutrition:write` | idempotent | nutrition.py:376 |
+| `update_custom_food` | **implemented** | write | nutrition | `garmin:nutrition:write` | idempotent | nutrition.py:376 |
 | `upload_course` | not-implemented | write | location | `garmin:activities:write` | non-idempotent | courses.py:203 |
 | `upload_workout` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:794 |
 | `upload_workouts` | **implemented** | write | health | `garmin:workouts:write` | non-idempotent | workouts.py:933 |
-| `upsert_and_log` | not-implemented | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:745 |
+| `upsert_and_log` | **implemented** | write | nutrition | `garmin:nutrition:write` | non-idempotent | nutrition.py:745 |
 
 ### Tools requiring more than one scope
 
@@ -472,7 +472,7 @@ See [Deliberate deviations](#deliberate-deviations).
 Every row is registered by `internal/tools/register.go` in tier order. Paths are
 relative to the repository root.
 
-### Read-only tier — 72 tools
+### Read-only tier — 86 tools
 
 | Tool | Go registrar | File |
 | --- | --- | --- |
@@ -548,12 +548,32 @@ relative to the repository root.
 | `get_respiration_trend` | `registerGetRespirationTrend` | `internal/tools/get_respiration_trend.go` |
 | `get_training_load_trend` | `registerGetTrainingLoadTrend` | `internal/tools/get_training_load_trend.go` |
 | `get_training_load_balance` | `registerGetTrainingLoadBalance` | `internal/tools/get_training_load_balance.go` |
+| `get_nutrition_daily_food_log` | `registerGetNutritionDailyFoodLog` | `internal/tools/get_nutrition_daily_food_log.go` |
+| `get_nutrition_daily_meals` | `registerGetNutritionDailyMeals` | `internal/tools/get_nutrition_daily_meals.go` |
+| `get_nutrition_daily_settings` | `registerGetNutritionDailySettings` | `internal/tools/nutritionsettings.go` |
+| `search_foods` | `registerSearchFoods` | `internal/tools/search_foods.go` |
+| `get_custom_foods` | `registerGetCustomFoods` | `internal/tools/get_custom_foods.go` |
+| `get_custom_food_serving_units` | `registerGetCustomFoodServingUnits` | `internal/tools/get_custom_food_serving_units.go` |
+| `get_earned_badges` | `registerGetEarnedBadges` | `internal/tools/get_earned_badges.go` |
+| `get_goals` | `registerGetGoals` | `internal/tools/get_goals.go` |
+| `get_adhoc_challenges` | `registerGetAdhocChallenges` | `internal/tools/get_adhoc_challenges.go` |
+| `get_available_badge_challenges` | `registerGetAvailableBadgeChallenges` | `internal/tools/badgechallengelists.go` |
+| `get_badge_challenges` | `registerGetBadgeChallenges` | `internal/tools/badgechallengelists.go` |
+| `get_non_completed_badge_challenges` | `registerGetNonCompletedBadgeChallenges` | `internal/tools/badgechallengelists.go` |
+| `get_race_predictions` | `registerGetRacePredictions` | `internal/tools/get_race_predictions.go` |
+| `get_inprogress_virtual_challenges` | `registerGetInProgressVirtualChallenges` | `internal/tools/get_inprogress_virtual_challenges.go` |
 
-### Write tier — 23 tools
+### Write tier — 29 tools
 
 | Tool | Go registrar | File |
 | --- | --- | --- |
 | `request_reload` | `registerRequestReload` | `internal/tools/request_reload.go` |
+| `set_nutrition_daily_settings` | `registerSetNutritionDailySettings` | `internal/tools/nutritionsettings.go` |
+| `create_custom_food` | `registerCreateCustomFood` | `internal/tools/customfoodwrites.go` |
+| `update_custom_food` | `registerUpdateCustomFood` | `internal/tools/customfoodwrites.go` |
+| `log_custom_food` | `registerLogCustomFood` | `internal/tools/foodlogwrites.go` |
+| `log_food` | `registerLogFood` | `internal/tools/foodlogwrites.go` |
+| `upsert_and_log` | `registerUpsertAndLog` | `internal/tools/upsert_and_log.go` |
 | `set_activity_name` | `registerSetActivityName` | `internal/tools/activitywrites.go` |
 | `set_activity_type` | `registerSetActivityType` | `internal/tools/activitywrites.go` |
 | `set_activity_event_type` | `registerSetActivityEventType` | `internal/tools/activitywrites.go` |
@@ -577,10 +597,12 @@ relative to the repository root.
 | `create_strength_workout` | `registerCreateStrengthWorkout` | `internal/tools/builders_strength.go` |
 | `download_activity_file` | `registerDownloadActivityFile` | `internal/tools/downloads.go` |
 
-### Destructive tier — 5 tools
+### Destructive tier — 7 tools
 
 | Tool | Go registrar | File |
 | --- | --- | --- |
+| `delete_custom_food` | `registerDeleteCustomFood` | `internal/tools/customfoodwrites.go` |
+| `delete_food_log` | `registerDeleteFoodLog` | `internal/tools/foodlogwrites.go` |
 | `delete_activity` † | `registerDeleteActivity` | `internal/tools/activitylifecycle.go` |
 | `delete_workout` | `registerDeleteWorkout` | `internal/tools/workoutdelete.go` |
 | `delete_workouts` | `registerDeleteWorkouts` | `internal/tools/workoutdelete.go` |

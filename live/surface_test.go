@@ -265,7 +265,7 @@ func sweptTools() map[string]bool {
 	swept := map[string]bool{}
 	calls := slices.Concat(
 		accountCalls(time.Time{}), healthCalls(time.Time{}), activityCalls("1"),
-		trainingCalls(time.Time{}),
+		trainingCalls(time.Time{}), nutritionCalls(time.Time{}), challengeCalls(),
 	)
 	for _, call := range calls {
 		swept[call.tool] = true

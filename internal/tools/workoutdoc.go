@@ -64,7 +64,7 @@ func runningSport() sportType  { return sportType{ID: sportTypeRunning, Key: "ru
 func walkingSport() sportType  { return sportType{ID: sportTypeWalking, Key: "walking"} }
 func strengthSport() sportType { return sportType{ID: sportTypeStrength, Key: "strength_training"} }
 
-func timeCondition() endCondition { return endCondition{ID: conditionTypeTime, Key: "time"} }
+func timeCondition() endCondition { return endCondition{ID: conditionTypeTime, Key: keyTime} }
 
 func repsCondition() endCondition { return endCondition{ID: conditionTypeReps, Key: argNameReps} }
 

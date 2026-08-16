@@ -10,11 +10,12 @@ import (
 // Log categories. Each is the manifest's sensitivity label for the tools that carry
 // it, so a log line names the domain a call touched without naming the call.
 const (
-	categoryProfile  = "profile"
-	categoryHealth   = "health"
-	categoryLocation = "location"
-	categoryDevice   = "device"
-	categoryOrdinary = "ordinary"
+	categoryProfile   = "profile"
+	categoryHealth    = "health"
+	categoryNutrition = "nutrition"
+	categoryLocation  = "location"
+	categoryDevice    = "device"
+	categoryOrdinary  = "ordinary"
 )
 
 // noArguments is the input type of every tool that takes no argument.
@@ -166,6 +167,24 @@ func readOnlyRegistrations() []registration {
 		{getRespirationTrendContract, registerGetRespirationTrend},
 		{getTrainingLoadTrendContract, registerGetTrainingLoadTrend},
 		{getTrainingLoadBalanceContract, registerGetTrainingLoadBalance},
+
+		// Nutrition: the reads.
+		{getNutritionDailyFoodLogContract, registerGetNutritionDailyFoodLog},
+		{getNutritionDailyMealsContract, registerGetNutritionDailyMeals},
+		{getNutritionDailySettingsContract, registerGetNutritionDailySettings},
+		{searchFoodsContract, registerSearchFoods},
+		{getCustomFoodsContract, registerGetCustomFoods},
+		{getCustomFoodServingUnitsContract, registerGetCustomFoodServingUnits},
+
+		// Challenges, badges and goals. All read-only.
+		{getEarnedBadgesContract, registerGetEarnedBadges},
+		{getGoalsContract, registerGetGoals},
+		{getAdhocChallengesContract, registerGetAdhocChallenges},
+		{getAvailableBadgeChallengesContract, registerGetAvailableBadgeChallenges},
+		{getBadgeChallengesContract, registerGetBadgeChallenges},
+		{getNonCompletedBadgeChallengesContract, registerGetNonCompletedBadgeChallenges},
+		{getRacePredictionsContract, registerGetRacePredictions},
+		{getInProgressVirtualChallengesContract, registerGetInProgressVirtualChallenges},
 	}
 }
 
@@ -181,6 +200,14 @@ func writeRegistrations() []registration {
 	return []registration{
 		// Training: the domain's only write.
 		{requestReloadContract, registerRequestReload},
+
+		// Nutrition: the writes.
+		{setNutritionDailySettingsContract, registerSetNutritionDailySettings},
+		{createCustomFoodContract, registerCreateCustomFood},
+		{updateCustomFoodContract, registerUpdateCustomFood},
+		{logCustomFoodContract, registerLogCustomFood},
+		{logFoodContract, registerLogFood},
+		{upsertAndLogContract, registerUpsertAndLog},
 
 		{setActivityNameContract, registerSetActivityName},
 		{setActivityTypeContract, registerSetActivityType},
@@ -214,6 +241,10 @@ func writeRegistrations() []registration {
 // asked, a user who declines and a wait that elapses all refuse the call.
 func destructiveRegistrations() []registration {
 	return []registration{
+		// Nutrition: the two removals.
+		{deleteCustomFoodContract, registerDeleteCustomFood},
+		{deleteFoodLogContract, registerDeleteFoodLog},
+
 		{deleteActivityContract, registerDeleteActivity},
 		{deleteWorkoutContract, registerDeleteWorkout},
 		{deleteWorkoutsContract, registerDeleteWorkouts},

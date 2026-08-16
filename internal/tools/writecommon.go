@@ -12,7 +12,7 @@ import (
 // plain integer rather than as a number-or-string union.
 func activityIDIntegerProperty() Property {
 	return Property{
-		Name:        "activity_id",
+		Name:        argActivityID,
 		Types:       []string{typeInteger},
 		Description: "the Garmin activity identifier, as a positive whole number",
 		Minimum:     bound(1),

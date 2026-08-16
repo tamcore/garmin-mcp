@@ -25,7 +25,7 @@ type activityIDInput struct {
 // activityIDProperty declares the identifier argument for both detail tools.
 func activityIDProperty() Property {
 	return Property{
-		Name:        "activity_id",
+		Name:        argActivityID,
 		Types:       []string{typeInteger, typeString},
 		Description: "the Garmin activity identifier, as a positive number or decimal string",
 		Minimum:     bound(1),

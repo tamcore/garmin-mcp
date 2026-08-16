@@ -12,6 +12,36 @@ import (
 
 // Argument bounds this package enforces before anything is dispatched.
 const (
+	// argActivityID is the manifest's activity identifier argument name.
+	argActivityID = "activity_id"
+
+	// argStart and argLimit are the pagination argument names every offset-and-limit
+	// list tool in this package declares.
+	argStart = "start"
+	argLimit = "limit"
+
+	// argFoodID, argCalories and argGoalType are argument and field names shared by
+	// more than one nutrition or goal tool.
+	argFoodID   = "food_id"
+	argCalories = "calories"
+	argGoalType = "goal_type"
+
+	// challengeLabelRunning, challengeLabelCycling and challengeLabelSteps are
+	// activity-category display labels more than one challenge/badge id-to-label
+	// mapping in this package shares.
+	challengeLabelRunning = "Running"
+	challengeLabelCycling = "Cycling"
+	challengeLabelSteps   = "Steps"
+
+	// keyTime is the badge/workout unit key shared across the badge-value formatter
+	// and a workout end-condition key.
+	keyTime = "time"
+
+	// valueActive and valueFuture are lifecycle/status values more than one tool or
+	// test in this package compares against.
+	valueActive = "active"
+	valueFuture = "future"
+
 	// maxDateArgumentLen is the length of a YYYY-MM-DD date. A longer value is
 	// refused before it reaches the date parser.
 	maxDateArgumentLen = 10

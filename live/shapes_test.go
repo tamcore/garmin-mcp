@@ -24,6 +24,7 @@ const (
 	keyWeeksReturned = "weeks_returned"
 	keyDistance      = "distance"
 	keyHeartRate     = "heart_rate"
+	keyEntries       = "entries"
 )
 
 // answersLocally names the swept tools that reach no Garmin endpoint, with the reason.
@@ -44,6 +45,7 @@ func resultShapes() map[string][]string {
 	shapes := map[string][]string{}
 	for _, group := range []map[string][]string{
 		accountShapes(), activityShapes(), healthShapes(), trainingShapes(),
+		nutritionShapes(), challengeShapes(),
 	} {
 		maps.Copy(shapes, group)
 	}
@@ -117,7 +119,7 @@ func healthShapes() map[string][]string {
 		tools.ToolGetStepsData:                {argDate, "intervals", keyCount, keyTruncated},
 		tools.ToolGetFloors:                   {argDate, "buckets", keyCount, keyTruncated},
 		tools.ToolGetStressSummary:            {argDate, keyHasData, "data_points_count"},
-		tools.ToolGetTrainingReadiness:        {argDate, keyCount, keyTruncated, "entries"},
+		tools.ToolGetTrainingReadiness:        {argDate, keyCount, keyTruncated, keyEntries},
 		tools.ToolGetMorningTrainingReadiness: {argDate, keyHasData, "from_wakeup_reset"},
 		tools.ToolGetHeartRatesSummary:        {argDate, keyHasData, "data_points_count"},
 		tools.ToolGetRestingHeartRateDay:      {argDate, keyHasData},
@@ -162,7 +164,7 @@ func healthShapes() map[string][]string {
 			argEndDate, keyWeeksAsked, keyWeeksReturned, keyTruncated, keyWeeklyData,
 		},
 		tools.ToolGetBodyComposition: {
-			argStartDate, argEndDate, "has_entry_list", "entries", "entry_count",
+			argStartDate, argEndDate, "has_entry_list", keyEntries, "entry_count",
 			"entries_truncated", keyDroppedFields,
 		},
 	}

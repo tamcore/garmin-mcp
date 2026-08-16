@@ -76,7 +76,7 @@ func TestReadBloodPressureRefusesAnInvertedWindowBeforeAnyCall(t *testing.T) {
 
 	svc, fake := cardioService(t, cardioScript())
 
-	in := getBloodPressureInput{StartDate: "2026-02-01", EndDate: "2026-01-01"}
+	in := getBloodPressureInput{StartDate: challengeWindowEnd, EndDate: scoresStartDate}
 	if _, err := svc.readBloodPressure(cardioContext(t), in); !errors.Is(
 		err, ErrInvalidArgument) {
 		t.Fatalf("readBloodPressure() with an inverted window = %v, want ErrInvalidArgument", err)

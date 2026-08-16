@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
@@ -92,6 +94,11 @@ type GearItem struct {
 	DateBegin       *string         `json:"dateBegin"`
 	DateEnd         *string         `json:"dateEnd"`
 	Status          json.RawMessage `json:"gearStatus"`
+	// MaximumMeters is the gear's configured maximum-distance retirement
+	// threshold. Source: g.get("maximumMeters") in gear_management.py's get_gear
+	// tool (gear_management.py:102-104), which divides it by 1000 for display; the
+	// raw meters value is kept here undivided so a caller chooses its own unit.
+	MaximumMeters client.Number `json:"maximumMeters"`
 }
 
 // ForActivity reads the gear linked to one activity.
@@ -162,4 +169,108 @@ func (g *Gear) link(
 		return WriteResult{}, err
 	}
 	return newWriteResult(payload), nil
+}
+
+// List reads every gear item registered to the account behind userProfileID.
+//
+// The account's profile id is looked up through Devices.LastUsed rather than
+// accepted as a tool argument, matching AGENTS.md: no gear tool may take a
+// user_id-shaped selector. Source: get_gear
+// (params={"userProfilePk": userProfileNumber}), reusing PathGearFilter — the
+// same list PathGearFilter already serves for ForActivity's activityId filter.
+//
+// This read carries no domain-level item cap: it is a single, unpaginated
+// response bounded the same way EarnedBadges is, by the request layer's
+// Limits.MaxResponseBytes and Limits.MaxDecompressedBytes.
+func (g *Gear) List(
+	ctx context.Context, session client.Session, userProfileID client.Number,
+) ([]GearItem, error) {
+	id, ok := userProfileID.Int64Exact()
+	if !ok || id <= 0 {
+		req := readRequest(client.OpGetGear, client.EndpointGearFilter, client.PathGearFilter, nil)
+		return nil, invalid(req, fmt.Errorf("%w: a positive user profile id is required",
+			client.ErrValidation))
+	}
+
+	query := url.Values{}
+	query.Set(client.QueryUserProfilePK, strconv.FormatInt(id, 10))
+	req := readRequest(client.OpGetGear, client.EndpointGearFilter, client.PathGearFilter, query)
+
+	var items client.List[GearItem]
+	if _, err := g.req.read(ctx, session, req, &items); err != nil {
+		return nil, err
+	}
+	return items.Items(), nil
+}
+
+// GearDefault is one gear-to-activity-type default association.
+//
+// Source: gear_management.py's get_gear tool (gear_management.py:67-70):
+// d.get("uuid") and d.get("activityTypePk"). ActivityTypePk is kept as the raw
+// numeric key: the tool's ACTIVITY_TYPE_MAPPING that translates it to a label
+// is explicitly documented there as "extrapolated from data and might not be
+// complete or 100% accurate" (gear_management.py:11-12), so this package does
+// not port a guessed mapping and leaves the translation to a caller that wants
+// one.
+type GearDefault struct {
+	UUID           *string       `json:"uuid"`
+	ActivityTypePk client.Number `json:"activityTypePk"`
+}
+
+// Defaults reads the account's gear-to-activity-type default associations.
+//
+// Source: get_gear_defaults
+// (f"{garmin_connect_gear_baseurl}/user/{userProfileNumber}/activityTypes").
+func (g *Gear) Defaults(
+	ctx context.Context, session client.Session, userProfileID client.Number,
+) ([]GearDefault, error) {
+	id, ok := userProfileID.Int64Exact()
+	if !ok || id <= 0 {
+		req := readRequest(client.OpGetGearDefaults, client.EndpointGearDefaults,
+			client.PathGearUserDefaultsPrefix, nil)
+		return nil, invalid(req, fmt.Errorf("%w: a positive user profile id is required",
+			client.ErrValidation))
+	}
+
+	path := client.PathGearUserDefaultsPrefix + "/" + strconv.FormatInt(id, 10) + "/" +
+		client.ActivityTypesSegment
+	req := readRequest(client.OpGetGearDefaults, client.EndpointGearDefaults, path, nil)
+
+	var defaults client.List[GearDefault]
+	if _, err := g.req.read(ctx, session, req, &defaults); err != nil {
+		return nil, err
+	}
+	return defaults.Items(), nil
+}
+
+// GearStats is one gear item's usage statistics.
+//
+// Source: gear_management.py's get_gear tool (gear_management.py:113-120):
+// stats.get("totalActivities") and stats.get("totalDistance").
+type GearStats struct {
+	TotalActivities client.Number `json:"totalActivities"`
+	TotalDistance   client.Number `json:"totalDistance"`
+}
+
+// Stats reads one gear item's usage statistics.
+//
+// A 404 decodes as the zero GearStats rather than an error, matching
+// get_gear_stats's own try/except: retired or removed gear commonly has no
+// stats document, and upstream logs that case and returns {} rather than
+// failing the caller's whole gear listing over it.
+func (g *Gear) Stats(ctx context.Context, session client.Session, gear GearUUID) (GearStats, error) {
+	req := readRequest(client.OpGetGearStats, client.EndpointGearStats,
+		client.PathGearStatsPrefix+"/"+gear.String(), nil)
+	if gear.IsZero() {
+		return GearStats{}, invalid(req, fmt.Errorf("%w: a gear uuid is required", client.ErrValidation))
+	}
+
+	var stats GearStats
+	if _, err := g.req.read(ctx, session, req, &stats); err != nil {
+		if errors.Is(err, client.ErrNotFound) {
+			return GearStats{}, nil
+		}
+		return GearStats{}, err
+	}
+	return stats, nil
 }

@@ -80,7 +80,7 @@ func getActivitiesContract() Contract {
 		},
 		Schema: NewSchema(
 			Property{
-				Name:        "start",
+				Name:        argStart,
 				Types:       []string{typeInteger},
 				Description: "zero-based record offset",
 				Minimum:     bound(0),
@@ -88,7 +88,7 @@ func getActivitiesContract() Contract {
 				Default:     defaultActivityStart,
 			},
 			Property{
-				Name:        "limit",
+				Name:        argLimit,
 				Types:       []string{typeInteger},
 				Description: "how many activities to return; the server may lower it",
 				Minimum:     bound(1),

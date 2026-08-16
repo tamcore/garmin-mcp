@@ -194,12 +194,14 @@ type service struct {
 	wellness   *api.Wellness
 	devices    *api.Devices
 	details    *api.ActivityDetails
+	challenges *api.Challenges
 	writes     *api.ActivityWrites
 	gear       *api.Gear
 	workouts   *api.Workouts
 	calendar   *api.Calendar
 	strength   *api.StrengthWrites
 	files      *api.ActivityFiles
+	nutrition  *api.Nutrition
 }
 
 func newService(deps Deps) (*service, error) {
@@ -255,6 +257,9 @@ func (s *service) buildReadClients(rc *client.Client) error {
 	if s.calendar, err = api.NewCalendar(rc); err != nil {
 		return fmt.Errorf("building the calendar client: %w", err)
 	}
+	if s.challenges, err = api.NewChallenges(rc); err != nil {
+		return fmt.Errorf("building the challenges client: %w", err)
+	}
 	return nil
 }
 
@@ -271,6 +276,9 @@ func (s *service) buildWriteClients(rc *client.Client) error {
 	}
 	if s.strength, err = api.NewStrengthWrites(rc, s.catalog); err != nil {
 		return fmt.Errorf("building the strength write client: %w", err)
+	}
+	if s.nutrition, err = api.NewNutrition(rc); err != nil {
+		return fmt.Errorf("building the nutrition client: %w", err)
 	}
 	return nil
 }

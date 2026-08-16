@@ -36,6 +36,7 @@ const (
 	keyItems                = "items"
 	keyEnum                 = "enum"
 	keyDefault              = "default"
+	keyNullable             = "nullable"
 )
 
 // JSON Schema formats and patterns this package declares.
@@ -92,6 +93,11 @@ type Property struct {
 
 	// Required reports whether the caller must supply the argument.
 	Required bool
+
+	// Nullable declares that a caller may send JSON null for this argument,
+	// distinct from omitting it entirely, matching a manifest property recorded
+	// with "nullable": true. It adds the keyword only; it does not change Types.
+	Nullable bool
 }
 
 // A Schema is the strict input schema of one tool.
@@ -186,6 +192,9 @@ func (p Property) addConstraints(out map[string]any) {
 	}
 	if p.Default != nil {
 		out[keyDefault] = p.Default
+	}
+	if p.Nullable {
+		out[keyNullable] = true
 	}
 }
 

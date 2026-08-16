@@ -34,9 +34,8 @@ const (
 )
 
 // Argument and result keys the parity tests assert on, named once so a rename shows
-// up in one place.
+// up in one place. argActivityID lives in args.go: non-test code needs it too.
 const (
-	argActivityID  = "activity_id"
 	argDate        = "date"
 	keyDisplayName = "display_name"
 	typeKeyRunning = "running"

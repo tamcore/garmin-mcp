@@ -64,6 +64,7 @@ type mutation struct {
 type writeCaller struct {
 	inner client.Caller
 	owned *ownedObjects
+	foods *foodLedger
 }
 
 // Do applies the guard and then dispatches.
@@ -72,6 +73,9 @@ func (c writeCaller) Do(
 ) (*http.Response, error) {
 	if isReadRequest(req) {
 		return c.inner.Do(ctx, principal, req)
+	}
+	if resp, err, handled := c.doNutrition(ctx, principal, req); handled {
+		return resp, err
 	}
 
 	target, recognised := classifyMutation(req)

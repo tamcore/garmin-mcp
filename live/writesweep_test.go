@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/api"
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
@@ -34,7 +35,11 @@ const sweepPageSize = client.DefaultMaxPageSize
 // would refuse the request.
 //
 // Calendar entries need no pass of their own: removing a workout template removes
-// the entries that point at it, and this suite schedules no other template.
+// the entries that point at it, and this suite schedules no other template. A
+// custom food has no calendar analogue and no int64 identifier either, so its own
+// pass, sweepFoods, matches leftovers by name the same way foodguard_test.go's
+// storedCustomFood binds a create, rather than by fetching a single item — Garmin
+// exposes no per-item GET for a custom food.
 // It reports what it removed to stderr, and stays silent when there was nothing.
 // A leftover means a previous run was killed or a delete failed, which is a defect
 // worth seeing rather than a quiet repair.
@@ -54,12 +59,16 @@ func (w *writeEnv) sweep() error {
 	if err != nil {
 		return err
 	}
+	foods, err := w.sweepFoods(ctx, page)
+	if err != nil {
+		return err
+	}
 
-	if workouts+activities > 0 {
+	if workouts+activities+foods > 0 {
 		suiteLogger().Info(
 			"live: the sweeper removed leftovers a previous run left behind",
 			slog.Int("workouts", workouts), slog.Int("activities", activities),
-			slog.String("prefix", objectPrefix))
+			slog.Int("foods", foods), slog.String("prefix", objectPrefix))
 	}
 	return nil
 }
@@ -130,4 +139,58 @@ func (w *writeEnv) sweepActivities(ctx context.Context, page client.Page) (int, 
 		removed++
 	}
 	return removed, nil
+}
+
+// sweepFoods removes prefixed leftovers from the custom-food library and reports
+// how many it removed.
+//
+// A custom food has no per-item GET and no int64 identifier, so this walks the
+// whole library — an empty search lists everything — the same way
+// foodguard_test.go's storedCustomFood finds a created food by name, and adopts a
+// leftover through foodLedger.ownSweptFood, the string-keyed analogue of
+// ownedObjects.ownSwept guarded by the same isPreviousRunObject licence.
+func (w *writeEnv) sweepFoods(ctx context.Context, page client.Page) (int, error) {
+	library, err := w.nutrition.CustomFoods(ctx, w.session, "", page)
+	if err != nil {
+		return 0, fmt.Errorf("listing the custom-food library to sweep leftovers: %w", err)
+	}
+
+	removed := 0
+	for _, item := range library.CustomFoods.Items() {
+		if item.Meta == nil {
+			continue
+		}
+		id, present := item.Meta.FoodID.Value()
+		if !present || id == "" {
+			continue
+		}
+		if !w.foods.ownSweptFood(item.Meta.FoodName, id, w.startedAt) {
+			continue
+		}
+
+		parsed, err := api.ParseFoodID(id)
+		if err != nil {
+			continue
+		}
+		if _, err := w.nutrition.DeleteCustomFood(ctx, w.session, parsed); err != nil {
+			return removed, fmt.Errorf("removing a custom food a previous run left behind: %w", err)
+		}
+		w.foods.releaseFood(id)
+		removed++
+	}
+	return removed, nil
+}
+
+// ownSweptFood adopts a leftover custom food from an earlier run, the string-keyed
+// analogue of ownedObjects.ownSwept: it requires the same name shape and run-stamp
+// licence isPreviousRunObject enforces for a workout or activity, because a custom
+// food carries no int64 identifier for that function's own signature to take.
+func (f *foodLedger) ownSweptFood(name *string, id string, before time.Time) bool {
+	if id == "" || !isPreviousRunObject(name, before) {
+		return false
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.foods[id] = struct{}{}
+	return true
 }

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/tamcore/garmin-mcp/internal/garmin/api"
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 	"github.com/tamcore/garmin-mcp/internal/tools"
 )
@@ -39,6 +40,42 @@ func (w *writeEnv) keepClean(t *testing.T, kind ownedKind, id int64) {
 	})
 }
 
+// keepCleanFood is keepClean for a custom food: the identifier space the food ledger
+// tracks rather than ownedObjects', so it needs its own removal path.
+func (w *writeEnv) keepCleanFood(t *testing.T, id string) {
+	t.Helper()
+
+	t.Cleanup(func() {
+		if !w.foods.ownsFood(id) {
+			return
+		}
+		if err := w.removeCustomFood(id); err != nil {
+			t.Errorf("live: the custom food this test created could not be removed and is left "+
+				"on the account; it carries the %s prefix for a person to find by hand: %s",
+				objectPrefix, safeError(err))
+			return
+		}
+		w.foods.releaseFood(id)
+	})
+}
+
+// keepCleanLog is keepClean for a food-log entry.
+func (w *writeEnv) keepCleanLog(t *testing.T, id, mealDate string) {
+	t.Helper()
+
+	t.Cleanup(func() {
+		if !w.foods.ownsLog(id) {
+			return
+		}
+		if err := w.removeFoodLog(id, mealDate); err != nil {
+			t.Errorf("live: the food-log entry this test created could not be removed and is "+
+				"left on the account: %s", safeError(err))
+			return
+		}
+		w.foods.releaseLog(id)
+	})
+}
+
 // removeOutstanding deletes everything still in the ledger when the suite ends.
 //
 // It closes the one hole t.Cleanup cannot: a tool that creates an object and then
@@ -62,6 +99,43 @@ func (w *writeEnv) removeOutstanding() int {
 			}
 			w.owned.release(kind, id)
 		}
+	}
+	left += w.removeOutstandingFoodLogs()
+	left += w.removeOutstandingFoods()
+	return left
+}
+
+// removeOutstandingFoodLogs deletes every food-log entry still in the food ledger.
+// A leftover here is otherwise unreachable on a later run: Garmin's food-log surface
+// carries no name for isPreviousRunObject to recognise the way a workout or an
+// activity does.
+func (w *writeEnv) removeOutstandingFoodLogs() int {
+	left := 0
+	for id, mealDate := range w.foods.logEntries() {
+		if err := w.removeFoodLog(id, mealDate); err != nil {
+			suiteLogger().Error(
+				"live: a food-log entry this suite created could not be removed",
+				slog.String("reason", safeError(err)))
+			left++
+			continue
+		}
+		w.foods.releaseLog(id)
+	}
+	return left
+}
+
+// removeOutstandingFoods deletes every custom food still in the food ledger.
+func (w *writeEnv) removeOutstandingFoods() int {
+	left := 0
+	for _, id := range w.foods.foodIdentifiers() {
+		if err := w.removeCustomFood(id); err != nil {
+			suiteLogger().Error(
+				"live: a custom food this suite created could not be removed",
+				slog.String("reason", safeError(err)))
+			left++
+			continue
+		}
+		w.foods.releaseFood(id)
 	}
 	return left
 }
@@ -90,6 +164,36 @@ func (w *writeEnv) remove(kind ownedKind, id int64) error {
 	default:
 		return fmt.Errorf("no removal is defined for a %s", kind)
 	}
+	return err
+}
+
+// removeCustomFood deletes one owned custom food through the nutrition client.
+func (w *writeEnv) removeCustomFood(id string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*requestTimeout)
+	defer cancel()
+
+	foodID, err := api.ParseFoodID(id)
+	if err != nil {
+		return fmt.Errorf("the recorded food identifier is unusable: %w", err)
+	}
+	_, err = w.nutrition.DeleteCustomFood(ctx, w.session, foodID)
+	return err
+}
+
+// removeFoodLog deletes one owned food-log entry through the nutrition client.
+func (w *writeEnv) removeFoodLog(id, mealDate string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*requestTimeout)
+	defer cancel()
+
+	logID, err := api.ParseLogID(id)
+	if err != nil {
+		return fmt.Errorf("the recorded log identifier is unusable: %w", err)
+	}
+	date, err := client.ParseDate(mealDate)
+	if err != nil {
+		return fmt.Errorf("the recorded meal date is unusable: %w", err)
+	}
+	_, err = w.nutrition.DeleteFoodLog(ctx, w.session, date, logID)
 	return err
 }
 

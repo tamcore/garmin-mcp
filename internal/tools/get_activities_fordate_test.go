@@ -51,7 +51,7 @@ func assertDailyActivity(t *testing.T, activity map[string]any) {
 		argActivityID:                9001,
 		"distance_meters":            10000,
 		"duration_seconds":           3000,
-		"calories":                   640,
+		argCalories:                  640,
 		"average_heart_rate":         148,
 		"steps":                      8800,
 		"lap_count":                  4,
