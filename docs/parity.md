@@ -1014,6 +1014,30 @@ best.
 The UUID form that adaptive Garmin Coach plans use is not served. The input
 schema accepts the numeric identifier, and the description says so.
 
+### `get_lactate_threshold` returns the heart-rate series, which upstream drops
+
+In the range branch this server returns `heart_rate_history` beside
+`speed_history`. Upstream returns only the speed series, on every account and
+every window, because of a key mismatch between the two pinned projects:
+
+- `python-garminconnect` 0.3.10 reads both range endpoints and returns
+  `{"speed": ..., "heart_rate": ..., "power": ...}`.
+- `garmin_mcp` reads that result with `threshold.get("heartRate", [])`, which
+  never matches the `heart_rate` key it was given, so the guard beneath it sees an
+  empty list and omits the field.
+
+Nothing signals the loss: no exception, no empty-list field, just an answer with
+one fewer series than the account has.
+
+A differential run over one real account and one 31-day window found it. Both
+servers agreed exactly on the two speed readings; this server additionally
+reported the two heart-rate readings, on the same dates, that upstream's own
+client had already fetched and its tool layer then discarded.
+
+This is a bug fixed, not a compatibility break, and it is recorded here rather
+than in the ADR 0006 register for that reason. The endpoint set is unchanged: both
+projects request the same two range paths.
+
 ### Training status codes are rendered as strings, where upstream passes the number through
 
 `get_training_status` reports `training_status` and `fitness_trend` as strings. A
