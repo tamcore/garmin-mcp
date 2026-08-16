@@ -212,13 +212,12 @@ func healthOps() []Op {
 	}
 }
 
-// knownEndpoints and knownOps are the package-wide allowlists Request.Validate
-// checks a request against. They are assembled here because this file declares
-// the second half of each set; endpoints.go declares the first.
-//
-// Both are functions rather than vars. The allocation is one small slice per
-// validated request, which is nothing beside the HTTP round trip that follows,
-// and it buys an allowlist no code can reassign.
-func knownEndpoints() []Endpoint { return slices.Concat(coreEndpoints(), healthEndpoints()) }
+// knownEndpoints and knownOps are the allowlists Request.Validate checks, assembled
+// from the core, health and training halves. Functions, not vars: AGENTS.md allows no
+// package-level mutable state, and the per-request slice costs nothing beside the
+// round trip.
+func knownEndpoints() []Endpoint {
+	return slices.Concat(coreEndpoints(), healthEndpoints(), trainingEndpoints())
+}
 
-func knownOps() []Op { return slices.Concat(coreOps(), healthOps()) }
+func knownOps() []Op { return slices.Concat(coreOps(), healthOps(), trainingOps()) }
