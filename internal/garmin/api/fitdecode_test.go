@@ -227,8 +227,8 @@ func TestParseFITStopsCollectingAtTheSpanBound(t *testing.T) {
 	if len(activity.Laps) != maxLaps {
 		t.Errorf("%d laps, want the bound of %d", len(activity.Laps), maxLaps)
 	}
-	if !activity.SpansTruncated {
-		t.Error("SpansTruncated = false, want the bound reported")
+	if !activity.LapsTruncated {
+		t.Error("LapsTruncated = false, want the bound reported")
 	}
 
 	// The analysis runs over the bounded collection, so it summarizes exactly the
@@ -266,8 +266,8 @@ func TestParseFITAppliesTheDefaultSpanBound(t *testing.T) {
 		t.Errorf("%d laps, want the default bound of %d",
 			len(activity.Laps), api.DefaultMaxFITLaps)
 	}
-	if !activity.SpansTruncated {
-		t.Error("SpansTruncated = false, want the default bound reported")
+	if !activity.LapsTruncated {
+		t.Error("LapsTruncated = false, want the default bound reported")
 	}
 }
 

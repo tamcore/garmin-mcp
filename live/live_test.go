@@ -128,8 +128,16 @@ type env struct {
 	// fallback that used to be unnecessary becoming necessary is visible here.
 	strategy string
 
+	// now is the one instant every date argument derives from, captured at start-up
+	// so a run crossing UTC midnight still asks every tool for the same day.
+	now time.Time
+
 	session client.Session
 	mcp     *mcp.ClientSession
+
+	// caller is the read-only guard every tool call passes through. The sweep reads
+	// its request count, so a tool that answered without reaching Garmin fails.
+	caller *readOnlyCaller
 
 	// rest and refresher are the two pieces the write layer builds its own guarded
 	// session on. They are retained rather than rebuilt so the whole suite performs

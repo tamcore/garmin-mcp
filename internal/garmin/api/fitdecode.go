@@ -72,10 +72,11 @@ type fitCollector struct {
 	// profile struct per sample. Each one is converted before the next is read.
 	record mesgdef.Record
 
-	messages  int
-	overflow  bool
-	truncated bool
-	spansCut  bool
+	messages    int
+	overflow    bool
+	truncated   bool
+	sessionsCut bool
+	lapsCut     bool
 
 	sessions []FITSpan
 	laps     []FITSpan
@@ -96,11 +97,11 @@ func (c *fitCollector) OnMesg(mesg proto.Message) {
 	case typedef.MesgNumRecord:
 		c.addRecord(&mesg)
 	case typedef.MesgNumSession:
-		if c.spanRoom(len(c.sessions), c.limits.MaxSessions) {
+		if c.spanRoom(len(c.sessions), c.limits.MaxSessions, &c.sessionsCut) {
 			c.sessions = append(c.sessions, readSession(mesgdef.NewSession(&mesg)))
 		}
 	case typedef.MesgNumLap:
-		if c.spanRoom(len(c.laps), c.limits.MaxLaps) {
+		if c.spanRoom(len(c.laps), c.limits.MaxLaps, &c.lapsCut) {
 			c.laps = append(c.laps, readLap(mesgdef.NewLap(&mesg)))
 		}
 	case typedef.MesgNumEvent:
@@ -116,9 +117,9 @@ func (c *fitCollector) OnMesg(mesg proto.Message) {
 // is the product of the two counts: a file carrying overlapping spans over a full
 // sample stream would be quadratic work performed before any result bound could apply.
 // The two classes carry their own bound because they are rendered at different counts.
-func (c *fitCollector) spanRoom(collected, limit int) bool {
+func (c *fitCollector) spanRoom(collected, limit int, cut *bool) bool {
 	if collected >= limit {
-		c.spansCut = true
+		*cut = true
 		return false
 	}
 	return true
@@ -174,12 +175,13 @@ func (c *fitCollector) addShift(mesg *proto.Message) {
 // activity returns the collected model.
 func (c *fitCollector) activity() FITActivity {
 	return FITActivity{
-		Sessions:         c.sessions,
-		Laps:             c.laps,
-		Records:          c.records,
-		Shifts:           c.shifts,
-		RecordsTruncated: c.truncated,
-		SpansTruncated:   c.spansCut,
+		Sessions:          c.sessions,
+		Laps:              c.laps,
+		Records:           c.records,
+		Shifts:            c.shifts,
+		RecordsTruncated:  c.truncated,
+		SessionsTruncated: c.sessionsCut,
+		LapsTruncated:     c.lapsCut,
 	}
 }
 

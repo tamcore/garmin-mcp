@@ -41,7 +41,7 @@ func TestReadGuardJudgesTheBytesItDispatches(t *testing.T) {
 	refused := &recordingCaller{}
 	hidden := graphQLProbe(t, mutation)
 	hidden.GetBody = replayOf(query)
-	if _, err := (readOnlyCaller{inner: refused}).Do(
+	if _, err := (&readOnlyCaller{inner: refused}).Do(
 		t.Context(), livePrincipal, hidden); err == nil {
 		t.Error("the read-only guard admitted a mutation whose replay copy was a query")
 	}
@@ -52,7 +52,7 @@ func TestReadGuardJudgesTheBytesItDispatches(t *testing.T) {
 	admitted := &recordingCaller{}
 	shown := graphQLProbe(t, query)
 	shown.GetBody = replayOf(mutation)
-	if _, err := (readOnlyCaller{inner: admitted}).Do(
+	if _, err := (&readOnlyCaller{inner: admitted}).Do(
 		t.Context(), livePrincipal, shown); err != nil {
 		t.Fatalf("the read-only guard refused the calendar query: %v", err)
 	}

@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 )
@@ -48,17 +49,26 @@ const graphQLQueryStart = "query{"
 // and legitimately POST, which is why the guard sits here and not on the HTTP client.
 type readOnlyCaller struct {
 	inner client.Caller
+
+	// requests counts what the guard admitted. It is the evidence a tool reached the
+	// service: a result on its own proves only that the handler is wired.
+	requests atomic.Int64
 }
 
-func (c readOnlyCaller) Do(
+func (c *readOnlyCaller) Do(
 	ctx context.Context, principal string, req *http.Request,
 ) (*http.Response, error) {
 	if !isReadRequest(req) {
 		return nil, fmt.Errorf("live: refusing a %s request to %s: this suite is read-only",
 			req.Method, req.URL.Path)
 	}
+	// Counted before dispatch: the request has left the guard whatever follows.
+	c.requests.Add(1)
 	return c.inner.Do(ctx, principal, req)
 }
+
+// dispatched reports how many requests this guard has admitted.
+func (c *readOnlyCaller) dispatched() int64 { return c.requests.Load() }
 
 // isReadRequest reports whether one request only reads.
 func isReadRequest(req *http.Request) bool {

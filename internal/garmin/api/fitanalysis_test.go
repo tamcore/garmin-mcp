@@ -36,7 +36,7 @@ func TestAnalyzeFITSummarizesTheWholeActivity(t *testing.T) {
 	if summary.Sport != "cycling" {
 		t.Errorf("sport = %q, want cycling", summary.Sport)
 	}
-	if overall.Samples != 600 || overall.Seconds != 599 {
+	if overall.Samples != 600 || overall.Seconds.Value != 599 {
 		t.Errorf("samples = %d over %v seconds, want 600 over 599", overall.Samples, overall.Seconds)
 	}
 	if !overall.AvgPower.OK || overall.AvgPower.Value != ridePower {
@@ -67,10 +67,12 @@ func TestAnalyzeFITPrefersTheProfileSummary(t *testing.T) {
 		ElapsedSeconds:  new(612.5),
 		DistanceMeters:  new(6120.25),
 		AscentMeters:    new(63),
+		DescentMeters:   new(58),
 		Calories:        new(877),
 		AvgHeartRate:    new(169),
 		MaxHeartRate:    new(191),
 		AvgCadence:      new(88),
+		MaxCadence:      new(97),
 		AvgPower:        new(355),
 		MaxPower:        new(612),
 		NormalizedPower: new(389),
@@ -82,7 +84,9 @@ func TestAnalyzeFITPrefersTheProfileSummary(t *testing.T) {
 		want    float64
 	}{
 		"distance":      {overall.Distance, 6120.25},
-		"ascent":        {overall.Ascent, 63},
+		nameAscent:      {overall.Ascent, 63},
+		nameDescent:     {overall.Descent, 58},
+		"peak cadence":  {overall.MaxCadence, 97},
 		"calories":      {overall.Calories, 877},
 		"average power": {overall.AvgPower, 355},
 		"peak power":    {overall.MaxPower, 612},
@@ -95,7 +99,7 @@ func TestAnalyzeFITPrefersTheProfileSummary(t *testing.T) {
 			t.Errorf("%s = %+v, want the profile's %v", name, got.reading, got.want)
 		}
 	}
-	if overall.Seconds != 612.5 {
+	if overall.Seconds.Value != 612.5 {
 		t.Errorf("seconds = %v, want the profile's 612.5", overall.Seconds)
 	}
 	if !nearly(overall.Variability.Value, 389.0/355.0) {
@@ -115,8 +119,11 @@ func TestAnalyzeFITReadsTheLapSummaryNumbering(t *testing.T) {
 	file.LapSummary = &testkit.FITSummaryFixture{
 		DistanceMeters: new(1234.5),
 		AscentMeters:   new(17),
+		DescentMeters:  new(9),
 		AvgHeartRate:   new(151),
 		MaxHeartRate:   new(163),
+		AvgCadence:     new(81),
+		MaxCadence:     new(84),
 	}
 
 	summary := analyzeRide(t, file)
@@ -135,6 +142,15 @@ func TestAnalyzeFITReadsTheLapSummaryNumbering(t *testing.T) {
 	}
 	if !lap.Ascent.OK || lap.Ascent.Value != 17 {
 		t.Errorf("lap ascent = %+v, want 17", lap.Ascent)
+	}
+	// A lap numbers total_descent 22 and max_cadence 18, where a session numbers
+	// them 23 and 19. Reading either with the session's number would report the
+	// neighbouring field's value, so both are pinned here.
+	if !lap.Descent.OK || lap.Descent.Value != 9 {
+		t.Errorf("lap descent = %+v, want 9", lap.Descent)
+	}
+	if !lap.MaxCadence.OK || lap.MaxCadence.Value != 84 {
+		t.Errorf("lap peak cadence = %+v, want 84", lap.MaxCadence)
 	}
 }
 

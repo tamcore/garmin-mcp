@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tamcore/garmin-mcp/internal/cryptostore"
@@ -76,13 +77,17 @@ func buildEnv() (*env, error) {
 	if err != nil {
 		return nil, fmt.Errorf("building the Garmin request layer: %w", err)
 	}
-	caller := readOnlyCaller{inner: refresher}
+	caller := &readOnlyCaller{inner: refresher}
 	session, err := client.NewSession(caller, livePrincipal)
 	if err != nil {
 		return nil, fmt.Errorf("building the Garmin session: %w", err)
 	}
 
-	e := &env{strategy: strategy, session: session, rest: rest, refresher: refresher}
+	// The instant is captured here because buildEnv runs once per suite.
+	e := &env{
+		now: time.Now().UTC(), strategy: strategy, caller: caller,
+		session: session, rest: rest, refresher: refresher,
+	}
 	if err := e.buildDomainClients(rest); err != nil {
 		return nil, err
 	}

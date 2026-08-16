@@ -34,6 +34,11 @@ type ActivitySummary struct {
 	AverageHR      *float64 `json:"average_heart_rate,omitempty" jsonschema:"the average heart rate in bpm"`
 	MaxHR          *float64 `json:"max_heart_rate,omitempty" jsonschema:"the maximum heart rate in bpm"`
 	Favorite       *bool    `json:"favorite,omitempty" jsonschema:"whether the account marked it a favorite"`
+
+	// Absent when the activity has none: a swim counts no steps.
+	Steps         *float64 `json:"steps,omitempty" jsonschema:"the steps recorded"`
+	ElevationGain *float64 `json:"elevation_gain_meters,omitempty" jsonschema:"the total elevation gain in meters"`
+	ElevationLoss *float64 `json:"elevation_loss_meters,omitempty" jsonschema:"the total elevation loss in meters"`
 }
 
 // ActivityList is one page of activities plus the window it came from.
@@ -148,5 +153,8 @@ func newActivitySummary(activity api.Activity) ActivitySummary {
 		AverageHR:      optionalFloat(activity.AverageHR),
 		MaxHR:          optionalFloat(activity.MaxHR),
 		Favorite:       activity.Favorite,
+		Steps:          optionalFloat(activity.Steps),
+		ElevationGain:  optionalFloat(activity.ElevationGain),
+		ElevationLoss:  optionalFloat(activity.ElevationLoss),
 	}
 }

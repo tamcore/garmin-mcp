@@ -37,6 +37,8 @@ const (
 	nameAltitude    = "altitude"
 	nameBalance     = "balance"
 	nameTorque      = "torque"
+	nameAscent      = "ascent"
+	nameDescent     = "descent"
 )
 
 // rideSamples builds a steady climbing ride: constant power, cadence and heart rate,

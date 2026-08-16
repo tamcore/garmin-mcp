@@ -656,6 +656,227 @@ lexical check only — upper-case ASCII, digits and underscore, bounded in lengt
 Garmin remains authoritative for names, so a name this server does not list is
 passed through rather than rejected.
 
+### `decoupling_percent` carries the opposite sign to upstream's `hr_drift_pct`
+
+`get_activity_fit_data` reports `decoupling_percent` as
+
+```
+(first_half_ratio - second_half_ratio) / first_half_ratio * 100
+```
+
+where each ratio is that half's average power over its average heart rate. That
+is the standard aerobic decoupling convention:
+
+- **positive** means decoupling — the power-to-heart-rate ratio fell, so heart
+  rate drifted **up** relative to power;
+- **negative** means the ratio rose between the halves.
+
+The upstream Python server computes the **inverse** difference, labels the result
+`hr_drift_pct`, and annotates it "Negative drift = HR increased vs power
+(decoupling)". For one and the same file the two servers therefore report the
+same magnitude with opposite signs.
+
+This server keeps its own sign, and upstream's label is the odd one: "drift" and
+"decoupling" both name heart rate rising against power, and upstream reports that
+as a negative number.
+
+A worked example, with invented figures, shows why the sign here is the one that
+matches its own ratios. Take a file whose power-to-heart-rate ratio is 2.300 over
+the first half and 2.310 over the second. The ratio **rose**, so heart rate did
+not drift up against power. This server computes `(2.300 - 2.310) / 2.300`, a
+negative number, and negative here means the ratio rose. Upstream computes
+the same magnitude with the opposite sign and calls a negative number decoupling,
+which would describe that same file as drifting. The two half ratios travel in
+the result precisely so the direction never has to be inferred from the sign.
+
+The convention is stated in the `api.FITDrift` doc comment and in the
+`decoupling_percent` schema description, and both name upstream's opposite sign.
+**Do not flip it to match upstream.** A client that consumes both servers has to
+normalize on its own, and it always can: `first_half_power_per_beat` and
+`second_half_power_per_beat` are both in the result, so the direction is
+recoverable from the ratios rather than from the sign alone.
+
+No interpretation label is served. Upstream adds one (`well_coupled`); this
+server does not. The threshold that would separate a coupled effort from a
+decoupled one is not published by upstream, is not in any Garmin document, and is
+not a number this project can source, so a label would be an invented cut-off
+served as a finding. The three figures a label would be derived from are all in
+the result, so a caller that has a threshold can apply its own.
+
+The same rule governs the wording. The schema description states which way the
+ratio moved and stops there; it does not call a negative figure well coupled,
+because a description that grades the result is the unsourced threshold again in
+prose. `TestDriftDescriptionStatesDirectionWithoutGradingIt` holds that line.
+
+### `get_activities` returns three figures the manifest does not pin
+
+`steps`, `elevation_gain_meters` and `elevation_loss_meters` are on each entry of
+the `get_activities` and `get_activities_by_date` results. Upstream returns the
+same three per listed activity. The manifest record for `get_activities` pins the
+input schema only — its `outputShape` is `json-text` with an empty
+`staticTopLevelKeys` — so the naming follows the field naming this server already
+uses in the list result (`distance_meters`), not upstream's.
+
+All three are omitted when the activity does not carry them: a swim counts no
+steps, and an indoor ride records no altitude, so a zero would be a wrong reading
+rather than a missing one.
+
+### `get_activity_fit_data` reports descent and peak cadence
+
+`descent_meters` and `max_cadence` sit beside `ascent_meters` and
+`average_cadence` on every session, lap and whole-activity segment, which is what
+upstream reports as `total_descent_m` and `max_cadence_rpm`. Both come from the
+FIT profile — session `total_descent` (field 23) and `max_cadence` (field 19),
+lap 22 and 18 — by the same route as ascent and average cadence, and both fall
+back to a record-derived value only where the file carries no summary. The
+derived descent is the derived ascent's own walk in the other direction at the
+same noise threshold, so the two figures cannot disagree about what counts as a
+move rather than as barometric jitter.
+
+Ascent and descent are **absent**, not zero, when the file carries no altitude
+series at all. Flat terrain and an activity recorded without a barometer are
+different facts, and a zero would report the second as the first. A stream that
+did carry altitude and did not move still reports a measured `0`.
+
+### The FIT cadence keys name no unit, and upstream's do
+
+Every cadence key in the `get_activity_fit_data` result is unit-free:
+`average_cadence`, `max_cadence` and, on the per-second series, `cadence`.
+Upstream spells them `average_cadence_rpm` and `max_cadence_rpm`, and **that
+suffix is wrong for every run**. The FIT profile makes `avg_cadence` and
+`max_cadence` dynamic fields: on a running session they are
+`avg_running_cadence` and `max_running_cadence` in strides per minute, and only
+on other sports are they rpm. The evidence is the SDK's own generated profile —
+`mesgdef/session_gen.go` `GetAvgCadence`/`GetMaxCadence` and the same pair in
+`lap_gen.go`.
+
+Matching upstream is not a defence here, because a key that states a unit is a
+claim a caller may convert on, and this one is off by roughly a factor of two on
+a run. So the unit moved into the description, where it can name the sport it
+depends on, and the key stopped asserting it.
+
+This applies to `average_cadence` as much as to the newer `max_cadence`: the
+average shipped first with the same wrong suffix, and both were corrected in one
+change rather than leaving a result carrying two spellings of one quantity. The
+per-second series and the gear-change events dropped the suffix too, so a reader
+never meets two conventions in one document.
+
+**Only the session and lap fields are sport-dependent, and the descriptions say
+so per surface.** `Record.Cadence` has no dynamic form at all — the SDK declares
+it `Units: rpm` and generates no `GetCadence` — so every figure derived from the
+record stream is rpm whatever the sport. That splits the surfaces:
+
+| Surface | Source | Description says |
+| --- | --- | --- |
+| segment (session, lap, whole activity) | prefers the session or lap summary | rpm, or strides/min running |
+| climb, grade band | derived from the record stream | rpm |
+| per-second series, gear-change event | the record field itself | rpm |
+
+Describing a climb as sport-dependent would be as wrong as the old `_rpm`
+suffix, in the other direction. `TestCadenceDescriptionsMatchTheirOwnField`
+fails on either mistake.
+
+`compat/tools.json` pins no result key for this tool, so nothing in the manifest
+is loosened by the rename. `TestCadenceKeysNameNoUnit` and
+`TestCadenceDescriptionsMatchTheirOwnField` keep both halves honest.
+
+### The whole-activity FIT summary refuses a fold over a subset of sessions
+
+A multisport file has one device summary per session. When the sessions disagree
+in provenance — one carries `total_descent`, the next does not — the folded
+figure is **absent** rather than a sum over the sessions that happened to carry
+one. Absence hands the whole-activity figure back to the record-derived value,
+which covers every sample of every session and is therefore complete.
+
+The reasoning differs by figure and reaches the same rule:
+
+- a **total** folded over a subset under-reports, and nothing in the result says
+  a session is missing from it;
+- a **peak** folded over a subset is a lower bound printed as a maximum;
+- an **average** folded over a subset describes those sessions, not the activity.
+
+Ascent and descent are held to this identically, because a file where one came
+from the device and the other from the samples would invite exactly the
+comparison neither figure supports. A single-session file — every ordinary
+activity — is unaffected: it reproduces that session's figures exactly.
+
+Absence is only safe where something answers in its place, so every folded field
+was checked against `withProfileFigures` one at a time:
+
+| Folded figure | What answers when the fold is absent |
+| --- | --- |
+| `total_elapsed_time` | the segment window, end minus start over the records |
+| `total_distance` | the odometer delta across the record stream |
+| `total_ascent`, `total_descent` | the elevation walk over the record altitudes |
+| `avg_power`, `max_power`, `normalized_power` | the record power series |
+| `avg_cadence`, `max_cadence` | the record cadence series |
+| `avg_heart_rate`, `max_heart_rate` | the record heart-rate series |
+| `total_calories` | **nothing** |
+
+Calories is the exception, and it is the one field where absence is terminal
+rather than a handoff: a FIT record carries no calorie field, so there is no
+series to fall back to. It is still the honest answer. The alternatives are a
+sum over the sessions that happened to report one — a total that silently covers
+part of the activity — or a figure derived from power, which would be invented.
+Nothing is lost either way — *unless the session list was itself truncated*: each
+session's own calorie figure stays in `sessions[]` in the same result, so a caller
+can add them up while seeing exactly which sessions reported none. That escape
+hatch holds only while `sessions_truncated` is false. When it is true the list is
+a subset, the sessions beyond the bound are not in the result at all, and the
+whole-activity calorie figure is simply unavailable. The flag is what tells the
+two cases apart, and it is why the flag is reported separately from
+`samples_truncated`.
+
+### A truncated FIT decode reports absence, not a prefix
+
+The decode is bounded — `DefaultMaxFITRecords` samples, `DefaultMaxFITSessions`
+sessions, `DefaultMaxFITLaps` laps — so a file past a bound is retained in part.
+The analysis treats a part as a part, and each bound voids only what it actually
+touched:
+
+| Flag | What it means | What it voids |
+| --- | --- | --- |
+| `samples_truncated` | the record stream is a prefix | every figure *derived* from the records, and the whole-stream aggregates: power duration curve, grade bands, temperature split, decoupling |
+| `sessions_truncated` | the session list is a subset | the whole-activity fold, which would otherwise total a subset |
+| `laps_truncated` | the lap list is a subset | the lap list only |
+
+A derived total summed over a prefix under-counts, a peak over a prefix is a
+lower bound, and an average over a prefix may be representative or may not be —
+and nothing in the number says which. So they are left absent rather than
+reported over the stretch that survived.
+
+**Lap truncation voids nothing but the lap list.** A file whose sessions are
+whole and whose laps merely exceeded the cap keeps its whole-activity device
+figures, because the watch computed those over the sessions and the lap bound
+never touched them. Throwing them away would be the mirror of the defect this
+section exists to prevent: there a partial figure was served as whole, here a
+whole figure would be discarded because something unrelated was partial.
+
+Two things are deliberately *kept* when a bound is hit. **Device figures** are
+untouched: a session's `total_distance` was computed by the watch over the whole
+segment before this server saw the file, so a cut in the samples cannot make it
+partial. And **lists of detected events** — climbs, gear changes, the per-second
+series itself — are returned with their own truncation flag, because each entry
+is true of itself and the flag already says the list is not exhaustive. The line
+is between a figure that claims to describe the whole and an entry that claims
+only itself.
+
+The suppression is scoped to what the bound actually cut. A lap that ended before
+the last retained sample was measured in full and keeps its derived figures; only
+a span reaching past the cut loses them.
+
+`end_time` and `duration_seconds` follow the same rule as the figures. A
+suppressed segment takes its window from the span the file declared, never from
+the retained records: the last retained sample is where the bound fell, not where
+the segment ended. A whole-activity summary with no declared window therefore
+reports neither, rather than reporting the prefix's end as the ride's. `samples`
+stays either way — it counts what was analysed and says so.
+
+`get_power_duration_curve` follows the same rule from the other end: an activity
+whose file hit the sample bound is counted in `activities_skipped` rather than
+folded into the season bests, because a best folded from lower bounds is not a
+best.
+
 ### `get_workout_by_id` serves the numeric identifier only
 
 The UUID form that adaptive Garmin Coach plans use is not served. The input

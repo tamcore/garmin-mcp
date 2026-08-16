@@ -90,7 +90,7 @@ func TestLiveCallerRefusesAnythingButARead(t *testing.T) {
 	e := liveEnv(t)
 
 	inner := &countingCaller{}
-	guard := readOnlyCaller{inner: inner}
+	guard := &readOnlyCaller{inner: inner}
 
 	writePath := client.PathActivityPrefix + "/1"
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
@@ -128,7 +128,7 @@ func TestLiveCallerRefusesAGraphQLMutation(t *testing.T) {
 	liveEnv(t)
 
 	inner := &countingCaller{}
-	guard := readOnlyCaller{inner: inner}
+	guard := &readOnlyCaller{inner: inner}
 
 	for name, body := range map[string]string{
 		"a mutation document":         `{"query":"mutation{deleteWorkout(workoutId:\"1\")}"}`,
@@ -180,7 +180,7 @@ func knownQueryBody(t *testing.T) string {
 // A body is supplied through http.NewRequest with a *strings.Reader, which is what
 // sets GetBody — the same seam internal/garmin/client relies on, so the guard here
 // reads a request shaped exactly like a real one.
-func probe(t *testing.T, guard readOnlyCaller, method, path, body string) error {
+func probe(t *testing.T, guard *readOnlyCaller, method, path, body string) error {
 	t.Helper()
 
 	var reader io.Reader

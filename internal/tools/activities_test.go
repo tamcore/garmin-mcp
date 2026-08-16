@@ -38,6 +38,39 @@ func TestGetActivitiesReturnsABoundedPage(t *testing.T) {
 	assertNoCoordinates(t, first)
 }
 
+// TestGetActivitiesCarriesTheStepAndElevationTrio proves the three figures upstream
+// reports per listed activity reach this server's list result, and that an activity
+// whose document omits them reports nothing rather than a zero. A swim counts no
+// steps and an indoor ride records no altitude, so a zero would be a wrong reading
+// rather than a missing one.
+func TestGetActivitiesCarriesTheStepAndElevationTrio(t *testing.T) {
+	h := newHarness(t, readScript())
+
+	got := h.call(t, tools.ToolGetActivities, map[string]any{argStart: 0, argLimit: 2})
+	activities, ok := got["activities"].([]any)
+	if !ok || len(activities) != 2 {
+		t.Fatalf("activities = %v, want two", got["activities"])
+	}
+
+	carried, _ := activities[0].(map[string]any)
+	for key, want := range map[string]float64{
+		"steps":                 8800,
+		"elevation_gain_meters": 220,
+		"elevation_loss_meters": 214,
+	} {
+		if carried[key] != want {
+			t.Errorf("%s = %v, want %v", key, carried[key], want)
+		}
+	}
+
+	bare, _ := activities[1].(map[string]any)
+	for _, key := range []string{"steps", "elevation_gain_meters", "elevation_loss_meters"} {
+		if _, present := bare[key]; present {
+			t.Errorf("%s = %v for an activity without one, want the key absent", key, bare[key])
+		}
+	}
+}
+
 func TestGetActivitiesUsesTheManifestDefaults(t *testing.T) {
 	h := newHarness(t, readScript())
 

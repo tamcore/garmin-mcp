@@ -84,7 +84,7 @@ func TestFITSessionAgreesWithTheActivitySummary(t *testing.T) {
 	compared := 0
 	for _, c := range []agreement{
 		{field: "session distance", fit: session.Distance, rest: figures.Distance, rel: distanceTolerance},
-		{field: "session elapsed time", value: session.Seconds, present: true,
+		{field: "session elapsed time", fit: session.Seconds,
 			rest: figures.ElapsedDuration, abs: elapsedTolerance},
 		{field: "session ascent", fit: session.Ascent, rest: figures.ElevationGain, abs: ascentTolerance},
 		{field: "session calories", fit: session.Calories, rest: figures.Calories, abs: caloriesTolerance},
@@ -128,10 +128,7 @@ func (e *env) summaryFiguresOf(ctx context.Context, id client.ID) (summaryFigure
 type agreement struct {
 	field string
 
-	fit     api.FITNumber
-	present bool
-	value   float64
-
+	fit  api.FITNumber
 	rest client.Number
 
 	abs float64
@@ -146,7 +143,7 @@ type agreement struct {
 func (a agreement) compare(t *testing.T) bool {
 	t.Helper()
 
-	fit, ok := a.fitValue()
+	fit, ok := a.fit.Value, a.fit.OK
 	rest, present := a.rest.Float64()
 	if !ok || !present {
 		return false
@@ -159,15 +156,6 @@ func (a agreement) compare(t *testing.T) bool {
 	t.Errorf("%s disagrees with the activity summary by %.3f%% (tolerance %s)",
 		a.field, 100*relative(delta, rest), a.tolerance())
 	return true
-}
-
-// fitValue reports the decoded figure, from either the optional reading or the plain
-// one the segment carries as a float.
-func (a agreement) fitValue() (float64, bool) {
-	if a.present {
-		return a.value, true
-	}
-	return a.fit.Value, a.fit.OK
 }
 
 // tolerance renders the allowance that was breached. It states a constant of this
@@ -218,7 +206,7 @@ func TestFITSessionCoversTheWholeRecordStream(t *testing.T) {
 		t.Errorf("the single session covers %.1f%% of the record stream, want at least %.0f%%: "+
 			"the session window is collapsing", 100*covered, 100*sessionCoverage)
 	}
-	if session.Seconds <= 0 {
+	if !session.Seconds.OK || session.Seconds.Value <= 0 {
 		t.Error("the single session reports no elapsed time, so its window is empty")
 	}
 }

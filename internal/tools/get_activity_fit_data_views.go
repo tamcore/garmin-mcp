@@ -31,19 +31,24 @@ type FITSegmentView struct {
 	Sport            *string          `json:"sport,omitempty" jsonschema:"the recorded sport, when the file names one"`
 	Start            *string          `json:"start_time,omitempty" jsonschema:"the segment start in UTC"`
 	End              *string          `json:"end_time,omitempty" jsonschema:"the segment end in UTC"`
-	DurationSecs     float64          `json:"duration_seconds" jsonschema:"the elapsed seconds of the segment"`
+	DurationSecs     *float64         `json:"duration_seconds,omitempty" jsonschema:"the elapsed seconds of the segment"`
 	Samples          int              `json:"samples" jsonschema:"how many records the segment covers"`
 	DistanceMeters   *float64         `json:"distance_meters,omitempty" jsonschema:"the distance covered in meters"`
 	AscentMeters     *float64         `json:"ascent_meters,omitempty" jsonschema:"the elevation gained in meters"`
+	DescentMeters    *float64         `json:"descent_meters,omitempty" jsonschema:"the elevation lost in meters"`
 	Calories         *float64         `json:"calories_kcal,omitempty" jsonschema:"the energy the device computed, in kcal"`
 	AveragePower     *float64         `json:"average_power_w,omitempty" jsonschema:"the average power in watts"`
 	MaxPower         *float64         `json:"max_power_w,omitempty" jsonschema:"the peak power in watts"`
 	NormalizedPower  *float64         `json:"normalized_power_w,omitempty" jsonschema:"the normalized power in watts"`
 	VariabilityIndex *float64         `json:"variability_index,omitempty" jsonschema:"normalized power over average power"`
-	AverageCadence   *float64         `json:"average_cadence_rpm,omitempty" jsonschema:"the average cadence in rpm"`
 	AverageHeartRate *float64         `json:"average_heart_rate,omitempty" jsonschema:"the average heart rate in bpm"`
 	MaxHeartRate     *float64         `json:"max_heart_rate,omitempty" jsonschema:"the peak heart rate in bpm"`
 	Dynamics         *FITDynamicsView `json:"cycling_dynamics,omitempty" jsonschema:"the pedal metrics, when recorded"`
+
+	// The unit is the sport's: the session and lap cadence fields are dynamic, and
+	// for running they are strides per minute rather than rpm.
+	AverageCadence *float64 `json:"average_cadence,omitempty" jsonschema:"average cadence: rpm, or strides/min running"`
+	MaxCadence     *float64 `json:"max_cadence,omitempty" jsonschema:"peak cadence: rpm, or strides/min running"`
 }
 
 // A FITClimbView is one detected sustained ascent.
@@ -56,7 +61,7 @@ type FITClimbView struct {
 	DistanceMeters   *float64 `json:"distance_meters,omitempty" jsonschema:"the distance climbed in meters"`
 	AverageGrade     *float64 `json:"average_grade_percent,omitempty" jsonschema:"the average gradient in percent"`
 	AveragePower     *float64 `json:"average_power_w,omitempty" jsonschema:"the average power in watts"`
-	AverageCadence   *float64 `json:"average_cadence_rpm,omitempty" jsonschema:"the average cadence in rpm"`
+	AverageCadence   *float64 `json:"average_cadence,omitempty" jsonschema:"the average cadence in rpm"`
 	AverageHeartRate *float64 `json:"average_heart_rate,omitempty" jsonschema:"the average heart rate in bpm"`
 }
 
@@ -66,7 +71,7 @@ type FITGradeBandView struct {
 	Seconds          float64  `json:"seconds" jsonschema:"the seconds spent in the band"`
 	Samples          int      `json:"samples" jsonschema:"how many records fell in the band"`
 	AveragePower     *float64 `json:"average_power_w,omitempty" jsonschema:"the average power in watts"`
-	AverageCadence   *float64 `json:"average_cadence_rpm,omitempty" jsonschema:"the average cadence in rpm"`
+	AverageCadence   *float64 `json:"average_cadence,omitempty" jsonschema:"the average cadence in rpm"`
 	AverageHeartRate *float64 `json:"average_heart_rate,omitempty" jsonschema:"the average heart rate in bpm"`
 }
 
@@ -81,12 +86,15 @@ type FITTemperatureView struct {
 	CoolAveragePower *float64 `json:"cool_average_power_w,omitempty" jsonschema:"the average power when coolest"`
 }
 
-// A FITDriftView is the aerobic decoupling of one ride.
+// A FITDriftView is the aerobic decoupling of one ride. Percent is positive when the
+// ratio fell; upstream reports the opposite sign. See docs/parity.md.
 type FITDriftView struct {
 	Seconds     float64 `json:"paired_seconds" jsonschema:"the seconds with both power and heart rate"`
 	FirstRatio  float64 `json:"first_half_power_per_beat" jsonschema:"the first half's power over heart rate"`
 	SecondRatio float64 `json:"second_half_power_per_beat" jsonschema:"the second half's power over heart rate"`
-	Percent     float64 `json:"decoupling_percent" jsonschema:"how far the ratio fell, in percent"`
+	// Direction only: grading it would need a threshold nobody published.
+	//nolint:lll // the sign convention belongs in the schema, where a client reads it
+	Percent float64 `json:"decoupling_percent" jsonschema:"how far the power-to-heart-rate ratio fell between the halves, in percent. Positive means the ratio fell: heart rate drifted up relative to power. Negative means the ratio rose between the halves"`
 }
 
 // A FITShiftEventView is one electronic gear change.
@@ -95,9 +103,10 @@ type FITShiftEventView struct {
 	Position  string   `json:"position" jsonschema:"front or rear derailleur"`
 	FrontGear *float64 `json:"front_gear,omitempty" jsonschema:"the front gear after the shift"`
 	RearGear  *float64 `json:"rear_gear,omitempty" jsonschema:"the rear gear after the shift"`
-	Cadence   *float64 `json:"cadence_rpm,omitempty" jsonschema:"the cadence at the shift"`
-	Grade     *float64 `json:"grade_percent,omitempty" jsonschema:"the gradient at the shift"`
-	Quality   string   `json:"quality,omitempty" jsonschema:"proactive, reactive, coasting or spun_out"`
+	// A gear change is a cycling event, so this one is rpm.
+	Cadence *float64 `json:"cadence,omitempty" jsonschema:"the cadence at the shift, in rpm"`
+	Grade   *float64 `json:"grade_percent,omitempty" jsonschema:"the gradient at the shift"`
+	Quality string   `json:"quality,omitempty" jsonschema:"proactive, reactive, coasting or spun_out"`
 }
 
 // A FITShiftView counts and lists the gear changes of one ride.
@@ -131,7 +140,7 @@ type FITRecordView struct {
 	OffsetSecs  int      `json:"offset_seconds" jsonschema:"seconds since the first record"`
 	Power       *float64 `json:"power_w,omitempty" jsonschema:"the power in watts"`
 	HeartRate   *float64 `json:"heart_rate,omitempty" jsonschema:"the heart rate in bpm"`
-	Cadence     *float64 `json:"cadence_rpm,omitempty" jsonschema:"the cadence in rpm"`
+	Cadence     *float64 `json:"cadence,omitempty" jsonschema:"the cadence in rpm"`
 	Speed       *float64 `json:"speed_mps,omitempty" jsonschema:"the speed in meters per second"`
 	Altitude    *float64 `json:"altitude_meters,omitempty" jsonschema:"the altitude in meters"`
 	Grade       *float64 `json:"grade_percent,omitempty" jsonschema:"the gradient in percent"`
@@ -143,16 +152,18 @@ func newFITSegmentView(segment api.FITSegment) FITSegmentView {
 	view := FITSegmentView{
 		Start:            fitInstant(segment.Start),
 		End:              fitInstant(segment.End),
-		DurationSecs:     fitRound(segment.Seconds, placesWhole),
+		DurationSecs:     fitOptional(segment.Seconds, placesWhole),
 		Samples:          segment.Samples,
 		DistanceMeters:   fitOptional(segment.Distance, placesOne),
 		AscentMeters:     fitOptional(segment.Ascent, placesOne),
+		DescentMeters:    fitOptional(segment.Descent, placesOne),
 		Calories:         fitOptional(segment.Calories, placesWhole),
 		AveragePower:     fitOptional(segment.AvgPower, placesOne),
 		MaxPower:         fitOptional(segment.MaxPower, placesWhole),
 		NormalizedPower:  fitOptional(segment.NormalizedPw, placesOne),
 		VariabilityIndex: fitOptional(segment.Variability, placesTwo),
 		AverageCadence:   fitOptional(segment.AvgCadence, placesOne),
+		MaxCadence:       fitOptional(segment.MaxCadence, placesWhole),
 		AverageHeartRate: fitOptional(segment.AvgHeartRate, placesOne),
 		MaxHeartRate:     fitOptional(segment.MaxHeartRate, placesWhole),
 	}

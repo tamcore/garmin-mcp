@@ -63,7 +63,20 @@ const (
 	argCalendar   = "calendar_date"
 	argLimit      = "limit"
 	argCount      = "num_activities"
+	argWeeks      = "weeks"
 )
+
+// sweepDay is the calendar day every day-scoped tool is asked for. It is yesterday
+// rather than today, because a day still in progress has no settled summary.
+func sweepDay(now time.Time) string { return now.AddDate(0, 0, -1).Format(time.DateOnly) }
+
+// sweepWindow is the date range every window-scoped tool is asked for.
+func sweepWindow(now time.Time) map[string]any {
+	return map[string]any{
+		argStartDate: now.AddDate(0, 0, -windowDays).Format(time.DateOnly),
+		argEndDate:   now.Format(time.DateOnly),
+	}
+}
 
 // sweepCall is one tool the sweep drives, with the arguments it needs.
 type sweepCall struct {
@@ -72,15 +85,11 @@ type sweepCall struct {
 }
 
 // accountCalls are the tools that need no activity: they take no argument, or one
-// derived from the clock. They run against any account, an empty one included.
-func accountCalls() []sweepCall {
-	today := time.Now().UTC()
-	day := today.AddDate(0, 0, -1).Format(time.DateOnly)
-	window := map[string]any{
-		argStartDate: today.AddDate(0, 0, -windowDays).Format(time.DateOnly),
-		argEndDate:   today.Format(time.DateOnly),
-	}
-	reference := map[string]any{argCalendar: today.Format(time.DateOnly)}
+// derived from the suite's instant. They run against any account, an empty one included.
+func accountCalls(now time.Time) []sweepCall {
+	day := sweepDay(now)
+	window := sweepWindow(now)
+	reference := map[string]any{argCalendar: now.Format(time.DateOnly)}
 
 	return []sweepCall{
 		{tools.ToolGetUserProfile, nil},
@@ -135,7 +144,7 @@ func derivedCalls() []string {
 func TestReadOnlyToolSurfaceAnswersOverTheLiveAccount(t *testing.T) {
 	e := liveEnv(t)
 
-	for _, call := range accountCalls() {
+	for _, call := range accountCalls(e.now) {
 		t.Run(call.tool, func(t *testing.T) { e.assertToolAnswers(t, call) })
 	}
 }
@@ -152,14 +161,27 @@ func TestActivityScopedToolsAnswerForOneActivity(t *testing.T) {
 	}
 }
 
-// assertToolAnswers performs one call and checks the whole result.
+// assertToolAnswers performs one call and checks that it reached Garmin, that the
+// answer carries this tool's own shape, and that the result leaks nothing.
 func (e *env) assertToolAnswers(t *testing.T, call sweepCall) {
 	t.Helper()
 
+	before := e.caller.dispatched()
 	result := e.call(t, call.tool, call.args)
+
+	// A result alone proves the handler is wired, not that it reached the service.
+	reason, local := answersLocally()[call.tool]
+	switch {
+	case local && e.caller.dispatched() != before:
+		t.Errorf("%s dispatched a request but is excused as one that %s", call.tool, reason)
+	case !local && e.caller.dispatched() == before:
+		t.Fatalf("%s answered without dispatching a request to Garmin", call.tool)
+	}
+
 	if len(result) == 0 {
 		t.Fatalf("%s returned an empty result object", call.tool)
 	}
+	assertResultCarriesItsShape(t, call, result)
 	assertResultIsSafe(t, call.tool, result)
 }
 
@@ -177,10 +199,8 @@ func TestDerivedArgumentToolsAnswer(t *testing.T) {
 	}
 
 	for _, tool := range derivedCalls() {
-		t.Run(tool, func(t *testing.T) {
-			result := e.call(t, tool, map[string]any{argWorkoutID: id})
-			assertResultIsSafe(t, tool, result)
-		})
+		call := sweepCall{tool, map[string]any{argWorkoutID: id}}
+		t.Run(tool, func(t *testing.T) { e.assertToolAnswers(t, call) })
 	}
 }
 
@@ -216,13 +236,7 @@ func firstPreexistingWorkout(t *testing.T, entries []any) (int64, bool) {
 // so the surface cannot grow past the suite and the suite cannot decay into fewer but
 // still-passing calls.
 func TestEveryReadOnlyToolIsAccountedFor(t *testing.T) {
-	exercised := map[string]bool{}
-	for _, call := range slices.Concat(accountCalls(), activityCalls("1")) {
-		exercised[call.tool] = true
-	}
-	for _, tool := range derivedCalls() {
-		exercised[tool] = true
-	}
+	exercised := sweptTools()
 
 	registered := tools.ReadOnlyTools()
 	for _, tool := range registered {
@@ -239,6 +253,44 @@ func TestEveryReadOnlyToolIsAccountedFor(t *testing.T) {
 	for tool := range coveredElsewhere {
 		if !slices.Contains(registered, tool) {
 			t.Errorf("coveredElsewhere names %q, which is not a registered read-only tool", tool)
+		}
+	}
+}
+
+// sweptTools is the set of tools this suite drives through assertToolAnswers. The
+// instant is arbitrary here: nothing is dispatched, only the names are read.
+func sweptTools() map[string]bool {
+	swept := map[string]bool{}
+	calls := slices.Concat(
+		accountCalls(time.Time{}), healthCalls(time.Time{}), activityCalls("1"),
+	)
+	for _, call := range calls {
+		swept[call.tool] = true
+	}
+	for _, tool := range derivedCalls() {
+		swept[tool] = true
+	}
+	return swept
+}
+
+// TestEverySweptToolDeclaresItsShape pins the shape table to the sweep, so a tool added
+// to one and not the other fails here rather than at the first live call.
+func TestEverySweptToolDeclaresItsShape(t *testing.T) {
+	swept, shapes := sweptTools(), resultShapes()
+
+	for tool := range swept {
+		if _, declared := shapes[tool]; !declared {
+			t.Errorf("%s is swept but declares no result shape", tool)
+		}
+	}
+	for tool := range shapes {
+		if !swept[tool] {
+			t.Errorf("resultShapes declares %q, which this suite does not sweep", tool)
+		}
+	}
+	for tool, reason := range answersLocally() {
+		if !swept[tool] {
+			t.Errorf("answersLocally names %q as one that %s, but it is not swept", tool, reason)
 		}
 	}
 }
@@ -275,7 +327,7 @@ func assertResultIsSafe(t *testing.T, tool string, result map[string]any) {
 
 // isTruncationFlag reports whether a key is one of the declared truncation flags.
 func isTruncationFlag(key string) bool {
-	return key == "truncated" || strings.HasSuffix(key, "_truncated")
+	return key == keyTruncated || strings.HasSuffix(key, "_truncated")
 }
 
 // walk visits every key and value of a decoded JSON document, depth first, reporting

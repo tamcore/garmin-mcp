@@ -259,7 +259,8 @@ func TestCollectorBoundsSessionsAndLapsAtTheirOwnCount(t *testing.T) {
 		t.Errorf("%d laps collected from %d offered, want the bound of %d",
 			len(collector.laps), offered, DefaultMaxFITLaps)
 	}
-	if !collector.spansCut {
-		t.Error("the collector did not report that it cut the span lists")
+	if !collector.sessionsCut || !collector.lapsCut {
+		t.Errorf("sessionsCut=%v lapsCut=%v, want each span class reported separately",
+			collector.sessionsCut, collector.lapsCut)
 	}
 }

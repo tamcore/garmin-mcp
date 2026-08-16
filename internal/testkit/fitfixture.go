@@ -98,10 +98,12 @@ type FITSummaryFixture struct {
 	ElapsedSeconds  *float64
 	DistanceMeters  *float64
 	AscentMeters    *int
+	DescentMeters   *int
 	Calories        *int
 	AvgHeartRate    *int
 	MaxHeartRate    *int
 	AvgCadence      *int
+	MaxCadence      *int
 	AvgPower        *int
 	MaxPower        *int
 	NormalizedPower *int
@@ -218,6 +220,7 @@ var summaryFields = [][3]byte{
 	{7, 4, fitUint32},  // total_elapsed_time, scale 1000
 	{9, 4, fitUint32},  // total_distance, scale 100
 	{22, 2, fitUint16}, // total_ascent
+	{23, 2, fitUint16}, // total_descent
 	{11, 2, fitUint16}, // total_calories
 	{20, 2, fitUint16}, // avg_power
 	{21, 2, fitUint16}, // max_power
@@ -225,6 +228,7 @@ var summaryFields = [][3]byte{
 	{16, 1, fitUint8},  // avg_heart_rate
 	{17, 1, fitUint8},  // max_heart_rate
 	{18, 1, fitUint8},  // avg_cadence
+	{19, 1, fitUint8},  // max_cadence
 }
 
 // lapSummaryFields are the same quantities on the lap message, which numbers them
@@ -233,6 +237,7 @@ var lapSummaryFields = [][3]byte{
 	{7, 4, fitUint32},  // total_elapsed_time, scale 1000
 	{9, 4, fitUint32},  // total_distance, scale 100
 	{21, 2, fitUint16}, // total_ascent
+	{22, 2, fitUint16}, // total_descent
 	{11, 2, fitUint16}, // total_calories
 	{19, 2, fitUint16}, // avg_power
 	{20, 2, fitUint16}, // max_power
@@ -240,6 +245,7 @@ var lapSummaryFields = [][3]byte{
 	{15, 1, fitUint8},  // avg_heart_rate
 	{16, 1, fitUint8},  // max_heart_rate
 	{17, 1, fitUint8},  // avg_cadence
+	{18, 1, fitUint8},  // max_cadence
 }
 
 // summaryData writes the summary values in the order the definitions above declare.
@@ -250,13 +256,15 @@ func summaryData(out []byte, summary *FITSummaryFixture) []byte {
 	out = appendScaledUint32(out, summary.ElapsedSeconds, scaleSeconds)
 	out = appendScaledUint32(out, summary.DistanceMeters, scaleDistance)
 	out = appendUint16(out, summary.AscentMeters)
+	out = appendUint16(out, summary.DescentMeters)
 	out = appendUint16(out, summary.Calories)
 	out = appendUint16(out, summary.AvgPower)
 	out = appendUint16(out, summary.MaxPower)
 	out = appendUint16(out, summary.NormalizedPower)
 	out = appendUint8(out, summary.AvgHeartRate)
 	out = appendUint8(out, summary.MaxHeartRate)
-	return appendUint8(out, summary.AvgCadence)
+	out = appendUint8(out, summary.AvgCadence)
+	return appendUint8(out, summary.MaxCadence)
 }
 
 // withSummary appends the summary field definitions when a summary is declared.

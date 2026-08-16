@@ -109,9 +109,9 @@ func (e *env) assertActivityAgrees(t *testing.T) {
 
 	compared := 0
 	for _, c := range []activityFigure{
-		{keyDistanceMeters, []string{"distance", keyDistanceMeters}, figures.Distance},
+		{keyDistanceMeters, []string{keyDistance, keyDistanceMeters}, figures.Distance},
 		{"elapsed_seconds", []string{"timing", "elapsed_seconds"}, figures.ElapsedDuration},
-		{"average_bpm", []string{"heart_rate", "average_bpm"}, figures.AverageHR},
+		{"average_bpm", []string{keyHeartRate, "average_bpm"}, figures.AverageHR},
 		{"max_bpm", []string{"heart_rate", "max_bpm"}, figures.MaxHR},
 		{"calories", []string{"energy", "calories"}, figures.Calories},
 		{"gain_meters", []string{"elevation", "gain_meters"}, figures.ElevationGain},
@@ -169,7 +169,7 @@ func (e *env) assertFITDataAgrees(t *testing.T) {
 		{"distance", keyDistanceMeters, direct.Distance.Value, direct.Distance.OK},
 		{"ascent", "ascent_meters", direct.Ascent.Value, direct.Ascent.OK},
 		{"average heart rate", "average_heart_rate", direct.AvgHeartRate.Value, direct.AvgHeartRate.OK},
-		{"duration", "duration_seconds", direct.Seconds, true},
+		{"duration", "duration_seconds", direct.Seconds.Value, direct.Seconds.OK},
 	} {
 		e.compareSessionFigure(t, first, c)
 	}

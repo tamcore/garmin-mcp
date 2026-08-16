@@ -564,6 +564,52 @@ data into a terminal.
 - The accounting test that fails when a registered read-only tool is neither
   exercised nor excused with a reason.
 
+**The accounting test caught the health slice.** The 27 health-and-wellness tools
+were registered without a live sweep entry, and because no workflow builds the
+`garminlive` tag that landed on master with `TestEveryReadOnlyToolIsAccountedFor`
+failing — the exact decay the test exists to stop, proven by the test rather than
+by a reviewer. `live/healthsweep_test.go` now drives all 27 through the same paced
+read-only caller, the same bound and truncation-flag checks and the same leak scan
+as the rest of the sweep, with the argument shape each contract declares: a
+calendar day, an inclusive range (`get_body_composition`, `get_daily_steps`,
+`get_body_battery`, `get_blood_pressure`) or an end date plus a week count
+(`get_weekly_steps`, `get_weekly_intensity_minutes`, `get_weekly_stress`). It is a
+separate file only because `surface_test.go` would otherwise cross the 400-line
+limit.
+
+**Run on 2026-08-16 against the dedicated test account: all 27 passed, and none is
+excused.** The account records almost no wellness data, so most answered with an
+empty day. That is a pass and not a skip, and what the run proves is now stated
+exactly rather than generously.
+
+**What a sweep entry proves, and what it does not.** The first version of this
+sweep asserted only that a result was non-empty and leaked nothing, which a handler
+returning a well-formed object without ever contacting Garmin would satisfy. Two
+assertions closed that, and both were run against the real service in a failing
+state before being trusted:
+
+- **Transport evidence.** `readOnlyCaller` counts what it dispatches, and
+  `assertToolAnswers` requires the count to rise across every call. Removing the
+  one declared exception made `get_exercise_types` fail with `answered without
+  dispatching a request to Garmin`, which is the assertion working.
+- **Result shape.** `live/shapes_test.go` declares, per swept tool, the keys that
+  tool's own answer always carries; a key that is also an argument must repeat the
+  value that was sent. Adding a key no answer has made `get_stats` fail with
+  `returned no "a_key_no_answer_has"`.
+  `TestEverySweptToolDeclaresItsShape` pins the table to the sweep in both
+  directions and needs no credentials, so a tool added to one and not the other
+  fails offline.
+
+So the claim the sweep supports is: **each tool dispatched a request and its answer
+carried its own shape, its declared bounds, boolean truncation flags, and no
+coordinate, credential or raw payload.** It does not claim the readings are
+correct — that is what the FIT cross-check and the domain-client agreement checks
+are for, and neither covers the wellness surface.
+
+`get_exercise_types` is the one read-only tool that legitimately reaches no
+endpoint: it serves the compiled-in exercise catalog. It is named in
+`answersLocally` with that reason, and dispatching a request would now fail it.
+
 On the first run the account held **zero** activities and an empty workout
 library, so everything needing one skipped — including the FIT cross-check, the
 whole reason this layer exists. The skip stated the account's own activity
@@ -909,12 +955,61 @@ them.
   authoritative.
 - **`get_workout_by_id` serves the numeric identifier only.** The UUID form that
   adaptive Garmin Coach plans use is not served.
-- **Two tools are left unregistered rather than stubbed**:
-  `get_activity_fit_data` (no FIT parsing), and `set_fit_download_dir` (it would
-  persist a caller-supplied server filesystem path, and is refused by design).
-  The three calendar tools that were also unregistered — `get_scheduled_workouts`,
-  `get_training_plan_workouts` and `schedule_week` — are registered now that the
-  client layer builds the GraphQL request they need.
+- **`decoupling_percent` carries the opposite sign to upstream's
+  `hr_drift_pct`.** This server reports `(first - second) / first * 100` over the
+  per-half power-to-heart-rate ratios, which is the standard convention: positive
+  means the ratio fell, negative means it rose. Upstream computes the inverse and
+  still calls it drift, so its label contradicts its own sign. The arithmetic here
+  is not changed to match; the convention is stated in the `api.FITDrift` doc
+  comment and in the schema description, and the reasoning is in
+  `docs/parity.md`. **No interpretation label is served** — upstream's
+  `well_coupled` needs a threshold nobody published, so a label would be an
+  invented cut-off served as a finding.
+- **`get_activities` returns three keys the manifest does not pin.** `steps`,
+  `elevation_gain_meters` and `elevation_loss_meters` are on each list entry, as
+  upstream returns them. The manifest record pins the input schema only, so the
+  naming follows this server's own list result. All three are omitted when the
+  activity does not carry them.
+- **`get_activity_fit_data` reports `descent_meters` and `max_cadence`** beside
+  ascent and average cadence on every session, lap and whole-activity segment,
+  from the FIT profile's `total_descent` and `max_cadence` by the same route
+  ascent and average cadence take, with the record-derived walk as the fallback in
+  both directions. Ascent and descent are absent, not zero, when the file carries
+  no altitude series; a stream that carried altitude and did not move reports a
+  measured zero.
+- **The FIT cadence keys name no unit**, where upstream's say `_rpm`. Only the
+  session and lap fields are sport-dynamic — on a running session they are
+  `avg_running_cadence` and `max_running_cadence` in strides per minute — so the
+  suffix is wrong for every run there. `Record.Cadence` has no dynamic form and is
+  always rpm, so the descriptions split by surface: segments say rpm or
+  strides/min, and everything derived from the record stream says rpm.
+  `average_cadence` was corrected together with the newer `max_cadence`.
+- **The whole-activity FIT summary refuses a fold over a subset of sessions.**
+  When a multisport file's sessions disagree in provenance, the folded total, peak
+  or average is absent and the complete record-derived figure stands. A total over
+  a subset under-reports, a peak over a subset is a lower bound printed as a
+  maximum, and neither says a session is missing from it. Every folded field was
+  audited against its fallback; `total_calories` is the one with none, so there
+  absence is terminal and the per-session figures carry what is known — unless
+  `sessions_truncated` is set, when even those are a subset.
+- **A truncated FIT decode reports absence rather than a prefix.** Past a decode
+  bound the retained stream is a part, so figures derived from it are left absent
+  and the whole-stream aggregates — curve, grade bands, temperature split,
+  decoupling — are not computed. Device figures are untouched, and lists of
+  detected events are kept with their own truncation flag. `samples_truncated`,
+  `sessions_truncated` and `laps_truncated` are reported separately, because each
+  voids only what it touched: lap truncation voids nothing but the lap list, and
+  in particular does not disable the session fold. A suppressed segment also
+  withholds `end_time` and `duration_seconds` unless the file declared the window,
+  since the last retained sample is where the bound fell rather than where the
+  segment ended. `get_power_duration_curve` skips a truncated file rather than
+  folding a lower bound into a season best.
+- **One tool is left unregistered rather than stubbed**: `set_fit_download_dir`
+  (it would persist a caller-supplied server filesystem path, and is refused by
+  design). `get_activity_fit_data` was on this list before FIT decoding landed;
+  it is registered now. The three calendar tools that were also unregistered —
+  `get_scheduled_workouts`, `get_training_plan_workouts` and `schedule_week` —
+  are registered now that the client layer builds the GraphQL request they need.
 
 Five registered tools are **not** in the pinned manifest at all, because they
 come from open upstream pull requests rather than the pinned commit:

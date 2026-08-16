@@ -1,6 +1,9 @@
 package api
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 // TestOverallSpanFoldsEverySession proves the whole-activity summary of a multisport
 // file adds the totals, keeps the peaks and weights the averages by elapsed time,
@@ -31,12 +34,12 @@ func TestOverallSpanFoldsEverySession(t *testing.T) {
 	}{
 		"elapsed":         {span.Elapsed, 4000},
 		"distance":        {span.Distance, 35000},
-		"ascent":          {span.Ascent, 250},
+		nameAscent:        {span.Ascent, 250},
 		"calories":        {span.Calories, 1000},
-		"peak power":      {span.MaxPower, 600},
+		namePeakPow:       {span.MaxPower, 600},
 		"peak heart":      {span.MaxHeartRate, 190},
 		"average power":   {span.AvgPower, (200*3000 + 400*1000) / 4000.0},
-		"average heart":   {span.AvgHeartRate, (140*3000 + 160*1000) / 4000.0},
+		nameAvgHeart:      {span.AvgHeartRate, (140*3000 + 160*1000) / 4000.0},
 		"average cadence": {span.AvgCadence, (85*3000 + 90*1000) / 4000.0},
 		"normalized":      {span.NormalizedPw, (210*3000 + 410*1000) / 4000.0},
 	} {
@@ -80,6 +83,49 @@ func TestOverallSpanWithoutSessionsIsEmpty(t *testing.T) {
 	}
 }
 
+// TestOverallSpanRefusesAFoldOverASubsetOfSessions proves the every-session rule:
+// when the sessions disagree in provenance the folded figure is absent, so the
+// whole-activity result falls back to the complete record-derived value instead of
+// serving a total or a peak that silently covers only part of the activity.
+//
+// A partial sum is the defect this pins. Folding a 200 metre ascent from one session
+// while the other carried none reports 200 for the whole activity, and nothing in
+// the result says a session is missing from it. A peak fails the same way for its
+// own reason: the greatest of a subset is a lower bound, not a maximum.
+func TestOverallSpanRefusesAFoldOverASubsetOfSessions(t *testing.T) {
+	t.Parallel()
+
+	span := overallSpan([]FITSpan{
+		{
+			Sport: sportCyclingName, Elapsed: fitNumber(3000),
+			Ascent: fitNumber(200), Descent: fitNumber(180),
+			MaxCadence: fitNumber(96), MaxPower: fitNumber(600),
+			AvgHeartRate: fitNumber(140),
+		},
+		// The same activity's second session, written by a device that recorded no
+		// summary of its own.
+		{Sport: sportRunningName, Elapsed: fitNumber(1000)},
+	})
+
+	for name, reading := range map[string]FITNumber{
+		nameAscent:     span.Ascent,
+		nameDescent:    span.Descent,
+		"peak cadence": span.MaxCadence,
+		namePeakPow:    span.MaxPower,
+		nameAvgHeart:   span.AvgHeartRate,
+	} {
+		if reading.OK {
+			t.Errorf("%s = %+v, want absence rather than a fold over one session of two",
+				name, reading)
+		}
+	}
+	// Elapsed is carried by both sessions, so it still folds. The rule is about the
+	// sessions disagreeing, not about refusing to fold at all.
+	if !span.Elapsed.OK || span.Elapsed.Value != 4000 {
+		t.Errorf("elapsed = %+v, want the 4000 both sessions carried", span.Elapsed)
+	}
+}
+
 // TestOverallSpanCountsASessionWithoutAnElapsedTime proves a session that reports no
 // elapsed time still contributes to the averages instead of vanishing from them.
 func TestOverallSpanCountsASessionWithoutAnElapsedTime(t *testing.T) {
@@ -94,5 +140,64 @@ func TestOverallSpanCountsASessionWithoutAnElapsedTime(t *testing.T) {
 	}
 	if span.Elapsed.OK {
 		t.Errorf("elapsed = %+v, want none", span.Elapsed)
+	}
+}
+
+// TestMixedSessionCaloriesStayVisiblePerSession pins the one folded field with no
+// derived route: absence is final at the whole-activity level, and each session keeps
+// its own figure. See docs/parity.md.
+func TestMixedSessionCaloriesStayVisiblePerSession(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, time.January, 2, 8, 0, 0, 0, time.UTC)
+	records := make([]FITRecord, 0, 120)
+	for second := range 120 {
+		records = append(records, FITRecord{
+			Time:     base.Add(time.Duration(second) * time.Second),
+			Power:    fitNumber(200),
+			Altitude: fitNumber(100 + float64(second)),
+		})
+	}
+	activity := FITActivity{
+		Records: records,
+		Sessions: []FITSpan{
+			{
+				Start: base, End: base.Add(60 * time.Second), Elapsed: fitNumber(60),
+				Calories: fitNumber(700), Ascent: fitNumber(40),
+			},
+			// The second session's device wrote no summary figures of its own.
+			{
+				Start:   base.Add(60 * time.Second),
+				End:     base.Add(119 * time.Second),
+				Elapsed: fitNumber(59),
+			},
+		},
+	}
+
+	summary, err := AnalyzeFIT(t.Context(), activity)
+	if err != nil {
+		t.Fatalf("AnalyzeFIT() = %v", err)
+	}
+
+	if summary.Overall.Calories.OK {
+		t.Errorf("overall calories = %+v, want absence: a partial sum would be a total "+
+			"that silently covers one session of two", summary.Overall.Calories)
+	}
+	// The gap is visible rather than lost: the session that reported calories still
+	// reports them, and the one that did not still says so.
+	if len(summary.Sessions) != 2 {
+		t.Fatalf("%d session summaries, want 2", len(summary.Sessions))
+	}
+	if !summary.Sessions[0].Calories.OK || summary.Sessions[0].Calories.Value != 700 {
+		t.Errorf("first session calories = %+v, want the 700 it carried",
+			summary.Sessions[0].Calories)
+	}
+	if summary.Sessions[1].Calories.OK {
+		t.Errorf("second session calories = %+v, want absence", summary.Sessions[1].Calories)
+	}
+	// The contrast that makes calories the exception: ascent disagreed in exactly the
+	// same way and still reports, because the record stream can answer for it.
+	if !summary.Overall.Ascent.OK {
+		t.Error("overall ascent = absent, want the record-derived fallback")
 	}
 }

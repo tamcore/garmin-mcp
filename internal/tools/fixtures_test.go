@@ -52,12 +52,18 @@ const (
 func activityArray(ids ...int64) string {
 	entries := make([]string, 0, len(ids))
 	for i, id := range ids {
+		// Only the first entry carries the trio, so one page proves both mapping
+		// and omission.
+		optional := ""
+		if i == 0 {
+			optional = `,"steps":8800,"elevationGain":220.0,"elevationLoss":214.0`
+		}
 		entries = append(entries, `{"activityId":`+strconv.FormatInt(id, 10)+
 			`,"activityName":"Synthetic run `+strconv.Itoa(i)+`"`+
 			`,"startTimeLocal":"2026-01-31 06:12:00","startTimeGMT":"2026-01-31 05:12:00"`+
 			`,"activityType":{"typeKey":"running"},"eventType":{"typeKey":"uncategorized"}`+
 			`,"distance":10000.0,"duration":3000.0,"elapsedDuration":3060.0,"movingDuration":2980.0`+
-			`,"calories":640,"averageHR":148,"maxHR":172`+
+			`,"calories":640,"averageHR":148,"maxHR":172`+optional+
 			`,"startLatitude":0.0,"startLongitude":0.0,"favorite":false}`)
 	}
 	return "[" + strings.Join(entries, ",") + "]"

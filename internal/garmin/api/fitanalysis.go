@@ -8,23 +8,16 @@ import (
 	"time"
 )
 
-// Analysis bounds and thresholds.
-//
-// These are this server's own, not upstream's: upstream's helpers are not published
-// as a specification, so the thresholds are stated here rather than claimed to match.
-const (
-	// maxSampleGapSeconds caps the time one sample is credited with, so a paused
-	// recorder cannot inflate a time-in-band total.
-	maxSampleGapSeconds = 10
+// wholeActivityStages is how many walks analysisStages returns when nothing was cut.
+const wholeActivityStages = 7
 
-	// ascentThreshold is the rise a run of samples must accumulate before it counts
-	// as a climb rather than as barometric noise. Summing every positive delta of a
-	// one-second altitude series roughly doubles the figure a device reports, because
-	// the sensor jitters by a few decimeters between consecutive samples. This
-	// threshold is only reached by the record-derived fallback: a file that carries
-	// total_ascent is read, not resummed.
-	ascentThreshold = 3.0
-)
+// maxSampleGapSeconds caps the time one sample is credited with, so a paused
+// recorder cannot inflate a time-in-band total.
+//
+// This bound is this server's own, not upstream's: upstream's helpers are not
+// published as a specification, so it is stated here rather than claimed to match.
+// The elevation threshold, the other bound of this kind, lives in fitelevation.go.
+const maxSampleGapSeconds = 10
 
 // FITDynamics are the cycling-dynamics averages of one segment.
 type FITDynamics struct {
@@ -53,15 +46,17 @@ type FITSegment struct {
 	Start        time.Time
 	End          time.Time
 	Sport        string
-	Seconds      float64
+	Seconds      FITNumber
 	Distance     FITNumber
 	Ascent       FITNumber
+	Descent      FITNumber
 	Calories     FITNumber
 	AvgPower     FITNumber
 	MaxPower     FITNumber
 	NormalizedPw FITNumber
 	Variability  FITNumber
 	AvgCadence   FITNumber
+	MaxCadence   FITNumber
 	AvgHeartRate FITNumber
 	MaxHeartRate FITNumber
 	Samples      int
@@ -96,20 +91,10 @@ type FITSummary struct {
 // end of the file, and a cancelled caller is reported as itself.
 func AnalyzeFIT(ctx context.Context, activity FITActivity) (FITSummary, error) {
 	records := activity.Records
+	coverage := newFITCoverage(records, activity.RecordsTruncated)
 	var summary FITSummary
 
-	// The whole-activity stages, each one walk over the record stream. They are a list
-	// rather than one struct literal so a context check can sit between them.
-	stages := []func(){
-		func() { summary.Overall = analyzeSegment(records, overallSpan(activity.Sessions)) },
-		func() { summary.Curve = PowerDurationCurve(records) },
-		func() { summary.Climbs = detectClimbs(records) },
-		func() { summary.GradeBands = gradeBands(records) },
-		func() { summary.Temperature = temperatureSplit(records) },
-		func() { summary.Drift = heartRateDrift(records) },
-		func() { summary.Shifts = summarizeShifts(activity.Shifts, records) },
-	}
-	for _, stage := range stages {
+	for _, stage := range analysisStages(activity, coverage, &summary) {
 		if err := analysisContext(ctx); err != nil {
 			return FITSummary{}, err
 		}
@@ -117,10 +102,10 @@ func AnalyzeFIT(ctx context.Context, activity FITActivity) (FITSummary, error) {
 	}
 
 	var err error
-	if summary.Sessions, err = analyzeSpans(ctx, records, activity.Sessions); err != nil {
+	if summary.Sessions, err = analyzeSpans(ctx, records, activity.Sessions, coverage); err != nil {
 		return FITSummary{}, err
 	}
-	if summary.Laps, err = analyzeSpans(ctx, records, activity.Laps); err != nil {
+	if summary.Laps, err = analyzeSpans(ctx, records, activity.Laps, coverage); err != nil {
 		return FITSummary{}, err
 	}
 
@@ -131,6 +116,32 @@ func AnalyzeFIT(ctx context.Context, activity FITActivity) (FITSummary, error) {
 		summary.Sport = activity.Sessions[0].Sport
 	}
 	return summary, nil
+}
+
+// analysisStages are the whole-activity walks, listed so a context check can sit
+// between them. A stage whose input a bound truncated is omitted. See docs/parity.md.
+func analysisStages(activity FITActivity, coverage fitCoverage, summary *FITSummary) []func() {
+	records := activity.Records
+	sessions := activity.Sessions
+	if activity.SessionsTruncated {
+		sessions = nil
+	}
+
+	stages := make([]func(), 0, wholeActivityStages)
+	stages = append(stages,
+		func() { summary.Overall = analyzeSegment(records, overallSpan(sessions), coverage) },
+		func() { summary.Climbs = detectClimbs(records) },
+		func() { summary.Shifts = summarizeShifts(activity.Shifts, records) },
+	)
+	if activity.RecordsTruncated {
+		return stages
+	}
+	return append(stages,
+		func() { summary.Curve = PowerDurationCurve(records) },
+		func() { summary.GradeBands = gradeBands(records) },
+		func() { summary.Temperature = temperatureSplit(records) },
+		func() { summary.Drift = heartRateDrift(records) },
+	)
 }
 
 // analysisContext reports the caller's cancellation as itself, wrapped with what was
@@ -147,14 +158,14 @@ func analysisContext(ctx context.Context) error {
 // The context is checked per span rather than per list, because the span count is the
 // multiplier: one span is a bounded amount of work and a list of them is not.
 func analyzeSpans(
-	ctx context.Context, records []FITRecord, spans []FITSpan,
+	ctx context.Context, records []FITRecord, spans []FITSpan, coverage fitCoverage,
 ) ([]FITSegment, error) {
 	out := make([]FITSegment, 0, len(spans))
 	for _, span := range spans {
 		if err := analysisContext(ctx); err != nil {
 			return nil, err
 		}
-		out = append(out, analyzeSegment(records, span))
+		out = append(out, analyzeSegment(records, span, coverage))
 	}
 	return out, nil
 }
@@ -162,8 +173,12 @@ func analyzeSpans(
 // analyzeSegment summarizes the records inside one window and then lets the profile
 // figures of that window override what the records implied. A zero window means the
 // whole stream.
-func analyzeSegment(records []FITRecord, span FITSpan) FITSegment {
-	return withProfileFigures(deriveSegment(records, span), span)
+func analyzeSegment(records []FITRecord, span FITSpan, coverage fitCoverage) FITSegment {
+	derived := deriveSegment(records, span)
+	if !coverage.covers(span) {
+		derived = derived.withoutDerived(span)
+	}
+	return withProfileFigures(derived, span)
 }
 
 // deriveSegment computes every figure of one window from the record stream alone.
@@ -180,9 +195,10 @@ func deriveSegment(records []FITRecord, span FITSpan) FITSegment {
 		segment.End = inside[len(inside)-1].Time
 	}
 
-	segment.Seconds = segment.End.Sub(segment.Start).Seconds()
+	segment.Seconds = fitNumber(segment.End.Sub(segment.Start).Seconds())
 	segment.Distance = distanceOf(inside)
-	segment.Ascent = fitNumber(ascentOf(inside))
+	segment.Ascent = ascentOf(inside)
+	segment.Descent = descentOf(inside)
 	return withPowerMetrics(segment, inside)
 }
 
@@ -190,16 +206,16 @@ func deriveSegment(records []FITRecord, span FITSpan) FITSegment {
 // the session or lap message, where the file carries it. A figure the profile does
 // not carry keeps its derived value.
 func withProfileFigures(segment FITSegment, span FITSpan) FITSegment {
-	if span.Elapsed.OK {
-		segment.Seconds = span.Elapsed.Value
-	}
+	segment.Seconds = preferred(span.Elapsed, segment.Seconds)
 	segment.Distance = preferred(span.Distance, segment.Distance)
 	segment.Ascent = preferred(span.Ascent, segment.Ascent)
+	segment.Descent = preferred(span.Descent, segment.Descent)
 	segment.Calories = span.Calories
 	segment.AvgPower = preferred(span.AvgPower, segment.AvgPower)
 	segment.MaxPower = preferred(span.MaxPower, segment.MaxPower)
 	segment.NormalizedPw = preferred(span.NormalizedPw, segment.NormalizedPw)
 	segment.AvgCadence = preferred(span.AvgCadence, segment.AvgCadence)
+	segment.MaxCadence = preferred(span.MaxCadence, segment.MaxCadence)
 	segment.AvgHeartRate = preferred(span.AvgHeartRate, segment.AvgHeartRate)
 	segment.MaxHeartRate = preferred(span.MaxHeartRate, segment.MaxHeartRate)
 	segment.Variability = variabilityIndex(segment.NormalizedPw, segment.AvgPower)
@@ -225,7 +241,7 @@ func withPowerMetrics(segment FITSegment, records []FITRecord) FITSegment {
 	}
 
 	segment.AvgPower, segment.MaxPower = power.mean(), power.peak()
-	segment.AvgCadence = cadence.mean()
+	segment.AvgCadence, segment.MaxCadence = cadence.mean(), cadence.peak()
 	segment.AvgHeartRate, segment.MaxHeartRate = heart.mean(), heart.peak()
 	segment.NormalizedPw = normalizedPower(powerSeries(records))
 	segment.Variability = variabilityIndex(segment.NormalizedPw, segment.AvgPower)
@@ -302,31 +318,6 @@ func distanceOf(records []FITRecord) FITNumber {
 		return FITNumber{}
 	}
 	return fitNumber(last.Value - first.Value)
-}
-
-// ascentOf sums the climbs of a segment, ignoring any rise that never accumulates
-// past the noise threshold.
-//
-// The anchor is the lowest altitude seen since the last banked climb. A rise is
-// credited only once it clears the threshold above that anchor, and a descent moves
-// the anchor down, so sensor jitter cancels instead of accumulating.
-func ascentOf(records []FITRecord) float64 {
-	var total float64
-	var anchor FITNumber
-	for _, record := range records {
-		altitude := record.Altitude
-		if !altitude.OK {
-			continue
-		}
-		switch {
-		case !anchor.OK, altitude.Value < anchor.Value:
-			anchor = altitude
-		case altitude.Value-anchor.Value >= ascentThreshold:
-			total += altitude.Value - anchor.Value
-			anchor = altitude
-		}
-	}
-	return total
 }
 
 // A fitAccumulator averages and peaks a stream of optional readings.

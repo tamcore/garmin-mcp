@@ -115,6 +115,10 @@ type Activity struct {
 	LapCount                 client.Number `json:"lapCount"`
 	ModerateIntensityMinutes client.Number `json:"moderateIntensityMinutes"`
 	VigorousIntensityMinutes client.Number `json:"vigorousIntensityMinutes"`
+
+	// Optional per activity: an indoor ride records no altitude at all.
+	ElevationGain client.Number `json:"elevationGain"`
+	ElevationLoss client.Number `json:"elevationLoss"`
 }
 
 // jsonNull is the JSON null literal, which every tolerant decoder in this package

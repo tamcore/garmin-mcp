@@ -69,23 +69,26 @@ type activityFITInput struct {
 
 // FITData is the analysis of one activity file.
 type FITData struct {
-	ActivityID       int64               `json:"activity_id" jsonschema:"the activity the file belongs to"`
-	Sport            *string             `json:"sport,omitempty" jsonschema:"the recorded sport, when named"`
-	FileBytes        int                 `json:"file_bytes" jsonschema:"how many bytes the download carried"`
-	Overall          FITSegmentView      `json:"overall" jsonschema:"the whole-activity summary"`
-	Sessions         []FITSegmentView    `json:"sessions" jsonschema:"the per-session summaries"`
-	Laps             []FITSegmentView    `json:"laps" jsonschema:"the per-lap summaries"`
-	LapsTruncated    bool                `json:"laps_truncated" jsonschema:"whether the lap list was cut at a bound"`
-	Curve            []FITPowerBestView  `json:"power_duration_curve" jsonschema:"best mean power per duration"`
-	Climbs           []FITClimbView      `json:"climbs" jsonschema:"the detected sustained ascents"`
-	GradeBands       []FITGradeBandView  `json:"grade_bands" jsonschema:"time and averages per terrain band"`
-	Temperature      *FITTemperatureView `json:"temperature,omitempty" jsonschema:"warmest against coolest quarter"`
-	Drift            *FITDriftView       `json:"heart_rate_drift,omitempty" jsonschema:"the aerobic decoupling"`
-	Shifts           FITShiftView        `json:"shifts" jsonschema:"the electronic gear changes"`
-	Records          []FITRecordView     `json:"records,omitempty" jsonschema:"the per-second series, when asked for"`
-	RecordsIncluded  bool                `json:"records_included" jsonschema:"whether the series was asked for"`
-	RecordsTruncated bool                `json:"records_truncated" jsonschema:"whether the series was cut at a bound"`
-	SamplesTruncated bool                `json:"samples_truncated" jsonschema:"whether the decode stopped collecting"`
+	ActivityID    int64            `json:"activity_id" jsonschema:"the activity the file belongs to"`
+	Sport         *string          `json:"sport,omitempty" jsonschema:"the recorded sport, when named"`
+	FileBytes     int              `json:"file_bytes" jsonschema:"how many bytes the download carried"`
+	Overall       FITSegmentView   `json:"overall" jsonschema:"the whole-activity summary"`
+	Sessions      []FITSegmentView `json:"sessions" jsonschema:"the per-session summaries"`
+	Laps          []FITSegmentView `json:"laps" jsonschema:"the per-lap summaries"`
+	LapsTruncated bool             `json:"laps_truncated" jsonschema:"whether the lap list was cut at a bound"`
+	//nolint:lll // a client has to read what the flag implies for the figures
+	SessionsTruncated bool                `json:"sessions_truncated" jsonschema:"whether the session list was cut at a bound; the whole-activity summary is then not folded from it"`
+	Curve             []FITPowerBestView  `json:"power_duration_curve" jsonschema:"best mean power per duration"`
+	Climbs            []FITClimbView      `json:"climbs" jsonschema:"the detected sustained ascents"`
+	GradeBands        []FITGradeBandView  `json:"grade_bands" jsonschema:"time and averages per terrain band"`
+	Temperature       *FITTemperatureView `json:"temperature,omitempty" jsonschema:"warmest against coolest quarter"`
+	Drift             *FITDriftView       `json:"heart_rate_drift,omitempty" jsonschema:"the aerobic decoupling"`
+	Shifts            FITShiftView        `json:"shifts" jsonschema:"the electronic gear changes"`
+	Records           []FITRecordView     `json:"records,omitempty" jsonschema:"the per-second series, when asked for"`
+	RecordsIncluded   bool                `json:"records_included" jsonschema:"whether the series was asked for"`
+	RecordsTruncated  bool                `json:"records_truncated" jsonschema:"whether the series was cut at a bound"`
+	//nolint:lll // a client has to read what the flag implies for the figures
+	SamplesTruncated bool `json:"samples_truncated" jsonschema:"whether the sample bound cut the record stream; figures derived from it are then absent rather than partial"`
 }
 
 // LogValue reports the shape of the analysis, never a reading.
@@ -108,7 +111,7 @@ func (d FITData) LogValue() slog.Value {
 		slog.Bool("shifts", len(d.Shifts.Events) > 0),
 		slog.Int("records", len(d.Records)),
 		slog.Bool("truncated", d.RecordsTruncated || d.LapsTruncated ||
-			d.SamplesTruncated || d.Shifts.Truncated),
+			d.SamplesTruncated || d.SessionsTruncated || d.Shifts.Truncated),
 	)
 }
 
@@ -213,20 +216,21 @@ func newFITData(
 	laps, lapsTruncated := boundedSegments(summary.Laps, maxFITLaps)
 
 	data := FITData{
-		ActivityID:       activityID,
-		FileBytes:        size,
-		Overall:          newFITSegmentView(summary.Overall),
-		Sessions:         sessions,
-		Laps:             laps,
-		LapsTruncated:    lapsTruncated,
-		Curve:            newFITPowerBestViews(summary.Curve),
-		Climbs:           newFITClimbViews(summary.Climbs),
-		GradeBands:       newFITGradeBandViews(summary.GradeBands),
-		Temperature:      newFITTemperatureView(summary.Temperature),
-		Drift:            newFITDriftView(summary.Drift),
-		Shifts:           newFITShiftView(summary.Shifts, maxFITShiftEvents),
-		RecordsIncluded:  records,
-		SamplesTruncated: activity.RecordsTruncated || activity.SpansTruncated,
+		ActivityID:        activityID,
+		FileBytes:         size,
+		Overall:           newFITSegmentView(summary.Overall),
+		Sessions:          sessions,
+		Laps:              laps,
+		LapsTruncated:     lapsTruncated || activity.LapsTruncated,
+		Curve:             newFITPowerBestViews(summary.Curve),
+		Climbs:            newFITClimbViews(summary.Climbs),
+		GradeBands:        newFITGradeBandViews(summary.GradeBands),
+		Temperature:       newFITTemperatureView(summary.Temperature),
+		Drift:             newFITDriftView(summary.Drift),
+		Shifts:            newFITShiftView(summary.Shifts, maxFITShiftEvents),
+		RecordsIncluded:   records,
+		SamplesTruncated:  activity.RecordsTruncated,
+		SessionsTruncated: activity.SessionsTruncated,
 	}
 	if summary.Sport != "" {
 		sport := summary.Sport

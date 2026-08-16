@@ -59,7 +59,7 @@ type FITRecord struct {
 //
 // The summary figures are read from the FIT profile rather than derived from the
 // record stream. A device knows its own elapsed time, its own barometric ascent and
-// its own averages; a reader that recomputes them from a one-second sample series
+// descent and its own averages; a reader that recomputes them from a one-second sample series
 // gets a different and worse answer, which is what the record-derived ascent used to
 // demonstrate. Every one of these fields is optional: a file that omits one leaves
 // the analysis to fall back on the derived value.
@@ -71,10 +71,12 @@ type FITSpan struct {
 	Elapsed      FITNumber
 	Distance     FITNumber
 	Ascent       FITNumber
+	Descent      FITNumber
 	Calories     FITNumber
 	AvgHeartRate FITNumber
 	MaxHeartRate FITNumber
 	AvgCadence   FITNumber
+	MaxCadence   FITNumber
 	AvgPower     FITNumber
 	MaxPower     FITNumber
 	NormalizedPw FITNumber
@@ -99,8 +101,9 @@ type FITActivity struct {
 	// the decode stopped collecting rather than growing without limit.
 	RecordsTruncated bool
 
-	// SpansTruncated reports the same for the session or lap list.
-	SpansTruncated bool
+	// SessionsTruncated and LapsTruncated report the same per span class.
+	SessionsTruncated bool
+	LapsTruncated     bool
 }
 
 // ParseFITActivity decodes one activity file into the model above.

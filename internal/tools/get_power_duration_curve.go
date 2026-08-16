@@ -209,6 +209,13 @@ func (s *service) foldActivity(
 	}
 
 	scan.bytes += size
+	// A curve over a truncated stream is a lower bound, and a season best folded
+	// from lower bounds is not a best. Skip it rather than fold it.
+	if decoded.RecordsTruncated {
+		scan.skipped++
+		return nil
+	}
+
 	scan.analyzed++
 	scan.fold(activity, id.Int64(), api.PowerDurationCurve(decoded.Records))
 	return nil
