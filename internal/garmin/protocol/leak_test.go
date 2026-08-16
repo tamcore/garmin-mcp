@@ -167,7 +167,7 @@ func TestSlogTextHandlerEmitsNoSecretMaterial(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	logger := slog.New(slog.NewTextHandler(&buf, leakLogOptions()))
 	logger.Info("login attempt", "response", secretResponse(), "classification", secretClassification())
 
 	assertNoLeak(t, "slog text", buf.String())
@@ -331,5 +331,24 @@ func TestNewResponseCopiesTheHeader(t *testing.T) {
 	}
 	if got := protocol.ClassifyJSONLogin(resp).RetryAfter(); got != 5*time.Second {
 		t.Fatalf("RetryAfter() = %v, want 5s; the header was not copied", got)
+	}
+}
+
+// leakLogOptions drops the timestamp before a leak assertion sees the line.
+//
+// A log line carries its own wall clock, and a numeric needle collides with it: at
+// 18:16:11.596Z the line contains "11.5", so a test looking for the fixture value
+// 11.5 reports a leak that is not there. It has fired on CI once already. Dropping
+// the attribute narrows the haystack to what the model itself rendered, which is
+// what these tests are about.
+func leakLogOptions() *slog.HandlerOptions {
+	return &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+		ReplaceAttr: func(groups []string, attr slog.Attr) slog.Attr {
+			if len(groups) == 0 && attr.Key == slog.TimeKey {
+				return slog.Attr{}
+			}
+			return attr
+		},
 	}
 }

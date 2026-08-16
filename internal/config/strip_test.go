@@ -86,10 +86,10 @@ func renderAll[T any](t *testing.T, value T) map[string]string {
 func logRenderings[T any](value T) map[string]string {
 	var jsonBuf, textBuf, jsonNested, textNested bytes.Buffer
 	slog.New(slog.NewJSONHandler(&jsonBuf, nil)).Info("effective", "value", value)
-	slog.New(slog.NewTextHandler(&textBuf, nil)).Info("effective", "value", value)
+	slog.New(slog.NewTextHandler(&textBuf, leakLogOptions())).Info("effective", "value", value)
 	slog.New(slog.NewJSONHandler(&jsonNested, nil)).
 		WithGroup("outer").With("inner", &value).Info("effective", "again", []T{value})
-	slog.New(slog.NewTextHandler(&textNested, nil)).
+	slog.New(slog.NewTextHandler(&textNested, leakLogOptions())).
 		WithGroup("outer").With("inner", &value).Info("effective", "again", []T{value})
 
 	return map[string]string{
@@ -261,5 +261,24 @@ func TestSecretRenderingStaysUseful(t *testing.T) {
 		if !strings.Contains(rendering, unsetMarker) {
 			t.Errorf("%s rendering of an unset secret = %q, want the %q marker", name, rendering, unsetMarker)
 		}
+	}
+}
+
+// leakLogOptions drops the timestamp before a leak assertion sees the line.
+//
+// A log line carries its own wall clock, and a numeric needle collides with it: at
+// 18:16:11.596Z the line contains "11.5", so a test looking for the fixture value
+// 11.5 reports a leak that is not there. It has fired on CI once already. Dropping
+// the attribute narrows the haystack to what the model itself rendered, which is
+// what these tests are about.
+func leakLogOptions() *slog.HandlerOptions {
+	return &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+		ReplaceAttr: func(groups []string, attr slog.Attr) slog.Attr {
+			if len(groups) == 0 && attr.Key == slog.TimeKey {
+				return slog.Attr{}
+			}
+			return attr
+		},
 	}
 }

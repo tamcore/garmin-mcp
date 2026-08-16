@@ -76,7 +76,7 @@ func TestWriteModelsReportShapeToASlogSink(t *testing.T) {
 
 	for name, value := range models {
 		var logged strings.Builder
-		slog.New(slog.NewTextHandler(&logged, nil)).Info("garmin write", "model", value)
+		slog.New(slog.NewTextHandler(&logged, leakLogOptions())).Info("garmin write", "model", value)
 
 		rendered := logged.String()
 		for _, needle := range []string{leakWorkoutName, leakGearName, exerciseBackSquat, "20000"} {

@@ -28,7 +28,7 @@ func TestSensitiveModelsAreNotLoggable(t *testing.T) {
 
 	for name, value := range collectSensitiveModels(t) {
 		var logged strings.Builder
-		slog.New(slog.NewTextHandler(&logged, nil)).Info("garmin read", "model", value)
+		slog.New(slog.NewTextHandler(&logged, leakLogOptions())).Info("garmin read", "model", value)
 
 		rendered := logged.String()
 		for _, needle := range logNeedles {
@@ -74,7 +74,7 @@ func TestNestedSensitiveModelsAreNotLoggable(t *testing.T) {
 	}
 	for name, value := range nested {
 		var logged strings.Builder
-		slog.New(slog.NewTextHandler(&logged, nil)).Info("garmin read", "model", value)
+		slog.New(slog.NewTextHandler(&logged, leakLogOptions())).Info("garmin read", "model", value)
 
 		for _, needle := range logNeedles {
 			if strings.Contains(logged.String(), needle) {
@@ -190,5 +190,24 @@ func collectSensitiveModels(t *testing.T) map[string]any {
 		"Device":        devices[0],
 		"TypedSplits":   splits,
 		"ExerciseSets":  sets,
+	}
+}
+
+// leakLogOptions drops the timestamp before a leak assertion sees the line.
+//
+// A log line carries its own wall clock, and a numeric needle collides with it: at
+// 18:16:11.596Z the line contains "11.5", so a test looking for the fixture value
+// 11.5 reports a leak that is not there. It has fired on CI once already. Dropping
+// the attribute narrows the haystack to what the model itself rendered, which is
+// what these tests are about.
+func leakLogOptions() *slog.HandlerOptions {
+	return &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+		ReplaceAttr: func(groups []string, attr slog.Attr) slog.Attr {
+			if len(groups) == 0 && attr.Key == slog.TimeKey {
+				return slog.Attr{}
+			}
+			return attr
+		},
 	}
 }
