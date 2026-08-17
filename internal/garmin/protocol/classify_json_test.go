@@ -220,6 +220,78 @@ func TestClassifyJSONLogin(t *testing.T) {
 	}
 }
 
+// TestClassifyMFAVerifyJSON proves the MFA-verify-specific classifier
+// reinterprets a credential-shaped rejection as OutcomeMFARejected, and leaves
+// every other outcome — including a bare, non-body-driven status — untouched.
+func TestClassifyMFAVerifyJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		response    Response
+		wantOutcome Outcome
+	}{
+		{
+			name:        "invalid username password becomes mfa rejected",
+			response:    jsonResponse(`{"responseStatus":{"type":"INVALID_USERNAME_PASSWORD"}}`),
+			wantOutcome: OutcomeMFARejected,
+		},
+		{
+			name:        "invalid credentials variant becomes mfa rejected",
+			response:    jsonResponse(`{"responseStatus":{"type":"INVALID_CREDENTIALS"}}`),
+			wantOutcome: OutcomeMFARejected,
+		},
+		{
+			name:        "success stays success",
+			response:    jsonResponse(`{"responseStatus":{"type":"SUCCESSFUL"},"serviceTicketId":"ST-fake-mfa"}`),
+			wantOutcome: OutcomeSuccess,
+		},
+		{
+			name:        "account locked is not reinterpreted",
+			response:    jsonResponse(`{"responseStatus":{"type":"ACCOUNT_LOCKED"}}`),
+			wantOutcome: OutcomeAccountLocked,
+		},
+		{
+			name:        "repeated mfa required is not reinterpreted",
+			response:    jsonResponse(`{"responseStatus":{"type":"MFA_REQUIRED"}}`),
+			wantOutcome: OutcomeMFARequired,
+		},
+		{
+			name:        "rate limited is not reinterpreted",
+			response:    NewResponseFromParts(http.StatusTooManyRequests, contentTypeJSON, nil, []byte(`{}`)),
+			wantOutcome: OutcomeRateLimited,
+		},
+		{
+			// A bare, body-less 401 must never become a code rejection: only an
+			// explicit credential-shaped body verdict is reinterpreted.
+			name:        "bare 401 stays unknown, never mfa rejected",
+			response:    NewResponseFromParts(http.StatusUnauthorized, "text/plain", nil, []byte("Unauthorized")),
+			wantOutcome: OutcomeUnknown,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := ClassifyMFAVerifyJSON(tc.response); got.Outcome() != tc.wantOutcome {
+				t.Fatalf("Outcome = %v, want %v", got.Outcome(), tc.wantOutcome)
+			}
+		})
+	}
+}
+
+// The credential POST's own classifier must never see the reinterpretation:
+// ClassifyJSONLogin still reports OutcomeInvalidCredentials for the same body a
+// wrong password would produce, so the initial login response is unaffected.
+func TestClassifyJSONLoginUnaffectedByMFAVerifyReinterpretation(t *testing.T) {
+	t.Parallel()
+
+	resp := jsonResponse(`{"responseStatus":{"type":"INVALID_USERNAME_PASSWORD"}}`)
+	if got := ClassifyJSONLogin(resp); got.Outcome() != OutcomeInvalidCredentials {
+		t.Fatalf("ClassifyJSONLogin Outcome = %v, want %v", got.Outcome(), OutcomeInvalidCredentials)
+	}
+}
+
 func TestClassifyJSONLoginRetryAfterHTTPDate(t *testing.T) {
 	t.Parallel()
 

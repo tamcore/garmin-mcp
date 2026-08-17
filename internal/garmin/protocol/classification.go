@@ -58,6 +58,16 @@ func (c Classification) f() classificationFields {
 	return *c.fields.inner
 }
 
+// withOutcome returns a copy of c whose outcome is replaced. It is unexported:
+// only this package's MFA-verify-specific classifiers reinterpret a verdict, and
+// every other field — status, ticket, title and the rest — is carried over
+// unchanged.
+func (c Classification) withOutcome(outcome Outcome) Classification {
+	next := c.f()
+	next.outcome = outcome
+	return newClassification(next)
+}
+
 // Outcome is the classified meaning of the response.
 func (c Classification) Outcome() Outcome { return c.f().outcome }
 

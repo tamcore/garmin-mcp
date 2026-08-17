@@ -78,6 +78,7 @@ var protocolSentinels = [...]error{
 	protocol.ErrMFARequired, protocol.ErrInvalidCredentials, protocol.ErrAccountLocked,
 	protocol.ErrAccountRestricted, protocol.ErrSessionRejected, protocol.ErrBotChallenge,
 	protocol.ErrRateLimited, protocol.ErrTemporary, protocol.ErrUnknownResponse,
+	protocol.ErrMFARejected,
 }
 
 // Kind is the classified failure class of one API call.

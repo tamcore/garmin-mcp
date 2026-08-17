@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/auth"
+	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
 )
 
 // The routes. They are fixed and few: a browser needs no more, and every additional
@@ -169,11 +170,27 @@ func (s *Server) handleMFASubmit(w http.ResponseWriter, r *http.Request) {
 	dropCredentials(&code)
 
 	if err != nil {
-		s.log(r.Context(), "the one-time code was not accepted")
-		s.retry(w, pageMFA, msgCodeRejected)
+		if mfaFailureIsRetryable(err) {
+			s.log(r.Context(), "the one-time code was not accepted")
+			s.retry(w, pageMFA, msgCodeRejected)
+			return
+		}
+		s.log(r.Context(), "the login could not continue")
+		s.txn.fail(err)
+		s.notFound(w)
 		return
 	}
 	s.complete(w, r, attempt)
+}
+
+// mfaFailureIsRetryable reports whether a CompleteMFA failure means only that the
+// submitted code was wrong, so the user may try another one on the same
+// transaction. Every other cause — an account lockout, a bot challenge, a rate
+// limit, an exhausted or expired Garmin-side continuation, or anything
+// unrecognized — is terminal: the pending login cannot continue, and offering a
+// retry would resubmit against a failure retrying cannot fix.
+func mfaFailureIsRetryable(err error) bool {
+	return errors.Is(err, protocol.ErrMFARejected)
 }
 
 // handleDone renders the final page for a completed run.

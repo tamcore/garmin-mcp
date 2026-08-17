@@ -42,6 +42,24 @@ func ClassifyJSONLogin(r Response) Classification {
 	return newClassification(f)
 }
 
+// ClassifyMFAVerifyJSON classifies a response from the mobile or portal
+// verifyCode API — an explicit OTP-verification response, never a credential
+// POST. It reuses ClassifyJSONLogin's parsing and then reinterprets an
+// OutcomeInvalidCredentials verdict as OutcomeMFARejected: this endpoint is never
+// sent a password, so a definitive rejection here can only be about the
+// one-time code.
+//
+// Every other outcome — success, a repeated MFA_REQUIRED, account lockout, bot
+// challenge, rate limit, temporary failure or unknown — passes through
+// unchanged, so a lockout stays a lockout rather than reading as a code retry.
+func ClassifyMFAVerifyJSON(r Response) Classification {
+	c := ClassifyJSONLogin(r)
+	if c.Outcome() == OutcomeInvalidCredentials {
+		return c.withOutcome(OutcomeMFARejected)
+	}
+	return c
+}
+
 type loginPayload struct {
 	ResponseStatus struct {
 		Type string `json:"type"`

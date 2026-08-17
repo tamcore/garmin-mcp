@@ -19,6 +19,10 @@ var (
 	ErrRateLimited        = errors.New("garmin: rate limited")
 	ErrTemporary          = errors.New("garmin: temporary failure")
 	ErrUnknownResponse    = errors.New("garmin: unrecognized response")
+	// ErrMFARejected reports that Garmin rejected the submitted one-time code.
+	// Matched with errors.Is against a CompleteMFA failure so a caller can offer a
+	// retry instead of reporting a bad password.
+	ErrMFARejected = errors.New("garmin: one-time code rejected")
 )
 
 // sentinels is the set this package renders verbatim inside a redacted cause,
@@ -26,7 +30,7 @@ var (
 var sentinels = [...]error{
 	ErrMFARequired, ErrInvalidCredentials, ErrAccountLocked, ErrAccountRestricted,
 	ErrSessionRejected, ErrBotChallenge, ErrRateLimited, ErrTemporary, ErrUnknownResponse,
-	ErrUnsupportedDomain,
+	ErrUnsupportedDomain, ErrMFARejected,
 }
 
 // Error is the structured protocol failure. It deliberately holds no body,
@@ -129,6 +133,8 @@ func sentinelFor(o Outcome) error {
 		return ErrAccountRestricted
 	case OutcomeSessionRejected:
 		return ErrSessionRejected
+	case OutcomeMFARejected:
+		return ErrMFARejected
 	case OutcomeBotChallenge:
 		return ErrBotChallenge
 	case OutcomeRateLimited:

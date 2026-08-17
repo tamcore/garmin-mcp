@@ -49,8 +49,13 @@ func (s *RemoteServer) handleMFASubmit(w http.ResponseWriter, r *http.Request) {
 	dropCredentials(&code)
 
 	if err != nil {
-		s.log(r.Context(), "the one-time code was not accepted")
-		s.retry(w, r, session, pageMFA, msgCodeRejected)
+		if mfaFailureIsRetryable(err) {
+			s.log(r.Context(), "the one-time code was not accepted")
+			s.retry(w, r, session, pageMFA, msgCodeRejected)
+			return
+		}
+		s.log(r.Context(), "the login could not continue")
+		s.abandon(w, session)
 		return
 	}
 	s.resolvePrincipal(w, r, session, attempt)

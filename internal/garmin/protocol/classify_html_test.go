@@ -321,6 +321,109 @@ func TestClassifyWidgetLoginTitleHeuristics(t *testing.T) {
 	}
 }
 
+// TestClassifyMFAVerifyWidget proves the widget MFA-verify classifier
+// reinterprets only a title that names the code itself as OutcomeMFARejected, and
+// leaves every account-level, challenge, or ambiguous credential-shaped title
+// untouched: this project has no evidence of Garmin's actual widget OTP-rejection
+// title (upstream 0.3.10's _complete_mfa_widget only checks title != "Success"
+// and surfaces whatever came back), so a title that merely contains "invalid" is
+// not enough to claim it is about the submitted code.
+func TestClassifyMFAVerifyWidget(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		response    Response
+		wantOutcome Outcome
+	}{
+		{
+			name:        "invalid code title becomes mfa rejected",
+			response:    htmlResponse(http.StatusOK, widgetPage("Invalid Code", "")),
+			wantOutcome: OutcomeMFARejected,
+		},
+		{
+			name:        "incorrect code title becomes mfa rejected",
+			response:    htmlResponse(http.StatusOK, widgetPage("Incorrect Code Entered", "")),
+			wantOutcome: OutcomeMFARejected,
+		},
+		{
+			name:        "wrong code title becomes mfa rejected",
+			response:    htmlResponse(http.StatusOK, widgetPage("Wrong Code", "")),
+			wantOutcome: OutcomeMFARejected,
+		},
+		{
+			// Ambiguous: this is the exact upstream title for a rejected password,
+			// and this project has no evidence it is ever reused for a rejected
+			// code. Left as OutcomeInvalidCredentials rather than guessed.
+			name:        "invalid credentials title is not reinterpreted",
+			response:    htmlResponse(http.StatusOK, widgetPage("Invalid username or password", "")),
+			wantOutcome: OutcomeInvalidCredentials,
+		},
+		{
+			// An account-level failure, not a statement about the code: reinterpreting
+			// it as a rejected OTP would tell the user to retry a code against a
+			// failure retrying cannot fix.
+			name:        "account error title is not reinterpreted",
+			response:    htmlResponse(http.StatusOK, widgetPage("Account Error", "")),
+			wantOutcome: OutcomeInvalidCredentials,
+		},
+		{
+			// A stale CSRF token or an expired session, not the code.
+			name:        "invalid request title is not reinterpreted",
+			response:    htmlResponse(http.StatusOK, widgetPage("Invalid Request", "")),
+			wantOutcome: OutcomeInvalidCredentials,
+		},
+		{
+			// A non-Cloudflare WAF interstitial that happens to contain "invalid".
+			name:        "waf interstitial containing invalid is not reinterpreted",
+			response:    htmlResponse(http.StatusOK, widgetPage("Invalid Access Detected", "")),
+			wantOutcome: OutcomeInvalidCredentials,
+		},
+		{
+			name:        "success extracts ticket, unaffected",
+			response:    htmlResponse(http.StatusOK, widgetPage("Success", `<a href="?ticket=ST-fake-mfa-0001">go</a>`)),
+			wantOutcome: OutcomeSuccess,
+		},
+		{
+			name:        "locked account is not reinterpreted",
+			response:    htmlResponse(http.StatusOK, widgetPage("Account Locked", "")),
+			wantOutcome: OutcomeAccountLocked,
+		},
+		{
+			name:        "cloudflare bot challenge is not reinterpreted",
+			response:    htmlResponse(http.StatusOK, widgetPage("Attention Required! | Cloudflare", "")),
+			wantOutcome: OutcomeBotChallenge,
+		},
+		{
+			// The common SSO pattern this classifier cannot detect: Garmin
+			// re-renders the same MFA form with an inline error but an unchanged
+			// title. Documented as a limitation, not silently guessed at.
+			name:        "unchanged mfa title on a re-render is not detected as a rejection",
+			response:    htmlResponse(http.StatusOK, widgetPage("Enter MFA code for login", "")),
+			wantOutcome: OutcomeMFARequired,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := ClassifyMFAVerifyWidget(tc.response); got.Outcome() != tc.wantOutcome {
+				t.Fatalf("Outcome = %v, want %v", got.Outcome(), tc.wantOutcome)
+			}
+		})
+	}
+}
+
+// The credential POST's own classifier must never see the reinterpretation.
+func TestClassifyWidgetLoginUnaffectedByMFAVerifyReinterpretation(t *testing.T) {
+	t.Parallel()
+
+	resp := htmlResponse(http.StatusOK, widgetPage("Invalid username or password", ""))
+	if got := ClassifyWidgetLogin(resp); got.Outcome() != OutcomeInvalidCredentials {
+		t.Fatalf("ClassifyWidgetLogin Outcome = %v, want %v", got.Outcome(), OutcomeInvalidCredentials)
+	}
+}
+
 func TestClassifyWidgetLoginKeepsCSRFAndRetryAfter(t *testing.T) {
 	t.Parallel()
 

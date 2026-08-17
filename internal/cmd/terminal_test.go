@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
 	"github.com/tamcore/garmin-mcp/internal/loginweb"
 )
 
@@ -19,6 +20,10 @@ const (
 
 	// testMFAMethod is the delivery method Garmin names in a challenge.
 	testMFAMethod = "email"
+
+	// testMFATransactionID is the synthetic Garmin continuation capability the
+	// terminal MFA tests use in place of a real one.
+	testMFATransactionID = "synthetic-transaction"
 )
 
 // fakeTerminal returns a file the prompts read from, preloaded with typed.
@@ -126,7 +131,7 @@ func TestReadCredentialsPromptsForBothAndSaysTheyAreNotStored(t *testing.T) {
 func TestCompleteTerminalMFADescribesTheChallengeBeforeAsking(t *testing.T) {
 	var prompt bytes.Buffer
 	challenge := loginweb.Attempt{
-		NeedsMFA: true, TransactionID: "synthetic-transaction",
+		NeedsMFA: true, TransactionID: testMFATransactionID,
 		MFAMethod: testMFAMethod, DeliveryUncertain: true,
 	}
 
@@ -144,6 +149,95 @@ func TestCompleteTerminalMFADescribesTheChallengeBeforeAsking(t *testing.T) {
 	if strings.Contains(prompt.String(), challenge.TransactionID) {
 		t.Error("the prompt stream carries the transaction capability")
 	}
+}
+
+// fakeMFASeam scripts CompleteMFA one call at a time, so a test can prove the
+// terminal loop asks again after a rejected code and stops after a terminal one.
+type fakeMFASeam struct {
+	responses []mfaSeamResponse
+	calls     int
+}
+
+type mfaSeamResponse struct {
+	attempt loginweb.Attempt
+	err     error
+}
+
+func (f *fakeMFASeam) Login(context.Context, string, string) (loginweb.Attempt, error) {
+	return loginweb.Attempt{}, errors.New("fakeMFASeam.Login is not used by these tests")
+}
+
+func (f *fakeMFASeam) CompleteMFA(context.Context, string, string) (loginweb.Attempt, error) {
+	if f.calls >= len(f.responses) {
+		return loginweb.Attempt{}, errors.New("fakeMFASeam: no more scripted responses")
+	}
+	next := f.responses[f.calls]
+	f.calls++
+	return next.attempt, next.err
+}
+
+// scriptedCodes returns a readCode function that hands out codes in order and
+// fails if asked for more than were scripted.
+func scriptedCodes(codes ...string) func() (string, error) {
+	next := 0
+	return func() (string, error) {
+		if next >= len(codes) {
+			return "", errors.New("scriptedCodes: no more codes")
+		}
+		code := codes[next]
+		next++
+		return code, nil
+	}
+}
+
+// TestCompleteMFALoopRetriesARejectedCodeButNotATerminalFailure covers the item-5
+// fix for the CLI: a rejected code must prompt again on the same transaction,
+// while a terminal failure — an account lockout here — must abort the login
+// instead of asking for another code Garmin cannot accept anyway. The code
+// prompt is scripted directly, because a real terminal (needed by readSecret's
+// echo-disabled read) cannot be simulated with a pipe in this test process.
+func TestCompleteMFALoopRetriesARejectedCodeButNotATerminalFailure(t *testing.T) {
+	t.Run("retries a rejected code then succeeds", func(t *testing.T) {
+		var prompt bytes.Buffer
+		seam := &fakeMFASeam{responses: []mfaSeamResponse{
+			{err: protocol.ErrMFARejected},
+			{attempt: loginweb.Attempt{}},
+		}}
+		challenge := loginweb.Attempt{NeedsMFA: true, TransactionID: testMFATransactionID}
+
+		err := completeMFALoop(context.Background(), seam, &prompt, challenge,
+			scriptedCodes(testTerminalCode, testTerminalCode))
+		if err != nil {
+			t.Fatalf("completeMFALoop = %v, want the retry to succeed", err)
+		}
+		if seam.calls != 2 {
+			t.Errorf("CompleteMFA was called %d times, want 2", seam.calls)
+		}
+		if !strings.Contains(prompt.String(), "not accepted") {
+			t.Errorf("prompt = %q, want it to say the code was not accepted", prompt.String())
+		}
+	})
+
+	t.Run("aborts on a terminal failure without asking again", func(t *testing.T) {
+		var prompt bytes.Buffer
+		seam := &fakeMFASeam{responses: []mfaSeamResponse{
+			{err: protocol.ErrAccountLocked},
+		}}
+		challenge := loginweb.Attempt{NeedsMFA: true, TransactionID: testMFATransactionID}
+
+		err := completeMFALoop(context.Background(), seam, &prompt, challenge,
+			scriptedCodes(testTerminalCode))
+		if !errors.Is(err, ErrLoginNotCompleted) {
+			t.Fatalf("err = %v, want ErrLoginNotCompleted", err)
+		}
+		if !errors.Is(err, protocol.ErrAccountLocked) {
+			t.Errorf("err = %v, want it to still carry protocol.ErrAccountLocked", err)
+		}
+		if seam.calls != 1 {
+			t.Errorf("CompleteMFA was called %d times, want exactly 1: a terminal "+
+				"failure must not prompt for another code", seam.calls)
+		}
+	})
 }
 
 // TestDescribeChallengeStaysUsefulWithoutAMethod covers the case where Garmin

@@ -282,6 +282,101 @@ jobs:
             exit 1
           fi
 
+  fuzz-smoke:
+    name: Fuzz smoke
+    runs-on: ubuntu-latest
+    # Bounds a hung dependency download or a fuzz target that never returns
+    # control (a hang is a real fuzz finding, not only a crash). 7 targets at
+    # FUZZ_SMOKE_TIME=10s each cost well under a minute of actual fuzzing; the
+    # rest of the budget is checkout, toolchain setup and compilation.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      # Every declared FuzzX target gets a bounded smoke run: seconds, not
+      # minutes, so a crasher is caught without turning this into a slow or
+      # flaky gate. Targets are discovered from source rather than hand-listed,
+      # so a new fuzz function is picked up without a workflow edit, and a
+      # tagged-suite-style vacuous pass (no targets found) fails loudly.
+      #
+      # Discovery is tag-aware on purpose: this step runs `go test` with no
+      # -tags, so a FuzzX target declared in a fakegarmin/e2e/garminlive-tagged
+      # file would be found by a plain grep but is never actually compiled,
+      # and `go test -fuzz` reports "no fuzz tests to run" and fails the job
+      # rather than skipping the way an untagged discovery gap should. Any
+      # file carrying a `//go:build` line is excluded from discovery for
+      # exactly that reason. A fuzz target belongs in an untagged file; adding
+      # one to a tagged file makes it invisible here rather than failing here.
+      - name: Run every fuzz target for a bounded smoke duration
+        env:
+          FUZZ_SMOKE_TIME: 10s
+        run: |
+          set -o pipefail
+          mapfile -t candidates < <(grep -rl '^func Fuzz' --include='*_test.go' .)
+          files=()
+          for candidate in "${candidates[@]}"; do
+            if ! grep -q '^//go:build' "${candidate}"; then
+              files+=("${candidate}")
+            fi
+          done
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::no fuzz targets found; this job would pass vacuously"
+            exit 1
+          fi
+
+          ran=0
+          for file in "${files[@]}"; do
+            dir="./$(dirname "${file}")"
+            for name in $(grep -oh '^func Fuzz[A-Za-z0-9_]*' "${file}" | sed -E 's/^func //'); do
+              echo "== ${name} (${dir}) =="
+              go test -race -run='^$' -fuzz="^${name}\$" -fuzztime="${FUZZ_SMOKE_TIME}" "${dir}"
+              ran=$((ran + 1))
+            done
+          done
+          echo "fuzz targets run: ${ran}"
+
+  reproducible-build:
+    name: Reproducible build
+    runs-on: ubuntu-latest
+    # Two independent full compiles of the same commit; bounds a hung module
+    # download or compiler invocation rather than the default six hours.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      # Two independent builds of the same commit, each with its own GOCACHE so
+      # the second is a real recompile rather than a cache hit. -trimpath drops
+      # the build directory from the binary, and the ldflags are fixed literals
+      # rather than the real VCS state, so this check does not depend on which
+      # commit or working tree it runs against; GoReleaser supplies the real
+      # version and commit at release time (see .goreleaser.yaml). Any other
+      # source of nondeterminism — build ID, timestamp, map iteration order —
+      # still shows up as a hash mismatch, which is what this gate is for.
+      - name: Build twice from independent caches and compare
+        env:
+          CGO_ENABLED: "0"
+          LDFLAGS: -s -w -X main.version=repro-check -X main.commit=0000000000000000000000000000000000000000
+        run: |
+          set -o pipefail
+          GOCACHE="${RUNNER_TEMP}/gocache-1" go build -trimpath -ldflags "${LDFLAGS}" -o "${RUNNER_TEMP}/build-1/garmin-mcp" ./cmd/garmin-mcp
+          GOCACHE="${RUNNER_TEMP}/gocache-2" go build -trimpath -ldflags "${LDFLAGS}" -o "${RUNNER_TEMP}/build-2/garmin-mcp" ./cmd/garmin-mcp
+
+          hash1="$(sha256sum "${RUNNER_TEMP}/build-1/garmin-mcp" | cut -d' ' -f1)"
+          hash2="$(sha256sum "${RUNNER_TEMP}/build-2/garmin-mcp" | cut -d' ' -f1)"
+          echo "build 1: ${hash1}"
+          echo "build 2: ${hash2}"
+
+          if [ "${hash1}" != "${hash2}" ]; then
+            echo "::error::two builds of the same commit produced different binaries"
+            exit 1
+          fi
+
   vulncheck:
     name: govulncheck
     runs-on: ubuntu-latest

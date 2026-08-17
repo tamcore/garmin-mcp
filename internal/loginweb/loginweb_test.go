@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
 	"github.com/tamcore/garmin-mcp/internal/loginweb"
 )
 
@@ -41,6 +42,10 @@ type fakeAuthenticator struct {
 	loginErr     error
 	mfaAttempt   loginweb.Attempt
 	mfaErr       error
+	// mfaResponses, when non-empty, answers CompleteMFA one call at a time
+	// instead of the fixed mfaAttempt/mfaErr pair, so a test can script a
+	// rejected code followed by a correct one.
+	mfaResponses []mfaResponse
 
 	logins    int
 	mfaCalls  int
@@ -48,6 +53,12 @@ type fakeAuthenticator struct {
 	lastPass  string
 	lastCode  string
 	lastTxnID string
+}
+
+// mfaResponse is one scripted CompleteMFA answer.
+type mfaResponse struct {
+	attempt loginweb.Attempt
+	err     error
 }
 
 func (f *fakeAuthenticator) Login(_ context.Context, email, password string) (loginweb.Attempt, error) {
@@ -63,6 +74,11 @@ func (f *fakeAuthenticator) CompleteMFA(
 	f.mfaCalls++
 	f.lastTxnID = transactionID
 	f.lastCode = code
+	if len(f.mfaResponses) > 0 {
+		next := f.mfaResponses[0]
+		f.mfaResponses = f.mfaResponses[1:]
+		return next.attempt, next.err
+	}
 	return f.mfaAttempt, f.mfaErr
 }
 
@@ -406,5 +422,83 @@ func TestExpiredTransactionRefusesCredentials(t *testing.T) {
 	}
 	if fake.logins != 0 {
 		t.Error("an expired transaction reached Garmin")
+	}
+}
+
+// TestMFARejectedCodeMayBeRetried covers the retryable half: a rejected code
+// re-renders the same form, and a correct code afterward still completes the
+// login through the same transaction.
+func TestMFARejectedCodeMayBeRetried(t *testing.T) {
+	fake := &fakeAuthenticator{
+		loginAttempt: challenged(),
+		mfaResponses: []mfaResponse{
+			{err: protocol.ErrMFARejected},
+			{attempt: succeeded()},
+		},
+	}
+	server := newServer(t, fake)
+	b := newBrowser(t, server.Handler())
+
+	submitCredentials(t, b)
+	_, mfaForm := b.get("/mfa")
+
+	resp, retryForm := b.post("/mfa", url.Values{
+		fieldCSRF: {csrfToken(t, mfaForm)},
+		fieldCode: {"000000"},
+	})
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("POST /mfa with a rejected code = %d, want 401", resp.StatusCode)
+	}
+	if !strings.Contains(retryForm, "not accepted") {
+		t.Errorf("page = %q, want it to say the code was not accepted", retryForm)
+	}
+
+	resp, _ = b.post("/mfa", url.Values{
+		fieldCSRF: {csrfToken(t, retryForm)},
+		fieldCode: {testCode},
+	})
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("retry with the right code = %d, want 303", resp.StatusCode)
+	}
+	if fake.mfaCalls != 2 {
+		t.Errorf("CompleteMFA was called %d times, want 2", fake.mfaCalls)
+	}
+}
+
+// TestMFATerminalFailureEndsTheTransaction covers the other half: a failure that
+// says nothing about the submitted code — an account lockout, here — must not be
+// offered a retry, and the transaction must not survive it.
+func TestMFATerminalFailureEndsTheTransaction(t *testing.T) {
+	fake := &fakeAuthenticator{
+		loginAttempt: challenged(),
+		mfaErr:       protocol.ErrAccountLocked,
+	}
+	server := newServer(t, fake)
+	b := newBrowser(t, server.Handler())
+
+	submitCredentials(t, b)
+	_, mfaForm := b.get("/mfa")
+
+	resp, page := b.post("/mfa", url.Values{
+		fieldCSRF: {csrfToken(t, mfaForm)},
+		fieldCode: {testCode},
+	})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("POST /mfa with a terminal failure = %d, want 404; body=%s", resp.StatusCode, page)
+	}
+	if strings.Contains(page, "not accepted") {
+		t.Error("a terminal failure was rendered as a retryable rejected code")
+	}
+
+	// The transaction is over: a further submission finds nothing to submit to.
+	resp, _ = b.post("/mfa", url.Values{
+		fieldCSRF: {csrfToken(t, mfaForm)},
+		fieldCode: {testCode},
+	})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("a second submission after a terminal failure = %d, want 404", resp.StatusCode)
+	}
+	if fake.mfaCalls != 1 {
+		t.Errorf("CompleteMFA was called %d times, want 1", fake.mfaCalls)
 	}
 }

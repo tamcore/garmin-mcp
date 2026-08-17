@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
 	"github.com/tamcore/garmin-mcp/internal/loginweb"
 	"github.com/tamcore/garmin-mcp/internal/testkit"
 )
@@ -181,7 +182,7 @@ func TestALoginWithoutAPrincipalEndsTheTransaction(t *testing.T) {
 func TestARejectedCodeCanBeRetriedOnTheOTPForm(t *testing.T) {
 	h := newRemote(t, &fakeAuthenticator{
 		loginAttempt: challenged(),
-		mfaErr:       errLoginRejected,
+		mfaErr:       protocol.ErrMFARejected,
 	})
 
 	h.authorize()

@@ -155,6 +155,12 @@ func TestAPIErrorRendersRecognizedCauses(t *testing.T) {
 			},
 			want: protocol.OutcomeSessionRejected.String(),
 		},
+		// A bare protocol sentinel, not wrapped in a *protocol.Error, must still
+		// render its own text rather than degrading to an opaque Go type name.
+		"bare mfa rejected sentinel": {
+			cause: protocol.ErrMFARejected,
+			want:  protocol.ErrMFARejected.Error(),
+		},
 	}
 
 	for name, tc := range cases {

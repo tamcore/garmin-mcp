@@ -151,6 +151,14 @@ func (a *Authenticator) verifyCode(
 // turn. The two share SSO cookies but sit in different rate-limit buckets, so the
 // second is a real fallback rather than a retry. Source: the mfa_endpoints list
 // in Client._complete_mfa.
+//
+// A verdict that is definitive for the submitted code — a rejection or an account
+// lockout — stops the loop instead of consulting the alternate endpoint: posting
+// the same wrong code twice would spend Garmin's own OTP attempt counter at twice
+// the rate of the local attempt budget, bringing an account lockout forward. It
+// also keeps a later, merely inconclusive response (a 429, an unclassified page)
+// from overwriting the definitive one, because that response is now never
+// fetched at all.
 func (a *Authenticator) verifyJSONCode(
 	ctx context.Context,
 	sess *session,
@@ -174,17 +182,27 @@ func (a *Authenticator) verifyJSONCode(
 			continue
 		}
 
-		class := protocol.ClassifyJSONLogin(a.tokens.response(raw))
+		class := protocol.ClassifyMFAVerifyJSON(a.tokens.response(raw))
 		if class.Outcome() == protocol.OutcomeSuccess {
 			return class, nil
 		}
 		lastErr = class.Err(protocol.OpVerifyMFA, target.endpoint, nil)
+		if isDefinitiveMFAVerdict(class.Outcome()) {
+			break
+		}
 	}
 
 	if lastErr == nil {
 		lastErr = protocol.ErrUnknownResponse
 	}
 	return protocol.Classification{}, lastErr
+}
+
+// isDefinitiveMFAVerdict reports whether outcome settles the submitted code or the
+// account it belongs to, so trying the alternate verify endpoint could not change
+// the answer and must not be attempted.
+func isDefinitiveMFAVerdict(outcome protocol.Outcome) bool {
+	return outcome == protocol.OutcomeMFARejected || outcome == protocol.OutcomeAccountLocked
 }
 
 // verifyWidgetCode submits the OTP to the widget's HTML verify form. Source:
@@ -213,7 +231,7 @@ func (a *Authenticator) verifyWidgetCode(
 			protocol.EndpointWidgetVerifyMFA, err)
 	}
 
-	class := protocol.ClassifyWidgetLogin(a.tokens.response(raw))
+	class := protocol.ClassifyMFAVerifyWidget(a.tokens.response(raw))
 	if class.Outcome() != protocol.OutcomeSuccess {
 		return protocol.Classification{}, class.Err(protocol.OpVerifyMFA,
 			protocol.EndpointWidgetVerifyMFA, nil)

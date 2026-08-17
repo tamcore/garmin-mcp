@@ -54,6 +54,35 @@ const (
 	// the token and let the next login strategy try. Source: the 401/403 check in
 	// Client._verify_token (upstream issue #369).
 	OutcomeSessionRejected
+
+	// OutcomeMFARejected means Garmin rejected the submitted one-time code. It is
+	// produced only by ClassifyMFAVerifyJSON and ClassifyMFAVerifyWidget, which
+	// classify an explicit OTP-verification response and reinterpret what would
+	// otherwise read as OutcomeInvalidCredentials: neither verify endpoint is ever
+	// sent a password, so a definitive rejection there can only be about the code.
+	//
+	// This is not an upstream distinction: python-garminconnect 0.3.10 raises the
+	// same GarminConnectAuthenticationError for a wrong password and a wrong OTP
+	// (Client._complete_mfa and Client._complete_mfa_widget both fold every
+	// non-success verdict into one error). This project adds the split because the
+	// two failures need different handling downstream: a wrong password may let the
+	// login strategy fall through, while a wrong OTP must leave the pending MFA
+	// transaction alone so the same user can retry the code.
+	//
+	// It never appears during the credential POST, so it structurally cannot reach
+	// StopsFallback: that method classifies only the outcomes login.go's credential
+	// strategy chain can see, and ClassifyMFAVerifyJSON/ClassifyMFAVerifyWidget run
+	// nowhere in that chain. It is deliberately absent from StopsFallback for that
+	// reason, not because it should let a fallback continue past it.
+	//
+	// mfa.go's own verify-endpoint loop is a second, narrower fallback — mobile and
+	// portal sit in different rate-limit buckets — and it enforces the stop
+	// directly rather than through StopsFallback, because StopsFallback's signature
+	// takes no information about which endpoint asked or what was submitted: a
+	// definitive rejection or an account lockout on the flow's own endpoint ends
+	// that loop before the alternate endpoint is ever asked, so a real wrong code
+	// is never posted twice against Garmin's own OTP attempt counter.
+	OutcomeMFARejected
 )
 
 // Stable labels reused by Outcome.String, the error renderer and the redacted
@@ -87,6 +116,8 @@ func (o Outcome) String() string {
 		return "temporary_failure"
 	case OutcomeSessionRejected:
 		return "session_rejected"
+	case OutcomeMFARejected:
+		return "mfa_rejected"
 	default:
 		return "invalid_outcome(" + strconv.Itoa(int(o)) + ")"
 	}

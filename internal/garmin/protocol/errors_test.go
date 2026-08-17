@@ -24,6 +24,7 @@ func TestErrorSentinelMatching(t *testing.T) {
 		{name: "locked", outcome: OutcomeAccountLocked, want: ErrAccountLocked},
 		{name: "restricted", outcome: OutcomeAccountRestricted, want: ErrAccountRestricted},
 		{name: "session rejected", outcome: OutcomeSessionRejected, want: ErrSessionRejected},
+		{name: "mfa rejected", outcome: OutcomeMFARejected, want: ErrMFARejected},
 		{name: "bot challenge", outcome: OutcomeBotChallenge, want: ErrBotChallenge},
 		{name: "rate limited", outcome: OutcomeRateLimited, want: ErrRateLimited},
 		{name: "temporary", outcome: OutcomeTemporaryFailure, want: ErrTemporary},

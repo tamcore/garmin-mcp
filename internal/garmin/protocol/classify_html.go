@@ -20,10 +20,13 @@ var (
 // "incorrect", "account error"; then "unable to sign in"/"unable to login"; then
 // "mfa"/"authentication application".
 //
-// Two deliberate deviations from upstream: Cloudflare interstitials are reported
+// Three deliberate deviations from upstream: Cloudflare interstitials are reported
 // as OutcomeBotChallenge rather than folded into the server-error branch, because
-// they need a different remedy than a retry; and "gateway timeout"/"504" are
-// added to the temporary set as the missing member of the 502/503 family.
+// they need a different remedy than a retry; "gateway timeout"/"504" are added to
+// the temporary set as the missing member of the 502/503 family; and "wrong" is
+// added to the invalid set so a title reading "Wrong Code" is recognized at all,
+// which titleHintsCodeRejection below then needs to tell apart from an
+// account-level or session failure that also matches "invalid"/"incorrect".
 //
 // Every hint is matched as a delimited word or phrase, never as a substring:
 // substring matching read "unlocked" as "locked" and "invalidated" as "invalid".
@@ -31,10 +34,27 @@ var (
 	titleHintsBotChallenge = [...]string{"cloudflare", "attention required", "just a moment"}
 	titleHintsTemporary    = [...]string{"bad gateway", "service unavailable", "gateway timeout", "502", "503", "504"}
 	titleHintsLocked       = [...]string{"locked"}
-	titleHintsInvalid      = [...]string{"invalid", "incorrect", "account error"}
+	titleHintsInvalid      = [...]string{"invalid", "incorrect", "wrong", "account error"}
 	titleHintsRestricted   = [...]string{"unable to sign in", "unable to login"}
 	titleHintsMFA          = [...]string{"mfa", "authentication application"}
 )
+
+// titleHintsCodeRejection narrows ClassifyMFAVerifyWidget's reinterpretation of
+// an OutcomeInvalidCredentials verdict to a title that plausibly names the
+// submitted one-time code itself, rather than every "invalid"/"incorrect"/
+// "account error" title titleHintsInvalid folds into that outcome for the
+// credential POST.
+//
+// This project has no evidence of Garmin's actual widget OTP-rejection title:
+// upstream 0.3.10's _complete_mfa_widget checks only `title != "Success"` and
+// surfaces whatever title came back, so it never had to make this distinction.
+// Without that evidence, a bare "invalid" is not enough: it also matches a page
+// titled "Account Error" (an account-level failure), "Invalid Request" (a stale
+// CSRF token or an expired session), and a non-Cloudflare WAF interstitial that
+// happens to contain the word — none of which say anything about the code, and
+// reinterpreting them as a rejected OTP would tell the user to retry a code
+// against a failure retrying cannot fix.
+var titleHintsCodeRejection = [...]string{"invalid code", "incorrect code", "wrong code"}
 
 const (
 	// titleSuccess is the exact widget title that precedes a service ticket.
@@ -130,6 +150,42 @@ func ClassifyWidgetLogin(r Response) Classification {
 		}
 	}
 	return newClassification(f)
+}
+
+// ClassifyMFAVerifyWidget classifies the HTML response to the widget's OTP POST
+// specifically — never the credential POST that reaches ClassifyWidgetLogin
+// directly. It reuses the same title heuristics and then reinterprets the
+// verdict as OutcomeMFARejected only when the title itself names the code
+// (titleHintsCodeRejection): the widget OTP form never carries a password, but a
+// bare "invalid"/"incorrect"/"account error" title is not enough on its own,
+// because ClassifyWidgetLogin folds an account-level failure ("Account Error"),
+// a stale CSRF token or expired session ("Invalid Request"), and a non-Cloudflare
+// WAF interstitial into the very same OutcomeInvalidCredentials verdict. None of
+// those are about the submitted code, and this project has no evidence Garmin's
+// actual rejection title looks like any of upstream's borrowed hints — upstream
+// 0.3.10 never had to tell them apart, since _complete_mfa_widget only checks
+// `title != "Success"`.
+//
+// Known limitation, stated rather than papered over with an invented fixture: if
+// Garmin ever re-renders the same MFA form with an inline error but an unchanged
+// title — a common SSO pattern — this classifier cannot detect the rejection at
+// all, because it reads only the title, never the body's inline error text. It
+// reports OutcomeMFARequired again, same as a fresh challenge, and the caller
+// relies on the local and Garmin-side attempt budgets to eventually stop a login
+// that keeps resubmitting a code Garmin keeps rejecting.
+//
+// Every other outcome — success, account lockout, bot challenge, a repeated MFA
+// page, temporary failure, an ambiguous credential-shaped title, or unknown —
+// passes through unchanged.
+func ClassifyMFAVerifyWidget(r Response) Classification {
+	c := ClassifyWidgetLogin(r)
+	if c.Outcome() != OutcomeInvalidCredentials {
+		return c
+	}
+	if !containsAnyWordPhrase(strings.ToLower(c.PageTitle()), titleHintsCodeRejection[:]...) {
+		return c
+	}
+	return c.withOutcome(OutcomeMFARejected)
 }
 
 // newWidgetFields collects the verdict fields shared by both widget classifiers

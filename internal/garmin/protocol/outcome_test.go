@@ -16,6 +16,7 @@ func TestOutcomeString(t *testing.T) {
 		{OutcomeAccountLocked, "account_locked"},
 		{OutcomeAccountRestricted, "account_restricted"},
 		{OutcomeSessionRejected, "session_rejected"},
+		{OutcomeMFARejected, "mfa_rejected"},
 		{OutcomeBotChallenge, "bot_challenge"},
 		{OutcomeRateLimited, "rate_limited"},
 		{OutcomeTemporaryFailure, "temporary_failure"},
@@ -54,6 +55,12 @@ func TestOutcomeRetryableAndFallback(t *testing.T) {
 			wantRetryable: false, wantStops: false,
 		},
 		{name: "bot challenge continues", outcome: OutcomeBotChallenge, wantRetryable: false, wantStops: false},
+		{
+			// Never seen during Login's strategy fallback: it is produced only by
+			// the MFA-verify-specific classifiers.
+			name: "mfa rejected does not stop fallback", outcome: OutcomeMFARejected,
+			wantRetryable: false, wantStops: false,
+		},
 		{name: "rate limited retryable", outcome: OutcomeRateLimited, wantRetryable: true, wantStops: false},
 		{name: "temporary retryable", outcome: OutcomeTemporaryFailure, wantRetryable: true, wantStops: false},
 		{name: "unknown neither", outcome: OutcomeUnknown, wantRetryable: false, wantStops: false},

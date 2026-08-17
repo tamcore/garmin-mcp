@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
 	"github.com/tamcore/garmin-mcp/internal/loginweb"
 )
 
@@ -214,5 +215,78 @@ func TestRemoteBodyAndFieldBoundsApplyBeforeParsing(t *testing.T) {
 	}
 	if h.garmin.logins != 0 {
 		t.Errorf("Garmin saw %d bounded-out submissions, want 0", h.garmin.logins)
+	}
+}
+
+// TestRemoteMFARejectedCodeMayBeRetried covers the retryable half of the remote
+// profile: a rejected code re-renders the OTP form, and a correct code afterward
+// still completes the same transaction.
+func TestRemoteMFARejectedCodeMayBeRetried(t *testing.T) {
+	h := newRemote(t, &fakeAuthenticator{
+		loginAttempt: challenged(),
+		mfaResponses: []mfaResponse{
+			{err: protocol.ErrMFARejected},
+			{attempt: remoteSucceeded()},
+		},
+	})
+
+	h.authorize()
+	h.submitRemoteCredentials(h.continueToCredentials())
+	_, mfaForm := h.b.get(pathMFA)
+
+	resp, retryForm := h.b.post(pathMFA, url.Values{
+		fieldCSRF: {csrfToken(t, mfaForm)},
+		fieldCode: {"000000"},
+	})
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("POST %s with a rejected code = %d, want 401", pathMFA, resp.StatusCode)
+	}
+	if !strings.Contains(retryForm, "not accepted") {
+		t.Errorf("page = %q, want it to say the code was not accepted", retryForm)
+	}
+
+	resp, _ = h.b.post(pathMFA, url.Values{
+		fieldCSRF: {csrfToken(t, retryForm)},
+		fieldCode: {testCode},
+	})
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("retry with the right code = %d, want 303", resp.StatusCode)
+	}
+	if h.garmin.mfaCalls != 2 {
+		t.Errorf("CompleteMFA was called %d times, want 2", h.garmin.mfaCalls)
+	}
+}
+
+// TestRemoteMFATerminalFailureAbandonsTheTransaction covers the terminal half: a
+// failure that says nothing about the submitted code must end the transaction
+// rather than offer a retry.
+func TestRemoteMFATerminalFailureAbandonsTheTransaction(t *testing.T) {
+	h := newRemote(t, &fakeAuthenticator{
+		loginAttempt: challenged(),
+		mfaErr:       protocol.ErrAccountLocked,
+	})
+
+	h.authorize()
+	h.submitRemoteCredentials(h.continueToCredentials())
+	_, mfaForm := h.b.get(pathMFA)
+
+	resp, page := h.b.post(pathMFA, url.Values{
+		fieldCSRF: {csrfToken(t, mfaForm)},
+		fieldCode: {testCode},
+	})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("POST %s with a terminal failure = %d, want 404; body=%s", pathMFA, resp.StatusCode, page)
+	}
+	if strings.Contains(page, "not accepted") {
+		t.Error("a terminal failure was rendered as a retryable rejected code")
+	}
+
+	// The transaction is discarded: the OTP page no longer exists.
+	resp, _ = h.b.get(pathMFA)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("GET %s after a terminal failure = %d, want 404", pathMFA, resp.StatusCode)
+	}
+	if h.garmin.mfaCalls != 1 {
+		t.Errorf("CompleteMFA was called %d times, want 1", h.garmin.mfaCalls)
 	}
 }

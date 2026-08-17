@@ -1139,21 +1139,38 @@ that touches the package.
 
 ### Gates the pipeline still needs
 
-None of these exists: a bounded **fuzz smoke** job, a **coverage threshold**
-gate, a **two-clean-build reproducibility** check, **container image signing**,
-**container image and per-binary SBOMs**, and **build provenance attestation**.
-The MCP conformance job is not on this list: it is blocked upstream, not
-unstarted.
+The **coverage threshold** gate already existed in `ci.yaml` (the `test` job's
+"Enforce the per-package coverage floor" step), contrary to what this file
+previously said; it computes each package's percentage from `cover.out` and
+fails in both directions against the explicit exception list
+(`cmd/garmin-mcp`, `internal/garmin/auth`). A bounded **fuzz smoke** job
+(`fuzz-smoke`) and a **two-clean-build reproducibility** check
+(`reproducible-build`) are now added too. What still does not exist:
+**container image signing**, **container image and per-binary SBOMs**, and
+**build provenance attestation**. The MCP conformance job is not on this list:
+it is blocked upstream, not unstarted.
 
 - `.goreleaser.yaml` signs the **checksum file only** (`artifacts: checksum`,
   keyless cosign `sign-blob`) and emits **archive SBOMs only**
   (`sboms: artifacts: archive`). There is no image signing block, no container
   image SBOM, no per-binary SBOM, and no build provenance attestation. None of
   this is "configured but unverified": it is not configured.
-- The CI unit job writes `cover.out` with `-covermode=atomic`, and no job asserts
-  a minimum percentage, so the documented 80% rule is unenforced. Two packages
-  are under it today; see [Measured coverage](#measured-coverage).
-- No fuzz target exists anywhere in the repository.
+- The CI unit job writes `cover.out` with `-covermode=atomic`, and the `test`
+  job's coverage-floor step enforces the documented 80% rule per package,
+  checked in both directions against the exception list. See
+  [Measured coverage](#measured-coverage) for the current numbers.
+- Fuzz targets exist for the parsers most exposed to untrusted or drifting
+  input: `internal/garmin/protocol` (`FuzzClassifyJSONLogin`,
+  `FuzzClassifyWidgetPages`, `FuzzParseWidgetMFAVars`), `internal/garmin/client`
+  (`FuzzNumberUnmarshalJSON`, `FuzzTextUnmarshalJSON`, `FuzzParseDate`),
+  `internal/tools` (`FuzzSanitizeUntyped`) and `internal/garmin/api`
+  (`FuzzParseFITActivity`). The `fuzz-smoke` CI job discovers every declared
+  `FuzzX` function and runs each for a bounded 10s under `-race`; none performs
+  I/O or reaches the network.
+- The `reproducible-build` job builds `cmd/garmin-mcp` twice in one job, each
+  from its own `GOCACHE` so the second build is a real recompile, with
+  `-trimpath` and fixed `-ldflags` version/commit literals, and fails if the
+  two binaries' SHA-256 hashes differ.
 - GitHub-native **secret scanning** is a repository setting, not a workflow file,
   and still needs enabling. Dependency and license review **is** an enforced CI
   gate: `ci.yaml` runs a SHA-pinned `actions/dependency-review-action` on
@@ -1225,8 +1242,16 @@ source.
   method is email or SMS and no code has been sent yet. A confirmed delivery
   clears `MFADeliveryUncertain`, which now means the code may not have been sent
   rather than that this server never asked. A failed request does not fail the
-  login, deliberately, and is never retried. What remains: there is still no
-  outcome distinct from `OutcomeInvalidCredentials` for a rejected OTP.
+  login, deliberately, and is never retried. A rejected OTP now has its own
+  outcome: `protocol.OutcomeMFARejected`, produced only by
+  `ClassifyMFAVerifyJSON` and `ClassifyMFAVerifyWidget`, which classify the
+  mobile/portal/widget verify responses specifically and reinterpret a
+  credential-shaped rejection there — never a bare status, never the initial
+  credential POST — as a wrong code rather than a wrong password. This is not an
+  upstream distinction: 0.3.10 folds both into one `GarminConnectAuthenticationError`.
+  The registry's existing lease and attempt-budget behavior already kept the
+  transaction retryable on any verify failure, so the addition is classification
+  and error-matching (`errors.Is(err, protocol.ErrMFARejected)`) only.
 - The `JWT_WEB` cookie fallback after a failed DI exchange is not implemented.
   Upstream consumes the CAS ticket through the web front end when the DI exchange
   fails; this project requires the DI token set and reports

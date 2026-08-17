@@ -35,8 +35,8 @@ date.
 | `cmd/notices/main.go` | Thin `main` for the notices generator: flags, then `notices.Generate`. A maintenance tool, never linked into `garmin-mcp` | n/a |
 | `internal/cmd` | Cobra tree and the composition root. `serve` (stdio and streamable-http), `auth`, `doctor`, `version`, `tools list` and `migrate` all do real work; no command returns a not-implemented sentinel | 80.8% |
 | `internal/config` | `Config`, deterministic four-layer precedence, `_FILE` secret variants, full lexical validation, redacted output, and the operator OAuth client registry | 90.8% |
-| `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, the login response classifier (JSON and widget HTML), and the widget MFA variable parse. No I/O | 96.5% |
-| `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, explicit widget MFA code delivery, refresh with per-principal collapsing and CAS, the shared `TokenGate`, the request-time host guard, unverified-JWT `exp` parsing | 66.1% untagged, 88.2% with `-tags=fakegarmin` |
+| `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, the login response classifier (JSON and widget HTML), the rejected-OTP outcome, and the widget MFA variable parse. No I/O | 96.6% |
+| `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, explicit widget MFA code delivery, refresh with per-principal collapsing and CAS, the shared `TokenGate`, the request-time host guard, unverified-JWT `exp` parsing | 66.1% untagged, 88.3% with `-tags=fakegarmin` |
 | `internal/garmin/client` | The authenticated request layer: bounded wire and decompressed sizes, page and page-start caps, one bounded post-`401` retry that never replays a `POST` or `PATCH`, typed errors, and the exact-integer accessor an identifier is compared through | 94.3% |
 | `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the published exercise catalog with its compiled-in fallback, FIT activity decoding through `github.com/muktihari/fit`, the training scores, thresholds and trends, nutrition, challenges and badges, and the device inventory | 90.7% |
 | `internal/mcpserver` | Server, registry, stdio and Streamable HTTP transports, bearer middleware, session binding, origin and forwarded-header guards, elicitation confirmation, `server_info` | 89.3% |
@@ -65,7 +65,7 @@ Everything else in the repository is documentation, contract manifests
 Every package in the untagged profile is at or above the 80% rule below.
 `internal/garmin/auth` is the one exception CI carries on merit: its login, MFA
 and refresh paths are tagged `fakegarmin`, so the untagged profile sees 66.1% and
-the tagged job reports 88.2%. `cmd/garmin-mcp` is the other, because it is the
+the tagged job reports 88.3%. `cmd/garmin-mcp` is the other, because it is the
 process entry point and the `e2e` job runs the built command instead. CI enforces
 the floor per package against that explicit list in both directions, so a package
 that drops under it fails the build and a listed package that reaches it must
@@ -494,7 +494,7 @@ interrupted part-way.
 
 | Workflow | Jobs |
 |----------|------|
-| CI (`ci.yaml`) | `verify` (gofmt, `go mod tidy`, `go vet`, then `go vet` again for `GOOS=linux`, `darwin` and `windows` so platform-specific files and their tests are type-checked), `dependency-review` (pull requests only, SHA-pinned, `fail-on-severity: low` and an explicit license allowlist), `lint` (golangci-lint plus `golangci-lint fmt --diff`), `test` (race, coverage profile, coverage summary), `test-fakegarmin` (race, coverage, and the declared-test assertion), `e2e` (race and the declared-test assertion), `vulncheck`, `build` (3 OS x 2 arch), `goreleaser` (`check` plus snapshot with `--skip=sign,sbom,docker`), `container` (build the image from a prepared context, then hardening smoke test, which proves a nonroot read-only shell-free image runs the binary and does not yet prove server start-up or a writable `/data`) |
+| CI (`ci.yaml`) | `verify` (gofmt, `go mod tidy`, `go vet`, then `go vet` again for `GOOS=linux`, `darwin` and `windows` so platform-specific files and their tests are type-checked), `dependency-review` (pull requests only, SHA-pinned, `fail-on-severity: low` and an explicit license allowlist), `lint` (golangci-lint plus `golangci-lint fmt --diff`), `test` (race, coverage profile, and the per-package coverage floor **enforced** against an explicit exception list in both directions), `test-fakegarmin` (race, coverage, and the declared-test assertion), `e2e` (race and the declared-test assertion), `fuzz-smoke` (every `Fuzz*` target for a bounded ten seconds, failing loudly when it discovers none), `reproducible-build` (two builds of `cmd/garmin-mcp`, each with its own `GOCACHE`, compared by hash), `vulncheck`, `build` (3 OS x 2 arch), `goreleaser` (`check` plus snapshot with `--skip=sign,sbom,docker`), `container` (build the image from a prepared context, then hardening smoke test, which proves a nonroot read-only shell-free image runs the binary and does not yet prove server start-up or a writable `/data`) |
 | Release (`release.yaml`) | `v*` tags only. `gates` re-runs the whole CI workflow against the tagged commit, then `release` runs GoReleaser with the narrowest write permissions plus `id-token: write` for keyless cosign |
 
 Every third-party action is pinned to a full commit SHA with the intended
@@ -502,12 +502,20 @@ version in a trailing comment. `golangci-lint`, GoReleaser, `govulncheck`,
 cosign, and syft use explicit pinned versions, never `latest`. Secrets are never
 exposed to forked pull requests.
 
-Jobs the target pipeline still needs: a bounded fuzz smoke job, a coverage
-threshold gate, and a two-clean-build reproducibility check. None exists in
-`ci.yaml` today. An MCP conformance job is **not** on that list any more: the
-suite cannot score a domain server, and the evidence is in
-`docs/implementation-status.md` and ADR 0002. See the same status file for the
-current supply-chain coverage, which is checksum signing and archive SBOMs only.
+Two of the three jobs that list once named are now in `ci.yaml`, and the third
+turned out to have been there all along. `fuzz-smoke` discovers
+every `Fuzz*` target and runs each for a bounded ten seconds, failing loudly when
+it finds none rather than passing vacuously. `reproducible-build` builds
+`cmd/garmin-mcp` twice, each with its own `GOCACHE` so the second is a real
+recompile, and fails unless the two binaries hash identically. The per-package
+coverage floor was **already** enforced, in the `test` job, against an explicit
+exception list checked in both directions — this paragraph claimed for some time
+that it did not exist, which was simply wrong.
+
+An MCP conformance job is **not** on that list: the suite cannot score a domain
+server, and the evidence is in `docs/implementation-status.md` and ADR 0002. See
+the same status file for the current supply-chain coverage, which is checksum
+signing and archive SBOMs only.
 
 ## Quality Gates [NOW]
 

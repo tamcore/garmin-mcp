@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
 	"github.com/tamcore/garmin-mcp/internal/loginweb"
 )
 
@@ -62,23 +63,50 @@ func runTerminalLogin(ctx context.Context, deps *dependencies, opts Options) err
 	return nil
 }
 
-// completeTerminalMFA prompts for the one-time code and submits it.
+// completeTerminalMFA prompts for the one-time code and submits it, retrying on
+// this terminal's own transaction when Garmin rejects the code.
 func completeTerminalMFA(
-	ctx context.Context, seam loginSeam, tty *os.File, prompt io.Writer, challenge loginweb.Attempt,
+	ctx context.Context, seam loginweb.Authenticator, tty *os.File, prompt io.Writer, challenge loginweb.Attempt,
+) error {
+	readCode := func() (string, error) {
+		return readSecret(tty, prompt, "One-time code: ", maxTerminalCodeLen)
+	}
+	return completeMFALoop(ctx, seam, prompt, challenge, readCode)
+}
+
+// completeMFALoop is completeTerminalMFA with the code prompt taken as a
+// function, so a test can script codes without a real terminal device.
+//
+// A rejected code prompts again on the same transaction: the operator mistyped
+// or misread the code, and the pending login is still usable. Every other
+// failure — an account lockout, a bot challenge, a rate limit, an exhausted or
+// expired continuation, or anything unrecognized — aborts instead: none of them
+// says anything about the code, so asking for another one would resubmit against
+// a failure retrying cannot fix. The registry's own attempt budget bounds how
+// many times a genuinely wrong code may be retried before it, too, turns
+// terminal.
+func completeMFALoop(
+	ctx context.Context, seam loginweb.Authenticator, prompt io.Writer,
+	challenge loginweb.Attempt, readCode func() (string, error),
 ) error {
 	describeChallenge(prompt, challenge)
 
-	code, err := readSecret(tty, prompt, "One-time code: ", maxTerminalCodeLen)
-	if err != nil {
-		return err
-	}
+	for {
+		code, err := readCode()
+		if err != nil {
+			return err
+		}
 
-	_, err = seam.CompleteMFA(ctx, challenge.TransactionID, code)
-	dropCredentials(&code)
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrLoginNotCompleted, err)
+		_, err = seam.CompleteMFA(ctx, challenge.TransactionID, code)
+		dropCredentials(&code)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, protocol.ErrMFARejected) {
+			return fmt.Errorf("%w: %w", ErrLoginNotCompleted, err)
+		}
+		_, _ = fmt.Fprintln(prompt, "That code was not accepted. Try again.")
 	}
-	return nil
 }
 
 // describeChallenge tells the user what Garmin asked for, without repeating anything
