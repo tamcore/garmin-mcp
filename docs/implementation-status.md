@@ -8,7 +8,7 @@ Every stopping point updates this file in the same commit as the work it
 describes. Never mark an item done on the strength of a placeholder or
 `not implemented` handler.
 
-Last updated: 2026-08-15.
+Last updated: 2026-08-17.
 
 ## Phase status
 
@@ -19,10 +19,20 @@ Last updated: 2026-08-15.
 | 2 — core auth and storage (M1) | **CLOSED** |
 | 3 — MCP foundation (M1) | **CLOSED** |
 | 4 — remote multi-user (M2) | **CLOSED.** The MCP conformance requirement is **blocked upstream**, with evidence below, not outstanding work |
-| 5 — compatibility breadth (M3) | **IN PROGRESS** — 80 of the 138 upstream tools are implemented, plus 5 tools the pinned manifest does not carry. No resource is implemented |
-| 6 — hardening and release | not started |
+| 5 — compatibility breadth (M3) | **DONE** — 137 of the 138 upstream tools are implemented, plus 6 the pinned manifest does not carry, for 143 registered. The one refusal is `set_fit_download_dir` (ADR 0006). All 5 resources are implemented |
+| 6 — hardening and release | **IN PROGRESS.** The security review ran and its three release blockers plus five more findings are fixed, and `v0.0.1` is published. The findings under "The Phase 6 security review ran" are still open, none blocking |
 
 Phase definitions are in `docs/phases.md`.
+
+## Released versions
+
+There is no `CHANGELOG.md`; GoReleaser generates each release's notes from the
+commit subjects, and this table is the durable record.
+
+| Tag | State | What it carries |
+|-----|-------|-----------------|
+| `v0.0.1` | published | First release. The pipeline itself was the point, and it found one real defect: the `signs` block still used cosign v2 flags while the pinned installer had moved to v3, which no gate could have caught because keyless signing cannot run outside a release job. |
+| `v0.0.2` | tagged from this commit | A confidential OAuth client may now supply its secret digest inline through `secret-hash`, not only through `secret-hash-file`. The file form cannot be satisfied by a Kubernetes projected Secret volume at all: its keys are symlinks, which the hardened file layer refuses before it even reaches the owner-only mode check, so no mode or `fsGroup` setting can fix it. Also: a public client carrying a digest is now refused in the composition root rather than silently ignored, and a batch of documentation that contradicted the build was corrected — the tool counts, the resource status, the health and readiness probes, the scheduled cleanup, and the destructive-confirmation shape a client actually receives. |
 
 ## Measured coverage
 
@@ -1136,7 +1146,7 @@ the Garmin DI token cannot reach an MCP client (`internal/tools` and
 `internal/resources` do not import the auth, store or crypto packages, and the
 response type retains no headers, so a Garmin `Set-Cookie` cannot ride out in a
 tool result); credentials cannot become tool arguments (no login tool exists and
-none of the 142 tools has a credential-shaped field); tenant isolation holds
+none of the 143 tools has a credential-shaped field); tenant isolation holds
 structurally, because every outbound path needs a session that cannot be built
 without a principal, and the only construction site reads the principal from the
 request context; write and destructive gating holds, including on stdio where the
@@ -1146,6 +1156,17 @@ filesystem calls at all; and key rotation cannot strand a record.
 
 **Still open, none blocking, in the order I would take them:**
 
+- Refresh-token reuse detection is bounded by the presented token's own expiry
+  rather than by the family's lifetime. `refreshGrant` returns `invalid_grant` for
+  expiry at `internal/oauthserver/refreshgrant.go:33`, before `issueTokens` reaches
+  the store transaction where reuse is detected and the family revoked. A consumed
+  token replayed after its own expiry is therefore answered as expired and revokes
+  nothing, even when a later generation of that family is still live. No privilege
+  is gained — the replayed token is not accepted either way — but a theft signal is
+  discarded, and `docs/operations.md` had claimed every presentation of a consumed
+  token revokes the family. The fix is to detect reuse before expiry, which needs
+  the consumed state to be visible to the grant rather than only inside the rotation
+  transaction; `oauthserver.RefreshToken` carries no consumed field today.
 - `/authorize` and both credential-form routes are mounted OUTSIDE the rate-limit
   gate that covers the token, revocation and metadata endpoints, and the login
   session registry refuses at 256 rather than evicting. 256 unauthenticated

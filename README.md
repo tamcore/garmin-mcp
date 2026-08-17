@@ -166,12 +166,24 @@ the single-active-instance limit. Every setting is listed in
 
 This is honest, not promotional.
 
-**Tool coverage: 45 of the 138 upstream tools are implemented.** The upstream
+**Tool coverage: 137 of the 138 upstream tools are implemented.** The upstream
 surface is the Taxuspt `garmin_mcp` project at a pinned commit, inventoried
-statically into `compat/tools.json`. This build registers 50 Garmin tools — the
-45 from that manifest plus 5 the manifest does not carry — and one built-in
-`server_info` tool. None of the 5 upstream resources is implemented.
-`docs/parity.md` carries the per-tool status.
+statically into `compat/tools.json`. This build registers 143 tools — 99
+read-only, 35 write, 9 destructive — which is those 137 plus 6 the manifest does
+not carry, one of them the built-in `server_info`. The single upstream tool this
+build refuses is `set_fit_download_dir`, because it writes to the server
+filesystem at a caller's direction; ADR 0006 and `docs/parity.md` record why. All
+5 upstream resources are implemented. `docs/parity.md` carries the per-tool
+status.
+
+Do not trust that paragraph over the build. `garmin-mcp tools list` prints the
+registered tools with their tier and effect, needs no Garmin account, no token and
+no database, and is the only count that cannot go stale:
+
+```console
+$ garmin-mcp tools list | tail -1
+143 tools: 99 read-only, 35 write, 9 destructive
+```
 
 **Writes and destructive tools are off by default.** `enable-write-tools` and
 `enable-destructive-tools` both default to false, and destructive requires write.

@@ -137,8 +137,24 @@ Each entry:
 | `scopes` | yes | At least one non-blank scope, at most 32, each at most 128 bytes. This is the widest set the client may ever be granted, and the deployment advertises the union of every client's scopes. Two names are meaningful to the tool policy: `garmin:write` gates the write tier and `garmin:destructive` gates the destructive tier, and neither implies the other. The read tier is not scope-gated, so a read-only client still needs a scope but the name is the operator's own; `garmin:read` is the convention this repository uses. |
 | `resources` | yes | 1 to 8 RFC 8707 resource indicators, same URI rules as a redirect URI. This is the audience a token is minted for. |
 | `public` | no | `true` selects token endpoint authentication method `none`, which is safe only because PKCE S256 is mandatory. A public client must carry no secret digest. |
-| `secret-hash-file` | for a confidential client | A file holding the hex SHA-256 of the client secret. At most 128 bytes are read, and the file must be owner-only. The deployment stores nothing recoverable. |
-| `secret-hash` | never | The inline digest. Remote mode refuses it, and the registry applies to remote only, so this field cannot be used. |
+| `secret-hash-file` | for a confidential client (alternative to `secret-hash`) | A file holding the hex SHA-256 of the client secret. At most 128 bytes are read. The file must be a regular file — a symlink is refused — and owner-only, so a projected Kubernetes Secret volume cannot satisfy this setting: its keys are symlinks into a shared, non-owner-only-readable data directory. Prefer this form wherever a plain owner-only regular file is possible. |
+| `secret-hash` | for a confidential client (alternative to `secret-hash-file`) | The hex SHA-256 digest of the client secret, inline. Exactly one of `secret-hash` or `secret-hash-file` must be set for a confidential client, never both. This is the form to use in a container deployment where the digest arrives through an environment variable rather than a mountable file. |
+
+Computing the digest and using it safely:
+
+```sh
+# Linux
+printf '%s' 'the-client-secret' | sha256sum | cut -d' ' -f1
+# macOS, which ships shasum rather than sha256sum
+printf '%s' 'the-client-secret' | shasum -a 256 | cut -d' ' -f1
+```
+
+Either field takes the **digest**, never the secret itself — pasting the raw
+client secret into `secret-hash` will not authenticate. The digest is unsalted,
+single-round SHA-256, so it is password-verifier material, not a replayable
+credential: a low-entropy client secret is recoverable offline from a leaked
+digest. Generate the client secret with a cryptographically strong random
+source and enough length that this offline search is infeasible.
 
 Example:
 

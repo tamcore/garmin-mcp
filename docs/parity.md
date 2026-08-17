@@ -20,13 +20,13 @@ when the manifest status and the registered surface disagree either way.
 
 | | Count |
 | --- | --- |
-| Manifest tools implemented | **80** of 138 |
-| Manifest tools not implemented | 58 |
-| Manifest resources implemented | **0** of 5 |
-| Tools registered beyond the manifest | 5 |
-| Tools registered in total | 50, plus the server's own `server_info` |
+| Manifest tools implemented | **137** of 138 |
+| Manifest tools not implemented | 1 (`set_fit_download_dir`) |
+| Manifest resources implemented | **5** of 5 |
+| Tools registered beyond the manifest | 6, one of them the server's own `server_info` |
+| Tools registered in total | 143 |
 
-The 50 registered tools are 23 read-only, 22 write and 5 destructive. Read-only
+The 143 registered tools are 99 read-only, 35 write and 9 destructive. Read-only
 tools always register. Write and destructive tools register too, so the policy
 has a tool to refuse and the start-up tier validation covers them, and they are
 gated at call time on the intersection of operator enablement and a granted

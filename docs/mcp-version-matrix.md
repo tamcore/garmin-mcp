@@ -27,9 +27,9 @@ multi-user server, **M3** full Taxuspt parity. Definitions are in
 `docs/phases.md`, checklists in `docs/implementation-status.md`.
 
 Most rows have landed. The SDK is a direct requirement in `go.mod`, both
-transports exist, 47 tools are registered, and the policy layer, the rate limiter
-and the logger all exist. Resources are the notable exception: none is
-implemented. `docs/implementation-status.md` is the authoritative gap list.
+transports exist, 143 tools and all five resources are registered, and the policy
+layer, the rate limiter and the logger all exist.
+`docs/implementation-status.md` is the authoritative gap list.
 
 **Conformance is not a review gate for this project.** The official suite was run
 against a live deployment and cannot score a domain server: its stable release
@@ -89,9 +89,62 @@ run against that finding.
 | Elicitation | required | M1 | `mcp.ServerSession.Elicit`, `mcp.ElicitParams`, `mcp.ElicitResult`, `mcp.ElicitationCapabilities` | Destructive operations request confirmation with a bounded timeout. **Deviation from the house pattern:** the house server proceeds when elicitation is unsupported or times out; this project fails closed, and the refusal names the reason. |
 | Middleware | required | M1 | `Server.AddReceivingMiddleware`, `Server.AddSendingMiddleware`, `mcp.Middleware` | Rate limiting is handler middleware keyed per principal, returning a caller-actionable error result rather than a transport error. A nil limiter passes through. Per-principal keying has no house equivalent. |
 | Progress notifications | optional | M1 | `mcp.ServerSession` notification methods | Used by the configurable safety delay before write and destructive execution, emitting one notification per second and honoring context cancellation. |
-| Resources and resource templates | required | M3 | `mcp.Resource`, `mcp.ResourceTemplate`, `Server.AddResource`, `Server.AddResourceTemplate` | Covers the five workout-template resources at the pinned Taxuspt commit. **None is implemented yet.** The embedded-resource return path is in use already: `download_activity_file` returns a bounded `mcp.EmbeddedResource` instead of writing a server filesystem path. |
+| Resources and resource templates | required | M3 | `mcp.Resource`, `mcp.ResourceTemplate`, `Server.AddResource`, `Server.AddResourceTemplate` | Covers the five workout-template resources at the pinned Taxuspt commit. **All five are implemented** in `internal/resources`, with the manifest contract, the render, and a test that this server's own upload path accepts every template. The embedded-resource return path is in use already: `download_activity_file` returns a bounded `mcp.EmbeddedResource` instead of writing a server filesystem path. |
 | Prompts | deferred | — | `mcp.Prompt`, `Server.AddPrompt` | The pinned Taxuspt commit registers no prompts, so there is no parity obligation. Adding one would create a new public contract for no compatibility gain. |
 | Completion | optional | M3 | the SDK completion handler path | Argument completion for resource templates. No milestone gate requires it. |
+
+## Destructive confirmation, by negotiated protocol version
+
+A destructive tool never runs unconfirmed, and the shape of the question depends
+on the version the session negotiated. A client author needs this, so it is
+written here rather than left to be read out of `internal/mcpserver/confirm.go`.
+
+| Negotiated version | Confirmation shape |
+|--------------------|--------------------|
+| `2026-07-28` and later | The tool call returns a `CallToolResult` carrying `InputRequests` and `RequestState`. Nothing has run and nothing was denied. The client asks its user, then **re-calls the same tool** with the answer in `InputResponses`. SEP-2322 forbids a server-to-client request while a request is in flight, and the SDK enforces it, so this is the only shape available. |
+| `2025-11-25`, `2025-06-18`, `2025-03-26`, `2024-11-05` | The server sends `elicitation/create` on the session **while the call is in flight** and waits, under a bounded deadline, for the answer. |
+
+The version is compared as a string, which orders these correctly because MCP
+protocol versions are ISO dates. The cut is `>= 2026-07-28`.
+
+What a client must do, in both shapes:
+
+- **Declare the elicitation capability.** That is the only client-side
+  prerequisite. A client that declares none is refused before either shape is
+  chosen, whatever its protocol version.
+- **Answer the single boolean property `confirm`.** The requested schema is an
+  object with `confirm` (boolean), and `confirm` is `required`, so accepting the
+  prompt and sending nothing is not an answer. Only an accepted result with
+  `confirm` true proceeds; declining, cancelling and dismissing all refuse. On the
+  in-flight shape, letting the bounded wait elapse also refuses. Two cases are
+  *not* refusals: on the multi-round-trip shape an answer that is not an
+  elicitation result, or one filed under a different key, counts as no answer at
+  all, so the tool asks again rather than being denied — and simply never
+  re-calling the tool produces no result of any kind, because nothing is pending
+  server-side.
+- **On the multi-round-trip shape, echo the key exactly.** The key is
+  `confirm:<tool name>` and the retry is looked up under that exact key, so a
+  confirmation given for one tool cannot authorize another. `RequestState` carries
+  the same key and is a correlation hint, never a capability: the whole policy
+  gate — enablement, scope, tier — re-runs from scratch on the retry, so the round
+  trip grants nothing by itself.
+
+### What a refusal looks like on the wire
+
+A refused confirmation is **not** a JSON-RPC error. It is a `CallToolResult` with
+`isError: true` and one text content, because a transport error is invisible to
+the model whereas an error result reaches it as text it can act on. The text is
+stable and can be mapped to a message of your own:
+
+| Cause | Text |
+|-------|------|
+| Client declared no elicitation capability | `This tool was refused because it needs confirmation: policy: destructive tool requires confirmation: policy: confirmation is unsupported by the client.` |
+| User declined or dismissed | `This tool was refused because it needs confirmation: policy: destructive tool requires confirmation: policy: confirmation was declined.` |
+| Bounded wait elapsed | `This tool was refused because it needs confirmation: policy: destructive tool requires confirmation: policy: confirmation timed out.` |
+
+The underlying transport error is never included: it can carry an `Authorization`
+header, a cookie or a response body, so it is classified into one of the reasons
+above and discarded.
 
 ## Deprecated as of protocol 2026-07-28
 

@@ -1,7 +1,7 @@
 # Threat model
 
 **Read this first.** The MCP server, the OAuth authorization server, the browser
-login pages, the logger, the SQLite store and 142 tools all exist now, and most of
+login pages, the logger, the SQLite store and 143 tools all exist now, and most of
 the controls below have landed. Sections marked **[TARGET]** are requirements
 written with `must` and `will`; a `must` sentence is a requirement, never a claim
 that the code exists. The section
@@ -435,7 +435,7 @@ rotation they should perform.
 
 ### 11. Malicious tool arguments and accidental destructive actions
 
-Landed for the 142 registered tools — 98 read-only, 35 write, 9 destructive. Each declares all four annotation hints and a
+Landed for the 143 registered tools — 99 read-only, 35 write, 9 destructive. Each declares all four annotation hints and a
 strict schema, scope and operator policy are enforced before any Garmin call, the
 three tier name lists are validated against the registered set in both directions
 at start-up, allowlist and denylist are intersected with the tiers, and

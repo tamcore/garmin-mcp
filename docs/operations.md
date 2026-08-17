@@ -147,6 +147,27 @@ garmin-mcp serve             # binds, migrates, reconciles clients, serves
 `doctor` creates nothing. The first `serve` run creates the state directory, the
 key file, and the database.
 
+### Health and readiness probes
+
+The Streamable HTTP transport serves two unauthenticated probe endpoints. Point an
+orchestrator at these rather than at a TCP socket or an MCP path:
+
+| Path | Question | Answers |
+|------|----------|---------|
+| `/livez` | Is the process up? | `200` with body `ok`. If the handler runs at all, the process is alive, and restarting it would destroy in-flight work for nothing. |
+| `/readyz` | Can it serve? | `200` with body `ok`, or `503` with body `not ready` when the store is unreachable. The check is bounded at 2 seconds, so a wedged store fails the probe instead of hanging it. |
+
+The two are deliberately separate. Collapsing them means either restarting a
+healthy process because the database blipped, or keeping a broken one in rotation.
+
+The paths are constants and cannot be renamed: a renameable probe path is one that
+gets renamed into a collision with a real endpoint, and renaming buys only
+obscurity over a response that discloses nothing. Neither body ever names a
+dependency, a host, or an error: the endpoint is unauthenticated, so the readiness
+check's error is used as a boolean and then discarded. A failing probe therefore
+tells you *that* the store is unreachable and never why — diagnose that from the
+server's own logs and from `garmin-mcp doctor`.
+
 ## 2. Registering OAuth clients
 
 There is no dynamic client registration. A client exists because an operator
@@ -198,7 +219,11 @@ registry, so it can no longer authorize or authenticate.
 ### A confidential client's secret digest
 
 This deployment never stores a client secret. It stores the hex SHA-256 digest of
-one, and it reads that digest from a file:
+one, supplied either through a file or inline. Exactly one of the two must be
+set; never both.
+
+The file form, `secret-hash-file`, is the preference wherever a plain
+owner-only regular file is possible:
 
 ```yaml
 oauth-clients:
@@ -213,14 +238,48 @@ oauth-clients:
     secret-hash-file: /etc/garmin-mcp/clients/example-service-client.sha256
 ```
 
-The file holds one line of hex, at most 128 bytes are read, and it must be
-owner-only. It is read once, at start-up, through the hardened file layer, so an
-unreadable or group-readable digest is a start-up failure and never a mid-flight
-token endpoint failure. The digest is never logged and never echoed into an
-error.
+The file holds one line of hex, at most 128 bytes are read, and it must be a
+regular file — a symlink is refused — and owner-only. It is read once, at
+start-up, through the hardened file layer, so an unreadable, group-readable, or
+symlinked digest is a start-up failure and never a mid-flight token endpoint
+failure. The digest is never logged and never echoed into an error.
 
-The inline `secret-hash` field is refused in remote mode, and the registry
-applies to remote mode only, so `secret-hash-file` is the only usable form.
+A Kubernetes projected Secret volume cannot satisfy `secret-hash-file`: its keys
+are symlinks into a shared, non-owner-only-readable data directory, which the
+hardened file layer refuses on both counts. Neither mode nor `fsGroup` can fix
+that, because the refusal is of the symlink and not only of the permissions, so
+there is nothing to tune. For that shape, use the inline `secret-hash` field.
+
+Nothing in this server expands `${VAR}` inside a configuration file, so a
+`secret-hash: ${SOME_VAR}` line registers the literal characters and fails
+start-up. Supply the whole registry as the JSON array the container form already
+accepts, and let the Secret provide that one environment variable:
+
+```json
+[
+  {
+    "id": "example-service-client",
+    "name": "Example Service Client",
+    "redirect-uris": ["https://client.example.invalid/oauth/callback"],
+    "scopes": ["garmin:read"],
+    "resources": ["https://mcp.example.invalid/mcp"],
+    "secret-hash": "3b2f…the 64 hex characters…c1a9"
+  }
+]
+```
+
+```yaml
+env:
+  - name: GARMIN_MCP_OAUTH_CLIENTS
+    valueFrom:
+      secretKeyRef:
+        name: garmin-mcp-oauth-clients
+        key: clients.json
+```
+
+Prefer `secretKeyRef` over a literal value: a literal is readable by anyone who
+can read the workload object, whereas the referenced Secret is a separate object
+with its own access rules.
 
 Produce a digest from a secret you hold elsewhere:
 
@@ -229,6 +288,12 @@ printf '%s' "$CLIENT_SECRET" | shasum -a 256 | cut -d' ' -f1 \
   > /etc/garmin-mcp/clients/example-service-client.sha256
 chmod 600 /etc/garmin-mcp/clients/example-service-client.sha256
 ```
+
+Either field takes the digest, never the secret itself: pasting the raw
+secret into `secret-hash` will not authenticate. The digest is unsalted,
+single-round SHA-256 — password-verifier material rather than a replayable
+credential — so a low-entropy client secret is recoverable offline from a
+leaked digest. Use a high-entropy generated secret.
 
 ### Scopes
 
@@ -287,10 +352,10 @@ database migrated by a newer build is refused rather than downgraded.
 anything is served. Migration is idempotent, so this costs nothing on an
 already-current database.
 
-There is no separate migration step today. `garmin-mcp migrate` exists in the
-command tree but is a stub: it validates configuration and then reports that the
-subsystem is not implemented. An operator who wants to migrate without serving
-has no supported way to do it. Plan the schema change as part of the deploy.
+`garmin-mcp migrate` is the separate migration step. It applies the embedded
+migrations to the configured database and refuses with a configuration error when
+no database path is set, rather than guessing a location. Run it before `serve`
+when you want the schema change to be its own deploy step with its own failure.
 
 ### Backup and restore
 
@@ -594,6 +659,62 @@ consumed counts as reuse and revokes the whole family inside the detecting
 transaction; the client sees `invalid_grant`. A refresh can never widen scope,
 change resource, or cross clients.
 
+#### What a client author must know about strict rotation
+
+Rotation is strict and there is **no replay grace and no idempotency key**. That is
+a deliberate choice, not an omission, and it has a cost a client must design around,
+so the whole contract is stated here.
+
+- **Consumption happens when this server's transaction commits, which is before the
+  response reaches you.** A timeout, a reset connection, a proxy error, or your own
+  crash therefore does not tell you the old token was unused.
+- **After an ambiguous refresh, do not retry the old token.** It may already be
+  consumed, and presenting it is reuse, which revokes the entire family — every
+  access and refresh token in it. Treat the authorization as needing
+  reauthorization instead.
+- **A crash between this server's commit and your own is not recoverable by
+  retrying.** The new token pair existed only in the response you lost, and it is
+  stored hashed here, so nothing can reissue or recover it. Reauthorization is the
+  only correct handling. This is the real cost of strict rotation, and it is
+  accepted knowingly: the alternative is below.
+- **Replace the pair atomically in your own store.** A successful response always
+  carries a fresh pair; persist it in the same transaction that retires the old one.
+- **Serialize refreshes per family across every process and replica you run.** Two
+  concurrent refreshes of one family are indistinguishable from theft.
+- **Do not branch on why a refresh failed.** Every one of expiry, revocation, an
+  unknown token and reuse is the error code `invalid_grant`. An unknown token and a
+  revoked family are deliberately given the *same* description as each other —
+  "The refresh token is not usable." — so that neither tells an attacker whether a
+  guessed value ever existed; an expired one says so, which only a holder of a real
+  token can learn. Treat every `invalid_grant` on a refresh as reauthorization
+  required and do not parse the description: it is prose, not a contract.
+- **Reuse detection is bounded by the presented token's own expiry, not by the
+  family's lifetime.** A consumed token replayed after its own expiry is answered
+  as expired and does **not** revoke the family, even when a later generation is
+  still live. That is weaker than the paragraph above implies and it loses a theft
+  signal; it is a known defect, recorded in `docs/implementation-status.md`, and the
+  reuse check is to be moved ahead of the expiry check.
+
+**Why there is no grace window.** The obvious accommodation — remember the previous
+generation briefly and treat a replay of it as a legitimate rotation — cannot be
+made safe here. A bearer request carries no evidence that distinguishes a crashed
+client retrying from an attacker replaying, so the server would have to choose a
+victim. Keep the newer generation valid and one family holds two live refresh
+tokens, which breaks the single-successor property reuse detection is built on and
+lets a replay branch into parallel chains. Invalidate the newer generation and a
+presenter of a stale token evicts the legitimate holder that already persisted it.
+Neither is acceptable, and no rule is safe in both directions.
+
+Genuine idempotency — answering a retry with the *same* pair — is also unavailable:
+tokens are stored hashed, so a previously issued pair cannot be reproduced, and
+making it reproducible would mean keeping recoverable token material at rest. That
+trade is worse than the failure it would fix.
+
+Neither RFC 9700 §4.14.2 nor the OAuth 2.1 draft provides for a grace window; both
+say the previous refresh token is invalidated and that detected reuse revokes the
+active token and its grant. A grace is implementation policy that weakens the named
+mechanism, so this server does not implement one.
+
 A session id is a routing label, never a credential. A session is bound to the
 authorization that created it, and a request presenting another authorization's
 session id is refused. The binding deliberately excludes the token family, so a
@@ -612,15 +733,20 @@ a revocation can still be investigated. Consents are never removed by cleanup.
 The default bound is 500 rows per table per call, the maximum is 5000, and the
 returned counts say whether another pass is needed.
 
-**Nothing schedules it.** There is no ticker, no janitor goroutine, and no CLI
-command; the method has no caller outside tests. An operator today gets no
-cleanup at all, and the database grows with expired transactions, codes, and
-tokens.
+**A remote deployment schedules it for you.** `serve` builds a cleaner and runs
+it on a ticker for the life of the process: every 15 minutes, at most 4 passes per
+tick, 500 rows per table per pass, so one sweep can never hold SQLite's single
+writer long enough to stall live requests. A non-empty sweep writes one log record,
+`expired authorization state removed`; a failed sweep writes one too and the next
+tick retries. There is no setting, because the only correct value is "often enough
+that the backlog stays small", which is what the interval is.
 
-That is a housekeeping gap, not a security one. Every read applies its own expiry
-predicate, so an expired transaction, code, or token is refused on a database
-that has never been cleaned. Monitor the database file size, and budget for its
-growth until a scheduler ships.
+A stdio process builds no cleaner. Its state is the single-user encrypted file
+store, not a multi-user database, so there is nothing to sweep.
+
+Cleanup is housekeeping, not a security control. Every read applies its own expiry
+predicate, so an expired transaction, code, or token is refused even on a database
+that has never been swept. What the sweep buys is bounded growth.
 
 ### Rate limits
 
@@ -689,12 +815,11 @@ release covers.
 Stated once, so an operator does not go looking:
 
 - No horizontal scaling, and no coordination that would allow it.
-- No scheduled cleanup.
-- No `migrate`, `revoke`, `unlink`, or `tools list` command.
+- No `revoke` and no `unlink` command. The store implements both, and the
+  authorization server exposes revoke-consent and revoke-principal, but nothing in
+  the command tree calls them; see "What an operator can actually do today" above.
+  `migrate` and `tools list` do exist.
 - No **online** key rotation: `rotate-key` exists and re-seals both backends, but it is offline and one-shot, and it is not meant to run beside a live `serve`. See Rotation above.
-- No health or readiness endpoint. The MCP transport answers `404` for every path
-  it does not own, so a probe must target a path this server serves, or an
-  operator must front it with something that provides one.
 - No dynamic OAuth client registration.
 - No OS keyring integration.
 - Write and destructive tools are refused over stdio regardless of
