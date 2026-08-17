@@ -294,8 +294,9 @@ jobs:
     # failure — a red build caused by timing rather than by a finding, which is
     # worse than no gate. The race detector still covers this code in the unit,
     # fakegarmin and e2e jobs, which run every one of these parsers.
-    # FUZZ_SMOKE_TIME=10s each cost well under a minute of actual fuzzing; the
-    # rest of the budget is checkout, toolchain setup and compilation.
+    # The per-target budget is counted in executions rather than seconds, so a
+    # loaded runner cannot turn this gate red without a finding; see the step's
+    # own comment. The job timeout below is the wall-clock backstop instead.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -317,9 +318,17 @@ jobs:
       # file carrying a `//go:build` line is excluded from discovery for
       # exactly that reason. A fuzz target belongs in an untagged file; adding
       # one to a tagged file makes it invisible here rather than failing here.
+      # The budget is a number of EXECUTIONS, not a duration, and that is the
+      # whole point. With -fuzztime=10s this job failed on a loaded runner with
+      # "context deadline exceeded" at 10.11s: not a crasher, the engine missing
+      # its own shutdown deadline. A wall-clock budget makes the gate's verdict
+      # depend on how busy the runner is, and a gate that goes red for timing is
+      # one people learn to ignore — which is how a real finding gets waved
+      # through. An execution budget cannot expire late. Roughly 150k execs is
+      # what 10s bought on the runners that passed, so coverage is comparable.
       - name: Run every fuzz target for a bounded smoke duration
         env:
-          FUZZ_SMOKE_TIME: 10s
+          FUZZ_SMOKE_EXECS: 150000x
         run: |
           set -o pipefail
           mapfile -t candidates < <(grep -rl '^func Fuzz' --include='*_test.go' .)
@@ -339,7 +348,7 @@ jobs:
             dir="./$(dirname "${file}")"
             for name in $(grep -oh '^func Fuzz[A-Za-z0-9_]*' "${file}" | sed -E 's/^func //'); do
               echo "== ${name} (${dir}) =="
-              go test -run='^$' -fuzz="^${name}\$" -fuzztime="${FUZZ_SMOKE_TIME}" "${dir}"
+              go test -run='^$' -fuzz="^${name}\$" -fuzztime="${FUZZ_SMOKE_EXECS}" "${dir}"
               ran=$((ran + 1))
             done
           done
