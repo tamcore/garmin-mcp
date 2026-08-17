@@ -151,7 +151,8 @@ that drops under the floor fails the build unless it is named there.
       component-by-component resolution from the volume root, post-open identity
       verification with `os.SameFile`, link-based exclusive install, `O_NONBLOCK`
       regular-file reads proven against a planted FIFO under a watchdog, and
-      owner-only modes enforced by an explicit `chmod` on the open descriptor.
+      owner-only modes verified, and chmodded through the open descriptor when
+      they are not already correct.
 - [x] `internal/tokenlink` `Store`, the adapter that makes a `*store.FileStore`
       satisfy `auth.TokenStore`, asserted against the real consumer interface.
 

@@ -71,7 +71,7 @@ when the deployment is assembled — see [Start-up refusals](#start-up-refusals)
 | `transport` | `--transport` | `stdio` | both | `stdio` or `streamable-http`. Trimmed and case-folded; empty selects `stdio`. Anything else is rejected without echoing the value. |
 | `region` | `--region` | `garmin.com` | both | `garmin.com` or `garmin.cn`. Empty selects `garmin.com`. A China account under the global region cannot log in, and the region is never guessed from a credential. |
 | `principal-id` | `--principal-id` | `local` | stdio | Not blank, no leading or trailing space, at most 256 bytes, no `@`, no control characters. It is an opaque storage key, never an email and never a Garmin account selector. Remotely the principal comes from the verified bearer token, and this setting is ignored. |
-| `state-dir` | `--state-dir` | per-user configuration directory + `/garmin-mcp` | both | No `..` segment. Holds `keys/` and `tokens/`. |
+| `state-dir` | `--state-dir` | per-user configuration directory + `/garmin-mcp` | both | No `..` segment. Holds `keys/` and `tokens/`. On a Kubernetes volume mount, point this at a subdirectory of the mount, never at the mount root — see [operations.md](operations.md#the-state-directory-on-a-kubernetes-volume-mount). |
 | `log-level` | `--log-level` | `info` | both | `debug`, `info`, `warn`, or `error`. An unknown level is rejected rather than defaulted. |
 | `log-format` | `--log-format` | `text` | both | `text` or `json`. |
 

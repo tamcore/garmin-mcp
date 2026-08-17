@@ -147,6 +147,55 @@ garmin-mcp serve             # binds, migrates, reconciles clients, serves
 `doctor` creates nothing. The first `serve` run creates the state directory, the
 key file, and the database.
 
+### The state directory on a Kubernetes volume mount
+
+**Point `state-dir` (and `database-path`) at a subdirectory of the mounted
+volume, never at the mount root itself.** This is the shape that works without
+pre-provisioning on Kubernetes:
+
+```yaml
+- {name: GARMIN_MCP_STATE_DIR,     value: /data/gm}
+- {name: GARMIN_MCP_DATABASE_PATH, value: /data/gm/garmin.db}
+```
+
+with the `PersistentVolumeClaim` mounted at `/data` and `runAsUser`,
+`runAsGroup`, and `fsGroup` all set to the image's non-root uid. Do not set
+`master-key-file` here: its default, `<state-dir>/keys/`, is already what this
+example wants. `master-key-file` selects the key **directory**, not the file
+name, so a value like `/data/gm/keys` would put the key directly under
+`/data/gm` rather than inside a `keys/` subdirectory.
+
+Mounting the setting directly at `/data` does not work. A volume mount root is
+owned by uid 0 regardless of `fsGroup`: `fsGroup` typically (depending on the
+volume driver, the kubelet also ORs in group read/write and directory execute
+bits) changes the mounted directory's **group** and sets the setgid bit, but it
+never changes the **owner**, and no pod-security knob does. Enforcing an
+owner-only directory
+mode requires a `chmod`, and `chmod` requires ownership, so a non-root process
+gets `operation not permitted` the first time it tries to secure `/data`
+itself:
+
+```
+garmin-mcp: opening the encryption key: opening the active encryption key:
+cryptostore: prepare key directory key material "/data":
+securefile: secure directory "/data": chmodat .: operation not permitted
+```
+
+Pointing the setting at a subdirectory instead (`/data/gm` above) avoids this
+entirely: `internal/securefile` creates missing path components itself, and a
+directory the process created is one it owns, so the chmod that follows
+creation succeeds. `internal/securefile` also skips the chmod outright when a
+directory it did not create already denies group and other access — which
+covers a mount root an operator has already pre-provisioned as owner-only —
+but it never widens that check to accept a group- or world-accessible
+directory. **A group-accessible state directory is refused on purpose**: it
+holds the master encryption key and the encrypted token database, and unlike a
+digest, that material is recoverable if exposed, so this is not a check to work
+around.
+
+See [configuration.md](configuration.md) for the `state-dir`,
+`master-key-file`, and `database-path` settings themselves.
+
 ### Health and readiness probes
 
 The Streamable HTTP transport serves two unauthenticated probe endpoints. Point an
@@ -682,12 +731,29 @@ so the whole contract is stated here.
 - **Serialize refreshes per family across every process and replica you run.** Two
   concurrent refreshes of one family are indistinguishable from theft.
 - **Do not branch on why a refresh failed.** Every one of expiry, revocation, an
-  unknown token and reuse is the error code `invalid_grant`. An unknown token and a
-  revoked family are deliberately given the *same* description as each other —
-  "The refresh token is not usable." — so that neither tells an attacker whether a
-  guessed value ever existed; an expired one says so, which only a holder of a real
-  token can learn. Treat every `invalid_grant` on a refresh as reauthorization
-  required and do not parse the description: it is prose, not a contract.
+  unknown token and reuse is the error code `invalid_grant`, and there are three
+  distinct descriptions behind it, not two:
+  - "The refresh token is not usable." for an unknown token and for a
+    revoked family, deliberately merged so that neither tells an attacker
+    whether a guessed value ever existed;
+  - "The refresh token has expired." — a holder of a real, expired token is
+    told so, which discloses nothing a guess could not already rule out;
+  - "The refresh token is no longer valid." for a failure detected during
+    rotation itself: reuse (a second presentation of an already-rotated token)
+    is one cause, but the same description also covers a family revoked or a
+    token no longer found by the time rotation runs, including a revocation
+    that lands concurrently and independently of anything this request did.
+
+  Which description a client sees for one underlying cause is not even stable
+  across the family's own history: once a reuse revokes the family, a
+  *subsequent* presentation of the newer, legitimately-issued token — the one
+  the client rotated to — no longer hits the reuse check at all. It resolves
+  as a token belonging to a now-revoked family and is reported "not usable"
+  instead, the same description an unknown token gets. Two different
+  descriptions for the same family, depending only on presentation order, is
+  exactly why the description is prose and not a contract. Treat every
+  `invalid_grant` on a refresh as reauthorization required and do not parse the
+  description.
 - **Reuse detection is bounded by the presented token's own expiry, not by the
   family's lifetime.** A consumed token replayed after its own expiry is answered
   as expired and does **not** revoke the family, even when a later generation is
