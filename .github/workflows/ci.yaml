@@ -282,6 +282,54 @@ jobs:
             exit 1
           fi
 
+  windows-acl:
+    name: Windows ACL runtime
+    runs-on: windows-latest
+    # The Windows security-descriptor layer is the one part of the tree that had
+    # never executed. `GOOS=windows go vet` type-checks acl_windows.go and
+    # perm_windows.go, and acl_test.go exercises the *rule* — checkOwnerOnlyAccess
+    # over hand-built accessControl values — on Linux. Neither runs a syscall.
+    # readAccessControl, describeSecurityDescriptor, describeACL, currentUserSID
+    # and applyOwnerOnlyACL only ever compiled, so a wrong flag constant or a
+    # mis-sized struct would have shipped green.
+    #
+    # These three packages are the ones that write secret files through
+    # securefile, so running their untagged suites here drives the real
+    # descriptors: the token store, the encryption key, and the hardening itself.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      # internal/cryptostore is deliberately absent. Its key_test.go asserts
+      # Mode().Perm() == 0o600 with no build tag, which cannot hold on Windows,
+      # where Go synthesises the mode bits rather than reading a Unix mode. That
+      # is a Unix-shaped test rather than a defect in the key store, but it means
+      # the key store's own Windows behavior stays unproven; it is recorded in
+      # docs/implementation-status.md rather than hidden by this exclusion.
+      # internal/store's Unix-only assertions already carry //go:build unix, so
+      # its suite runs here honestly.
+      - name: go test on Windows
+        run: go test -race -count=1 ./internal/securefile/... ./internal/store/...
+
+      # A job that ran no securefile test would pass while proving exactly what
+      # it was added to disprove. The assertion is on the package rather than on
+      # named tests: the point is that this package's suite executed on Windows
+      # at all, and pinning names here would only duplicate the source.
+      - name: Assert the securefile suite actually ran on Windows
+        shell: bash
+        run: |
+          set -o pipefail
+          go test -count=1 -json ./internal/securefile/... >result.json
+          passed="$(grep -c '"Action":"pass","Package":"github.com/tamcore/garmin-mcp/internal/securefile","Test":' result.json || true)"
+          echo "securefile tests passed on windows: ${passed}"
+          if [ "${passed}" -lt 1 ]; then
+            echo "::error::no internal/securefile test passed on Windows; this gate would be vacuous"
+            exit 1
+          fi
+
   fuzz-smoke:
     name: Fuzz smoke
     runs-on: ubuntu-latest
@@ -447,6 +495,23 @@ jobs:
   container:
     name: Container build and hardening smoke test
     runs-on: ubuntu-latest
+    # The start-up steps below poll a running server and wait on a deliberate
+    # failure, so this job is the one that can stall rather than fail. Without a
+    # bound a wedged daemon burns the runner's default six hours.
+    timeout-minutes: 20
+    env:
+      # Pinned by digest, not just tag: both are helper images used only to chown a
+      # volume and to poll the server from inside its network namespace, never
+      # shipped, but a floating tag is still an unpinned supply-chain input.
+      BUSYBOX_IMAGE: busybox:1.36.1@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
+      CURL_IMAGE: curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+      # One public, loopback-only OAuth client, registered purely so the
+      # streamable-http transport's mandatory-registry check passes. Nothing in
+      # this smoke test performs an OAuth flow.
+      SMOKE_OAUTH_CLIENT: >-
+        [{"id":"ci-smoke-client","name":"CI Smoke Test",
+        "redirect-uris":["https://127.0.0.1/callback"],"scopes":["garmin:read"],
+        "resources":["https://127.0.0.1:8080"],"public":true}]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
@@ -523,3 +588,185 @@ jobs:
             --security-opt no-new-privileges \
             --tmpfs /tmp:rw,noexec,nosuid,size=16m \
             garmin-mcp:ci
+
+      # Everything below proves the shape this image is about to run in: a
+      # streamable-http deployment with a read-only root filesystem, a non-root
+      # user, and a PVC-like mounted volume for state. A build that passes the
+      # hardening checks above but cannot actually start, cannot write its
+      # database and key, or hangs instead of failing when the volume is
+      # unwritable is exactly the failure a first real rollout would hit.
+
+      - name: Generate a smoke-test TLS certificate
+        run: |
+          # The authorization server refuses to name a cleartext issuer at any
+          # origin, loopback included, so even this smoke-only deployment needs a
+          # certificate. It is self-signed and thrown away at the end of the job;
+          # curl trusts it explicitly with -k rather than needing it installed.
+          mkdir -p "${RUNNER_TEMP}/garmin-mcp-certs"
+          openssl req -x509 -newkey rsa:2048 \
+            -keyout "${RUNNER_TEMP}/garmin-mcp-certs/tls.key" \
+            -out "${RUNNER_TEMP}/garmin-mcp-certs/tls.crt" \
+            -days 2 -nodes -subj "/CN=127.0.0.1" \
+            -addext "subjectAltName=IP:127.0.0.1"
+          chmod 644 "${RUNNER_TEMP}"/garmin-mcp-certs/tls.*
+
+      - name: Prepare a writable /data volume
+        run: |
+          # A fresh PVC is owned by root until something chowns it; a real
+          # deployment does this with fsGroup or an init container. The chown
+          # itself has to run as root, so this one step is the only one in the
+          # whole job that is not the nonroot user.
+          docker volume create garmin-mcp-ci-data
+          docker run --rm -v garmin-mcp-ci-data:/data "${BUSYBOX_IMAGE}" \
+            chown 65532:65532 /data
+
+      - name: Start the server hardened, with the volume mounted
+        run: |
+          docker run -d --name garmin-mcp-ci-serve \
+            --read-only \
+            --user 65532:65532 \
+            --cap-drop=ALL \
+            --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            -v garmin-mcp-ci-data:/data \
+            -v "${RUNNER_TEMP}/garmin-mcp-certs:/certs:ro" \
+            -e GARMIN_MCP_TRANSPORT=streamable-http \
+            -e GARMIN_MCP_BIND_ADDRESS=0.0.0.0:8080 \
+            -e GARMIN_MCP_PUBLIC_URL=https://127.0.0.1:8080 \
+            -e GARMIN_MCP_TLS_CERT_FILE=/certs/tls.crt \
+            -e GARMIN_MCP_TLS_KEY_FILE=/certs/tls.key \
+            -e GARMIN_MCP_DATABASE_PATH=/data/garmin-mcp.db \
+            -e GARMIN_MCP_STATE_DIR=/data \
+            -e GARMIN_MCP_MASTER_KEY_FILE=/data/keys/key-v1.json \
+            -e GARMIN_MCP_OAUTH_CLIENTS="${SMOKE_OAUTH_CLIENT}" \
+            garmin-mcp:ci serve
+
+      - name: Wait for the server to report ready, not merely alive
+        run: |
+          # The probe is reached from a second container sharing the first one's
+          # network namespace: the image ships no shell and no curl, and the
+          # bound address is 0.0.0.0, which docker's own port publishing would
+          # only forward from a host-side mapping this step does not need.
+          ready=""
+          for _ in $(seq 1 30); do
+            code="$(timeout --kill-after=5s 15 docker run --rm \
+              --network container:garmin-mcp-ci-serve "${CURL_IMAGE}" \
+              -sk --max-time 5 -o /dev/null -w '%{http_code}' \
+              https://127.0.0.1:8080/readyz || echo 000)"
+            if [ "${code}" = "200" ]; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ -z "${ready}" ]; then
+            echo "::error::the server never reported ready within 30s"
+            docker logs garmin-mcp-ci-serve
+            exit 1
+          fi
+
+          live="$(timeout --kill-after=5s 15 docker run --rm \
+            --network container:garmin-mcp-ci-serve "${CURL_IMAGE}" \
+            -sk --max-time 5 -o /dev/null -w '%{http_code}' \
+            https://127.0.0.1:8080/livez)"
+          if [ "${live}" != "200" ]; then
+            echo "::error::readyz reported ready but livez answered ${live}"
+            exit 1
+          fi
+
+      - name: Assert the database and key exist under the volume, owner-only
+        run: |
+          docker run --rm -v garmin-mcp-ci-data:/data "${BUSYBOX_IMAGE}" sh -c '
+            set -e
+            for target in /data/garmin-mcp.db /data/keys/key-v1.json; do
+              if [ ! -f "${target}" ]; then
+                echo "::error::${target} was not created under the mounted volume"
+                exit 1
+              fi
+              mode="$(stat -c %a "${target}")"
+              owner="$(stat -c %u:%g "${target}")"
+              echo "${target}: mode=${mode} owner=${owner}"
+              if [ "${mode}" != "600" ]; then
+                echo "::error::${target} is not owner-only (mode ${mode})"
+                exit 1
+              fi
+              if [ "${owner}" != "65532:65532" ]; then
+                echo "::error::${target} is not owned by the nonroot uid/gid (owner ${owner})"
+                exit 1
+              fi
+            done
+          '
+
+      - name: Stop the streamable-http smoke test
+        if: always()
+        run: |
+          docker logs garmin-mcp-ci-serve || true
+          docker rm -f garmin-mcp-ci-serve >/dev/null 2>&1 || true
+          docker volume rm garmin-mcp-ci-data >/dev/null 2>&1 || true
+
+      - name: Assert start-up fails closed when /data is not writable
+        run: |
+          # Fail-closed is the property that matters: a rollout onto a read-only
+          # PVC must refuse honestly and promptly, never start up broken and
+          # never hang waiting for state it can never create.
+          docker volume create garmin-mcp-ci-data-ro
+          docker run --rm -v garmin-mcp-ci-data-ro:/data "${BUSYBOX_IMAGE}" \
+            chown 65532:65532 /data
+
+          set +e
+          timeout --kill-after=5s 30 docker run --name garmin-mcp-ci-fail \
+            --read-only \
+            --user 65532:65532 \
+            --cap-drop=ALL \
+            --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            -v garmin-mcp-ci-data-ro:/data:ro \
+            -v "${RUNNER_TEMP}/garmin-mcp-certs:/certs:ro" \
+            -e GARMIN_MCP_TRANSPORT=streamable-http \
+            -e GARMIN_MCP_BIND_ADDRESS=0.0.0.0:8080 \
+            -e GARMIN_MCP_PUBLIC_URL=https://127.0.0.1:8080 \
+            -e GARMIN_MCP_TLS_CERT_FILE=/certs/tls.crt \
+            -e GARMIN_MCP_TLS_KEY_FILE=/certs/tls.key \
+            -e GARMIN_MCP_DATABASE_PATH=/data/garmin-mcp.db \
+            -e GARMIN_MCP_STATE_DIR=/data \
+            -e GARMIN_MCP_MASTER_KEY_FILE=/data/keys/key-v1.json \
+            -e GARMIN_MCP_OAUTH_CLIENTS="${SMOKE_OAUTH_CLIENT}" \
+            garmin-mcp:ci serve
+          ec=$?
+          set -e
+
+          echo "exit code: ${ec}"
+          logs="$(docker logs garmin-mcp-ci-fail 2>&1 || true)"
+          echo "${logs}"
+          docker rm -f garmin-mcp-ci-fail >/dev/null 2>&1 || true
+          docker volume rm garmin-mcp-ci-data-ro >/dev/null 2>&1 || true
+
+          # Every rejected status below would otherwise read as the refusal this
+          # step is asserting, which is how a negative test passes vacuously: an
+          # image whose binary cannot execute at all never reaches the read-only
+          # /data it is supposed to refuse.
+          case "${ec}" in
+            0)
+              echo "::error::the server started successfully despite a read-only /data"
+              exit 1 ;;
+            124|137)
+              echo "::error::the server hung instead of failing within 30s when /data was read-only"
+              exit 1 ;;
+            125)
+              echo "::error::docker itself failed to run the container, so the refusal was never tested"
+              exit 1 ;;
+            126|127)
+              echo "::error::the image's entrypoint is not executable or not found, so the refusal was never tested"
+              exit 1 ;;
+          esac
+
+          # The exit status alone only proves it failed, not that it failed for
+          # the right reason. A server that refused for an unrelated cause --
+          # a bad certificate, a malformed client registration -- would satisfy
+          # every check above while proving nothing about a read-only /data.
+          case "${logs}" in
+            *"read-only file system"*|*"read-only filesystem"*) ;;
+            *)
+              echo "::error::the server failed, but its output does not name a read-only filesystem, so the refusal was for some other cause"
+              exit 1 ;;
+          esac
