@@ -2,6 +2,7 @@ package oauthstore
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/tamcore/garmin-mcp/internal/identity"
 	"github.com/tamcore/garmin-mcp/internal/oauthserver"
@@ -23,6 +24,30 @@ import (
 // The column is part of the audit trail, so it is a constant and never text from a
 // request.
 const familyRevocationReason = "authorization_revoked"
+
+// reasonFor maps the caller's oauthserver.RevokeReason onto this store's own
+// closed reason-code vocabulary. RevokeReasonReplay uses store.ReasonRefreshReuse,
+// the exact code the transactional RotateRefreshToken reuse path already writes,
+// because refreshGrant's pre-check and that in-transaction path detect the same
+// underlying event — a refresh token was replayed — on two different code paths,
+// and the audit trail must not distinguish them by reason code.
+//
+// An unrecognised reason is refused rather than defaulted to
+// familyRevocationReason: a future RevokeReason this switch was never updated for,
+// or an accidentally zero value, must not silently file a security event under the
+// wrong reason. The caller must never let a revocation both proceed AND use an
+// invalid reason, so this is checked before RevokeFamily touches the store.
+func reasonFor(reason oauthserver.RevokeReason) (string, error) {
+	switch reason {
+	case oauthserver.RevokeReasonReplay:
+		return store.ReasonRefreshReuse, nil
+	case oauthserver.RevokeReasonClient:
+		return familyRevocationReason, nil
+	default:
+		return "", fmt.Errorf("oauthstore: revoke token family: unrecognised revoke reason %d: %w",
+			reason, oauthserver.ErrStorage)
+	}
+}
 
 // SaveTokenPair stores the first access and refresh token of a new family.
 //
@@ -118,6 +143,7 @@ func (a *Adapter) RefreshToken(ctx context.Context, lookup oauthserver.Lookup,
 		Generation: stored.Generation,
 		IssuedAt:   stored.IssuedAt,
 		ExpiresAt:  stored.ExpiresAt,
+		Consumed:   stored.Consumed,
 	}, nil
 }
 
@@ -161,9 +187,15 @@ func (a *Adapter) RotateRefreshToken(ctx context.Context, presented oauthserver.
 // RevokeFamily revokes every token in the family. Revoking an already revoked
 // family is not an error; a family the database has never seen reports
 // ErrTokenNotFound rather than succeeding silently on an id nobody recognizes.
-func (a *Adapter) RevokeFamily(ctx context.Context, family oauthserver.FamilyID) error {
+func (a *Adapter) RevokeFamily(
+	ctx context.Context, family oauthserver.FamilyID, reason oauthserver.RevokeReason,
+) error {
 	const op = "revoke token family"
-	_, err := a.sqlite.RevokeTokenFamily(ctx, string(family), familyRevocationReason)
+	code, err := reasonFor(reason)
+	if err != nil {
+		return err
+	}
+	_, err = a.sqlite.RevokeTokenFamily(ctx, string(family), code)
 	return translate(op, err)
 }
 

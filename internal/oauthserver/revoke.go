@@ -92,7 +92,7 @@ func (s *Server) RevokeToken(ctx context.Context, req RevokeRequest) error {
 	if !ok {
 		return nil
 	}
-	if err := s.store.RevokeFamily(ctx, family); err != nil {
+	if err := s.store.RevokeFamily(ctx, family, RevokeReasonClient); err != nil {
 		return fmt.Errorf("revoking token family: %w", storageOrCause(err))
 	}
 	return nil

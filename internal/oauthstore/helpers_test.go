@@ -121,6 +121,35 @@ func newFixture(t *testing.T) fixture {
 
 func openStore(t *testing.T, clk *clock) *store.SQLiteStore {
 	t.Helper()
+	return openStoreWithSink(t, clk, nil)
+}
+
+// recordingSink is a store.RevocationSink that keeps what it was told, so a test can
+// assert an announcement actually happened rather than merely that a call returned
+// no error. It is safe for concurrent use because the store publishes from
+// whichever goroutine ran the cascade.
+type recordingSink struct {
+	mu     sync.Mutex
+	events []store.RevocationEvent
+}
+
+func (r *recordingSink) PublishRevocation(event store.RevocationEvent) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, event)
+}
+
+func (r *recordingSink) recorded() []store.RevocationEvent {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]store.RevocationEvent(nil), r.events...)
+}
+
+// openStoreWithSink is openStore with an optional revocation sink wired in, so a
+// test can observe what a cascade announces. A nil sink behaves exactly like
+// openStore.
+func openStoreWithSink(t *testing.T, clk *clock, sink store.RevocationSink) *store.SQLiteStore {
+	t.Helper()
 	resolved, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatalf("resolve temp dir: %v", err)
@@ -130,9 +159,10 @@ func openStore(t *testing.T, clk *clock) *store.SQLiteStore {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	opened, err := store.OpenSQLite(context.Background(), store.SQLiteConfig{
-		Path: filepath.Join(resolved, "garmin-mcp.db"),
-		Key:  key,
-		Now:  clk.Now,
+		Path:        filepath.Join(resolved, "garmin-mcp.db"),
+		Key:         key,
+		Now:         clk.Now,
+		Revocations: sink,
 	})
 	if err != nil {
 		t.Fatalf("OpenSQLite: %v", err)
@@ -143,6 +173,48 @@ func openStore(t *testing.T, clk *clock) *store.SQLiteStore {
 		}
 	})
 	return opened
+}
+
+// newFixtureWithSink is newFixture with a recording revocation sink wired into the
+// underlying store, for a test that needs to assert a cascade announced itself.
+func newFixtureWithSink(t *testing.T) (fixture, *recordingSink) {
+	t.Helper()
+	ctx := context.Background()
+	clk := newClock()
+	sink := &recordingSink{}
+	sqlite := openStoreWithSink(t, clk, sink)
+
+	principalRow, err := sqlite.CreatePrincipal(ctx, testEmail)
+	if err != nil {
+		t.Fatalf("CreatePrincipal: %v", err)
+	}
+	clientRow, err := sqlite.RegisterClient(ctx, store.ClientRegistration{
+		Name:         testClientName,
+		RedirectURIs: []string{testRedirectRaw},
+	})
+	if err != nil {
+		t.Fatalf("RegisterClient: %v", err)
+	}
+	principal, err := identity.NewPrincipal(principalRow.ID)
+	if err != nil {
+		t.Fatalf("NewPrincipal: %v", err)
+	}
+	adapter, err := oauthstore.New(sqlite, staticClients{client: newTestClient(t, clientRow.ID)})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	return fixture{
+		adapter:   adapter,
+		sqlite:    sqlite,
+		clock:     clk,
+		principal: principal,
+		clientID:  clientRow.ID,
+		redirect:  mustRedirect(t, testRedirectRaw),
+		resource:  mustResource(t, testResourceRaw),
+		scopes:    mustScopes(t, testScopeRaw),
+		challenge: mustChallenge(t),
+	}, sink
 }
 
 func newTestClient(t *testing.T, id string) oauthserver.Client {

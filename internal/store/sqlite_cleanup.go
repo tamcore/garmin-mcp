@@ -29,6 +29,18 @@ const (
 	// revokedTokenRetention is how long a revoked token row is kept past its expiry,
 	// so an operator investigating a revocation can still see it.
 	revokedTokenRetention = 24 * time.Hour
+
+	// retainedConsumedGenerations bounds how many of a live family's most recent
+	// consumed-and-expired generations survive a sweep. Without this bound, a
+	// continuously rotating client renews its family's liveness on every refresh,
+	// so every past generation would be retained for as long as the client keeps
+	// refreshing: an hourly refresh cadence alone means roughly 8,760 retained rows
+	// per family per year, which is unbounded growth for an authenticated client.
+	// 200 is in the low hundreds, which caps per-family overhead hard while still
+	// covering many days of rotation at any realistic cadence — at one rotation per
+	// hour, 200 generations is over 8 days of replay-detection coverage beyond each
+	// row's own expiry.
+	retainedConsumedGenerations = 200
 )
 
 // CleanupStats counts what one Cleanup call removed. A caller that sees any field at
@@ -127,12 +139,42 @@ func (s *SQLiteStore) collectExpired(ctx context.Context, tx *sql.Tx, limit int,
 // deleteExpiredTokens removes expired token rows. A revoked row is kept for a grace
 // period past its expiry, so the row an operator would want to look at after a family
 // revocation is still there.
+//
+// A consumed refresh row (one already rotated away) is additionally kept past its own
+// expiry for as long as BOTH of the following hold: its family holds any OTHER token
+// that is neither expired nor revoked, AND the row is within the family's most recent
+// retainedConsumedGenerations generations. refreshGrant's pre-check for a
+// consumed-and-expired replay (internal/oauthserver/refreshgrant.go) depends on a
+// recently-consumed row still existing, and a sweep is not a security boundary that
+// gets to decide reuse detection stops mattering on its own schedule — but "the family
+// is live" alone is not a bound: a continuously rotating client renews its family's
+// liveness on every refresh, so without the generation cap every past generation of an
+// active family would be retained forever. The generation cap turns that into bounded
+// growth: at most retainedConsumedGenerations extra rows per live family, regardless
+// of how long or how often it keeps refreshing.
+//
+// Both the EXISTS and the MAX(generation) subqueries are indexed lookups by family_id
+// (idx_mcp_tokens_family), not table scans: for each expired candidate row they read
+// only the handful of sibling rows in the same family.
 func (s *SQLiteStore) deleteExpiredTokens(ctx context.Context, tx *sql.Tx, limit int) (int, error) {
 	now := formatTime(s.now())
 	cutoff := formatTime(s.now().Add(-revokedTokenRetention))
 	return deleteCounted(ctx, tx,
 		`DELETE FROM mcp_tokens WHERE rowid IN
-		     (SELECT rowid FROM mcp_tokens
-		       WHERE expires_at <= ? AND (revoked_at IS NULL OR expires_at <= ?) LIMIT ?)`,
-		now, cutoff, limit)
+		     (SELECT t.rowid FROM mcp_tokens t
+		       WHERE t.expires_at <= ? AND (t.revoked_at IS NULL OR t.expires_at <= ?)
+		         AND NOT (
+		           t.consumed_at IS NOT NULL
+		           AND EXISTS (
+		             SELECT 1 FROM mcp_tokens live
+		              WHERE live.family_id = t.family_id
+		                AND live.revoked_at IS NULL
+		                AND live.expires_at > ?
+		           )
+		           AND t.generation > (
+		             SELECT MAX(g.generation) FROM mcp_tokens g WHERE g.family_id = t.family_id
+		           ) - ?
+		         )
+		       LIMIT ?)`,
+		now, cutoff, now, retainedConsumedGenerations, limit)
 }

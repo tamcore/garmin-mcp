@@ -79,6 +79,14 @@ func tokenError(code, description string, status int, cause error) *TokenError {
 	return &TokenError{code: code, description: description, status: status, cause: cause}
 }
 
+// descRefreshNoLongerValid is the one description a refresh-token replay is ever
+// told, whether the reuse is caught by the in-transaction RotateRefreshToken path
+// or by refreshGrant's own pre-check for a presented token that outlived its own
+// expiry before it could be replayed. The two paths must never diverge in what the
+// client is told: that would let a client distinguish "consumed and expired" from
+// "consumed and still live", which is more than invalid_grant ever promises.
+const descRefreshNoLongerValid = "The refresh token is no longer valid."
+
 func invalidGrant(description string, cause error) *TokenError {
 	return tokenError(ErrorInvalidGrant, description, http.StatusBadRequest, cause)
 }
@@ -313,7 +321,7 @@ func (s *Server) persistTokens(
 		return nil
 	case errors.Is(err, ErrRefreshTokenReused), errors.Is(err, ErrTokenRevoked),
 		errors.Is(err, ErrTokenNotFound):
-		return invalidGrant("The refresh token is no longer valid.", err)
+		return invalidGrant(descRefreshNoLongerValid, err)
 	default:
 		return serverFailure(storageOrCause(err))
 	}

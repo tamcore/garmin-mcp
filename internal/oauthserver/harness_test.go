@@ -13,6 +13,14 @@ type harness struct {
 	store *fakeStore
 	mu    sync.Mutex
 	clock time.Time
+
+	// afterRead, when set, runs after every read of the clock, outside the lock,
+	// and is told how many reads have happened so far (1-indexed). It exists so a
+	// test can move the clock between what would be two separate s.now() calls
+	// inside one function invocation, to prove the function reads the clock only
+	// once.
+	afterRead func(reads int, h *harness)
+	nowReads  int
 }
 
 func newHarness(t *testing.T, specs ...ClientSpec) *harness {
@@ -34,8 +42,15 @@ func newHarness(t *testing.T, specs ...ClientSpec) *harness {
 
 func (h *harness) now() time.Time {
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.clock
+	result := h.clock
+	h.nowReads++
+	reads := h.nowReads
+	hook := h.afterRead
+	h.mu.Unlock()
+	if hook != nil {
+		hook(reads, h)
+	}
+	return result
 }
 
 func (h *harness) advance(d time.Duration) {

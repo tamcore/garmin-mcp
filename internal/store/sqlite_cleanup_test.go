@@ -177,6 +177,170 @@ func TestRevokedTokensSurviveOneRetentionWindow(t *testing.T) {
 	}
 }
 
+// TestCleanupRetainsAConsumedRowWhileItsFamilyIsLive is problem 1 of the
+// refresh-reuse-detection review: a consumed, expired refresh row must survive a
+// cleanup sweep for as long as its family holds any token that is neither expired
+// nor revoked. Without this, the periodic sweep removes the very row
+// refreshGrant's pre-check depends on to detect a replay, so the fix in
+// internal/oauthserver/refreshgrant.go only works until the next cleanup tick.
+func TestCleanupRetainsAConsumedRowWhileItsFamilyIsLive(t *testing.T) {
+	t.Parallel()
+	opened, clock := newTestStore(t)
+	ctx := context.Background()
+	grant := seedGrant(t, opened) // generation 0: access 10m, refresh 24h, from t0.
+
+	// Rotate while generation 0 is still comfortably live, so generation 1's own
+	// 24h refresh lifetime runs from a later instant than generation 0's did.
+	clock.advance(20 * time.Hour)
+	if _, err := opened.RotateRefreshToken(ctx,
+		rotation(grant.refresh, "retain-gen1-access", "retain-gen1-refresh"),
+	); err != nil {
+		t.Fatalf("RotateRefreshToken: %v", err)
+	}
+
+	// Now generation 0's refresh row (expires at t0+24h) is expired, but
+	// generation 1's (expires at t0+20h+24h = t0+44h) is not.
+	clock.advance(5 * time.Hour)
+
+	stats, err := opened.Cleanup(ctx, 0)
+	if err != nil {
+		t.Fatalf("Cleanup: %v", err)
+	}
+	// The two access tokens (generation 0 and generation 1) are unconsumed rows
+	// past their own 10-minute expiry, and this fix does not touch their
+	// retention: they are swept exactly as before.
+	if stats.Tokens != 2 {
+		t.Fatalf("Tokens removed = %d, want 2 (only the two expired access tokens)", stats.Tokens)
+	}
+	if stats.Families != 0 {
+		t.Fatalf("Families removed = %d, want 0: the family still holds live and consumed rows", stats.Families)
+	}
+
+	// The consumed, expired generation-0 refresh row must still be readable: a
+	// replay of it is exactly what the pre-check in refreshGrant must still be
+	// able to see.
+	stored, err := opened.ReadRefreshToken(ctx, grant.refresh)
+	if err != nil {
+		t.Fatalf("the consumed generation-0 refresh row did not survive cleanup "+
+			"while generation 1 is live: %v", err)
+	}
+	if !stored.Consumed {
+		t.Fatal("the surviving row lost its Consumed flag")
+	}
+}
+
+// TestCleanupSweepsAConsumedRowOnceItsFamilyIsDead is the other half: once every
+// token in the family is expired or revoked, the consumed row is no longer
+// special and is swept like any other expired row.
+func TestCleanupSweepsAConsumedRowOnceItsFamilyIsDead(t *testing.T) {
+	t.Parallel()
+	opened, clock := newTestStore(t)
+	ctx := context.Background()
+	grant := seedGrant(t, opened)
+
+	clock.advance(20 * time.Hour)
+	if _, err := opened.RotateRefreshToken(ctx,
+		rotation(grant.refresh, "sweep-gen1-access", "sweep-gen1-refresh"),
+	); err != nil {
+		t.Fatalf("RotateRefreshToken: %v", err)
+	}
+
+	// Past generation 1's own expiry (t0+44h) too, and past the retention window
+	// that would otherwise apply if it were revoked instead of merely expired:
+	// t0 + 20h + 5h + 45h = t0+70h.
+	clock.advance(5*time.Hour + 45*time.Hour)
+
+	stats, err := opened.Cleanup(ctx, 0)
+	if err != nil {
+		t.Fatalf("Cleanup: %v", err)
+	}
+	// Both access tokens were already swept in a real deployment's earlier ticks,
+	// but nothing here ran one, so this single sweep removes everything: both
+	// access tokens and both refresh generations, once generation 1 died too.
+	if stats.Tokens != 4 {
+		t.Fatalf("Tokens removed = %d, want 4 (both access tokens and both refresh generations)",
+			stats.Tokens)
+	}
+	if stats.Families != 1 {
+		t.Fatalf("Families removed = %d, want 1 once every token in it is gone", stats.Families)
+	}
+	if _, err := opened.ReadRefreshToken(ctx, grant.refresh); !errors.Is(err, store.ErrTokenNotFound) {
+		t.Fatalf("the generation-0 row survived after its family died: err = %v", err)
+	}
+}
+
+// retainedGenerationWindowForTest mirrors the unexported
+// store.retainedConsumedGenerations. It is duplicated here, rather than imported,
+// because this file is package store_test and the production constant is
+// deliberately unexported; keep the two literals in sync if the bound ever changes.
+const retainedGenerationWindowForTest = 200
+
+// rotateChain rotates a fresh grant's refresh token "count" times, advancing the
+// clock by one hour before each rotation. That gives every generation a distinct,
+// one-hour-later own expiry, which is what lets a single "now" later put some
+// generations past their own expiry while the family's newest generation is still
+// live. It returns the refresh secret of every generation from 1 through count,
+// indexed by generation number (index 0 is unused).
+func rotateChain(t *testing.T, s *store.SQLiteStore, clock *fakeClock, seed store.Secret, count int,
+) []store.Secret {
+	t.Helper()
+	secrets := make([]store.Secret, count+1)
+	presented := seed
+	for generation := 1; generation <= count; generation++ {
+		clock.advance(time.Hour)
+		tag := strconv.Itoa(generation)
+		next := store.NewSecret("chain-refresh-" + tag)
+		if _, err := s.RotateRefreshToken(context.Background(),
+			rotation(presented, "chain-access-"+tag, next.Reveal())); err != nil {
+			t.Fatalf("RotateRefreshToken to generation %d: %v", generation, err)
+		}
+		secrets[generation] = next
+		presented = next
+	}
+	return secrets
+}
+
+// TestCleanupBoundsConsumedRetentionByGeneration is problem 1 of the round-two
+// review: deleteExpiredTokens used to retain a consumed row for as long as its
+// family was live, with no bound. A continuously rotating client renews family
+// liveness on every refresh, so that was unbounded growth. This proves the bound: a
+// consumed, expired row that is within the family's most recent
+// retainedConsumedGenerations generations survives, and the same shape of row one
+// generation further back does not, even though the family is live in both cases.
+func TestCleanupBoundsConsumedRetentionByGeneration(t *testing.T) {
+	t.Parallel()
+	opened, clock := newTestStore(t)
+	ctx := context.Background()
+	grant := seedGrant(t, opened) // generation 0.
+
+	generations := rotateChain(t, opened, clock, grant.refresh, retainedGenerationWindowForTest+1)
+	// The live (unconsumed) generation is retainedGenerationWindowForTest+1.
+	// Generation 1 is exactly retainedGenerationWindowForTest generations behind it,
+	// which is outside the retained window (only strictly fewer than
+	// retainedGenerationWindowForTest generations behind qualifies). Generation 2 is
+	// retainedGenerationWindowForTest-1 behind, which is inside it.
+	gen1 := generations[1]
+	gen2 := generations[2]
+
+	// Generation 1 was issued at t0+1h (expires t0+25h) and generation 2 at t0+2h
+	// (expires t0+26h); both are already past their own expiry two hours after the
+	// last rotation, while the newest generation keeps its full 24-hour window ahead
+	// of it (it was just issued).
+	clock.advance(2 * time.Hour)
+
+	if _, err := opened.Cleanup(ctx, 0); err != nil {
+		t.Fatalf("Cleanup: %v", err)
+	}
+
+	if _, err := opened.ReadRefreshToken(ctx, gen2); err != nil {
+		t.Fatalf("generation 2, within the retained window, did not survive cleanup: %v", err)
+	}
+	if _, err := opened.ReadRefreshToken(ctx, gen1); !errors.Is(err, store.ErrTokenNotFound) {
+		t.Fatalf("generation 1, beyond the retained window, survived cleanup: err = %v, "+
+			"want ErrTokenNotFound", err)
+	}
+}
+
 func TestRecordAndReadAuditEvents(t *testing.T) {
 	t.Parallel()
 	opened, _ := newTestStore(t)

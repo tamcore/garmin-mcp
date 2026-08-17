@@ -128,8 +128,11 @@ type TokenStore interface {
 		ctx context.Context, presented Lookup, access AccessToken, refresh RefreshToken,
 	) error
 
-	// RevokeFamily revokes every token in the family. It is idempotent.
-	RevokeFamily(ctx context.Context, family FamilyID) error
+	// RevokeFamily revokes every token in the family. It is idempotent. reason
+	// says why, so the storage adapter can record the same audit-trail
+	// vocabulary the transactional reuse path already uses instead of a single
+	// reason code covering every caller of this method.
+	RevokeFamily(ctx context.Context, family FamilyID, reason RevokeReason) error
 
 	// RevokePrincipal revokes every token family belonging to the principal and
 	// deletes the principal's consents. It is the token half of unlinking a Garmin

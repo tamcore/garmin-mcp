@@ -82,6 +82,15 @@ type fakeStore struct {
 	failOn map[string]error
 	// rotations counts successful refresh rotations, for the race test.
 	rotations int
+	// revokeFamilyCalls counts calls to RevokeFamily specifically, so a test can
+	// tell the pre-check revocation path (which calls RevokeFamily directly) apart
+	// from the in-transaction path (which marks the family revoked as part of
+	// RotateRefreshToken without ever calling RevokeFamily).
+	revokeFamilyCalls int
+	// lastRevokeReason is the reason passed to the most recent RevokeFamily call,
+	// so a test can assert the pre-check routes through RevokeReasonReplay rather
+	// than the generic client-revocation reason.
+	lastRevokeReason RevokeReason
 }
 
 func newFakeStore() *fakeStore {
@@ -275,8 +284,12 @@ func (f *fakeStore) RefreshToken(_ context.Context, lookup Lookup) (RefreshToken
 		return RefreshToken{}, ErrTokenRevoked
 	}
 	// A consumed token is returned rather than refused: reuse is RotateRefreshToken's
-	// to detect, so that the family dies in the same transaction.
-	return entry.token, nil
+	// to detect, so that the family dies in the same transaction. Consumed is
+	// still reported on the record, so a caller with a reason to look before that
+	// transaction (an expired presented token) can.
+	token := entry.token
+	token.Consumed = entry.consumed
+	return token, nil
 }
 
 // RotateRefreshToken is the atomic step the whole rotation scheme rests on. A
@@ -306,9 +319,11 @@ func (f *fakeStore) RotateRefreshToken(
 	return nil
 }
 
-func (f *fakeStore) RevokeFamily(_ context.Context, family FamilyID) error {
+func (f *fakeStore) RevokeFamily(_ context.Context, family FamilyID, reason RevokeReason) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.revokeFamilyCalls++
+	f.lastRevokeReason = reason
 	if err := f.fail("RevokeFamily"); err != nil {
 		return err
 	}

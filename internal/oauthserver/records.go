@@ -144,6 +144,23 @@ func (c AuthorizationCode) String() string {
 // GoString satisfies the %#v verb with the same rendering.
 func (c AuthorizationCode) GoString() string { return c.String() }
 
+// A RevokeReason says why TokenStore.RevokeFamily is being called, so a storage
+// adapter can record the same audit-trail vocabulary its own transactional reuse
+// path already uses, without this package depending on a storage-specific string.
+type RevokeReason int
+
+const (
+	// RevokeReasonClient is an RFC 7009 client-initiated revocation, or any other
+	// revocation that is not a detected refresh-token replay.
+	RevokeReasonClient RevokeReason = iota + 1
+	// RevokeReasonReplay is refreshGrant's own pre-check revoking a family whose
+	// presented refresh token was found already consumed and past its own
+	// expiry. It must record the same reason the transactional
+	// RotateRefreshToken reuse path does, because both are the same underlying
+	// event: a refresh token was replayed.
+	RevokeReasonReplay
+)
+
 // A FamilyID names one refresh token family: the chain of rotations descending
 // from a single authorization. It is an opaque random identifier rather than a
 // secret, because it is only ever a key for revocation.
@@ -200,6 +217,13 @@ type RefreshToken struct {
 	Generation uint64
 	IssuedAt   time.Time
 	ExpiresAt  time.Time
+	// Consumed reports whether this refresh token has already been rotated away.
+	// Reuse detection normally lives in RotateRefreshToken alone, where the family
+	// dies in the same transaction that detects the replay; this field extends
+	// that detection to a presented token whose OWN expiry would otherwise let a
+	// consumed-and-expired replay slip past refreshGrant before the transactional
+	// check is ever reached.
+	Consumed bool
 }
 
 // IsExpired reports whether the token is past its expiry at now.

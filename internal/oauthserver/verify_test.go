@@ -64,7 +64,7 @@ func TestVerifyAccessTokenRefusesARevokedFamily(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading the access token: %v", err)
 	}
-	if err := h.store.RevokeFamily(context.Background(), stored.Family); err != nil {
+	if err := h.store.RevokeFamily(context.Background(), stored.Family, RevokeReasonClient); err != nil {
 		t.Fatalf("RevokeFamily: %v", err)
 	}
 
