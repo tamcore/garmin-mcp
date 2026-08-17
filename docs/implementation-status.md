@@ -34,6 +34,7 @@ commit subjects, and this table is the durable record.
 | `v0.0.1` | published | First release. The pipeline itself was the point, and it found one real defect: the `signs` block still used cosign v2 flags while the pinned installer had moved to v3, which no gate could have caught because keyless signing cannot run outside a release job. |
 | `v0.0.2` | published | A confidential OAuth client may now supply its secret digest inline through `secret-hash`, not only through `secret-hash-file`. The file form cannot be satisfied by a Kubernetes projected Secret volume at all: its keys are symlinks, which the hardened file layer refuses before it even reaches the owner-only mode check, so no mode or `fsGroup` setting can fix it. Also: a public client carrying a digest is now refused in the composition root rather than silently ignored, and a batch of documentation that contradicted the build was corrected — the tool counts, the resource status, the health and readiness probes, the scheduled cleanup, and the destructive-confirmation shape a client actually receives. |
 | `v0.0.3` | published | The state directory can no longer be a Kubernetes volume mount root, because a mount root is owned by uid 0 and `chmod` needs ownership; `restrict` now verifies instead of chmodding when the mode is already exactly right, the permission-denied error names the remedy, and the supported subdirectory shape is documented. Also: the `master-key-file` example dropped, since that setting names a directory and the default is already correct, and the refresh-failure documentation now enumerates all three refusal descriptions. |
+| `v0.0.4` | tagged from this commit | Refresh-token reuse is detected regardless of the presented token's own expiry. Previously the grant refused an expired token before reaching the transaction that detects reuse, so replaying a consumed-and-expired token revoked nothing while a later generation of its family was still live — the theft signal was discarded. Consumed rows are now retained while their family is live, bounded to the most recent 200 generations so growth stays bounded; the revocation is filed under the reuse reason rather than a generic one, and an unrecognised reason is an error rather than a default; and one clock read serves both checks, so a token live at the first and expired at the second can no longer escape detection. |
 
 ## Measured coverage
 
@@ -1154,21 +1155,73 @@ without a principal, and the only construction site reads the principal from the
 request context; write and destructive gating holds, including on stdio where the
 scope source is empty by construction; path traversal is impossible rather than
 merely unused, since the tool, resource and transport packages contain no
-filesystem calls at all; and key rotation cannot strand a record.
+filesystem calls at all; and key rotation cannot strand a record. Refresh-token
+reuse detection is now bounded by the family's lifetime rather than by the
+presented token's own expiry: `oauthserver.RefreshToken` carries a `Consumed`
+field, populated from the row's `consumed_at` column by `internal/oauthstore`, and
+`refreshGrant` checks it before the expiry check, so a consumed token replayed
+after its own expiry revokes the whole family through the same `RevokeFamily` call
+every other revocation path uses, instead of being waved through as merely
+expired. The in-transaction detection inside `RotateRefreshToken` is unchanged and
+still the only path for a replay of a still-live consumed token, which keeps that
+case atomic against a concurrent refresher.
+
+An adversarial review of that pre-check found seven problems, all fixed. The
+cleanup sweep in `internal/store/sqlite_cleanup.go` used to remove a consumed
+refresh row as soon as it expired, regardless of whether its family was still
+live, which meant the pre-check above only worked until the next cleanup tick; the
+retention predicate now keeps a consumed row for as long as its family holds
+anything that is not itself expired or revoked, proven against the real
+SQLite-backed store as well as the fake. A failed `RevokeFamily` call in the
+pre-check used to be folded into the cause with `%v`, which broke `errors.Is`; it
+is now wrapped with `%w`, so the failure is recoverable upstream even though the
+client's answer is deliberately unchanged. The pre-check used to read the clock
+twice, once for its own consumed-and-expired judgement and again for the plain
+expiry check, which let a token that was live at the first read and expired by the
+second slip onto the plain-expiry path instead of being caught as reuse; both
+checks now share one captured `now`. The pre-check's revocation used to be filed
+under the generic `authorization_revoked` audit reason instead of
+`refresh_token_reuse`, which discarded the theft signal the whole mechanism exists
+to preserve; `TokenStore.RevokeFamily` now takes an explicit `RevokeReason` and the
+pre-check passes `RevokeReasonReplay`. And `TestConcurrentRefreshesOfOneLiveTokenMintExactlyOnePair`
+was renamed to `TestConcurrentRefreshGrantCallsStillProduceExactlyOneWinner`, with a
+comment pointing at `internal/oauthstore/race_test.go`'s
+`TestRotateRefreshTokenElectsOneWinnerAndKillsTheFamily` for the real atomicity
+proof, because the fake-store version never proved storage-layer atomicity in the
+first place.
+
+A second, adversarial review pass of that same fix found four more problems, all
+fixed. The retention the first pass added — keep a consumed row past its own
+expiry while its family is live — had no bound of its own: a continuously
+rotating client renews its family's liveness on every refresh, so every past
+generation was retained for as long as the client kept refreshing, which is
+unbounded per-family growth (roughly 8,760 rows a year at an hourly refresh
+cadence). `deleteExpiredTokens` now additionally requires the row to be within
+the family's most recent 200 generations (`retainedConsumedGenerations` in
+`internal/store/sqlite_cleanup.go`), so retention past a row's own expiry is
+capped at 200 extra rows per live family regardless of how long or how often it
+rotates; `docs/operations.md`'s cleanup section and the reuse-detection bullets
+under "What a client author must know about strict rotation" now state the actual
+bound instead of claiming unqualified bounded growth. Second,
+`oauthstore.reasonFor` used to map any `RevokeReason` it did not recognize —
+including the zero value — onto `authorization_revoked`, silently mislabeling the
+audit trail for a future enum member; it now returns an error for anything but
+the two known reasons, and `RevokeFamily` refuses before touching the store, so a
+rejected reason can never both fail loudly and still revoke. Third, no test
+asserted that the consumed-and-expired pre-check in `refreshGrant` passes
+`RevokeReasonReplay` rather than the generic `RevokeReasonClient`; the fake
+store's `lastRevokeReason` was already recorded but never checked, so mutating
+that one argument passed every test. Fourth,
+`TestRefreshRevocationFailureStillReportsInvalidGrantButIsRecoverable` checked
+the error code and description but not the HTTP status, so a mutant that kept
+both and returned 500 instead of 400 survived — and a 500 there is exactly how a
+caller could detect that its replay failed to take effect, which
+`invalid_grant`'s constant-response guarantee exists to prevent. All four are
+covered by tests that fail against the reviewed mutant and pass against the
+fix.
 
 **Still open, none blocking, in the order I would take them:**
 
-- Refresh-token reuse detection is bounded by the presented token's own expiry
-  rather than by the family's lifetime. `refreshGrant` returns `invalid_grant` for
-  expiry at `internal/oauthserver/refreshgrant.go:33`, before `issueTokens` reaches
-  the store transaction where reuse is detected and the family revoked. A consumed
-  token replayed after its own expiry is therefore answered as expired and revokes
-  nothing, even when a later generation of that family is still live. No privilege
-  is gained — the replayed token is not accepted either way — but a theft signal is
-  discarded, and `docs/operations.md` had claimed every presentation of a consumed
-  token revokes the family. The fix is to detect reuse before expiry, which needs
-  the consumed state to be visible to the grant rather than only inside the rotation
-  transaction; `oauthserver.RefreshToken` carries no consumed field today.
 - `/authorize` and both credential-form routes are mounted OUTSIDE the rate-limit
   gate that covers the token, revocation and metadata endpoints, and the login
   session registry refuses at 256 rather than evicting. 256 unauthenticated

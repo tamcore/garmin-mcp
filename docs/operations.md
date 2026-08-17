@@ -704,9 +704,28 @@ today.
 | Consent record | no expiry; it lives until revoked |
 
 Refresh tokens rotate on every use. Presenting a refresh token that was already
-consumed counts as reuse and revokes the whole family inside the detecting
-transaction; the client sees `invalid_grant`. A refresh can never widen scope,
-change resource, or cross clients.
+consumed counts as reuse and revokes the whole family; the client sees
+`invalid_grant`. A refresh can never widen scope, change resource, or cross
+clients.
+
+Revocation happens on two paths, and only one of them is inside the transaction
+that detects the reuse. A replay of a still-live consumed token is caught by
+`RotateRefreshToken`, which revokes the family in the same transaction that finds
+it. A replay of a consumed token that has itself already expired is caught earlier,
+by a read-time pre-check in `refreshGrant`; that check revokes the family through a
+separate call, after the read, not inside a shared transaction with it. Both are
+detected and both revoke the same way from the client's point of view, and cleanup
+retains a consumed row past its own expiry while its family holds anything else
+that is not itself expired or revoked, **and** the row is within the family's most
+recent 200 generations, so the pre-check's row ordinarily survives until the family
+it needs it for is genuinely dead. That retention is capped, not open-ended — see
+"The cleanup job" below. A family that rotates past 200 generations sweeps its own
+oldest consumed rows out from under the pre-check; a replay of one of those older,
+already-swept generations is then refused as an unknown token instead of going
+through the reuse path, which still refuses the request (nothing is issued) but no
+longer revokes the family through this check. That only affects a family both more
+than 200 rotations old and replayed with a generation that old — a shape no
+legitimate client produces.
 
 #### What a client author must know about strict rotation
 
@@ -754,12 +773,21 @@ so the whole contract is stated here.
   exactly why the description is prose and not a contract. Treat every
   `invalid_grant` on a refresh as reauthorization required and do not parse the
   description.
-- **Reuse detection is bounded by the presented token's own expiry, not by the
-  family's lifetime.** A consumed token replayed after its own expiry is answered
-  as expired and does **not** revoke the family, even when a later generation is
-  still live. That is weaker than the paragraph above implies and it loses a theft
-  signal; it is a known defect, recorded in `docs/implementation-status.md`, and the
-  reuse check is to be moved ahead of the expiry check.
+- **Reuse detection does not stop at the presented token's own expiry, but it is
+  not unbounded either.** A consumed token replayed after its own expiry still
+  revokes the family, exactly as a replay of a still-live consumed token does: the
+  server checks whether the presented token was already consumed *before* it
+  checks whether that token has expired, so an old, rotated-away token cannot
+  outrun the reuse check merely by outliving its own lifetime — **as long as the
+  row still exists.** A consumed row survives, past its own expiry, for as long as
+  its family is live and it is within the family's most recent 200 generations
+  (see "The cleanup job"); a replay older than that is refused as an unknown token
+  rather than detected as reuse, because the row is gone by then. The description
+  is the same "The refresh token is no longer valid." for every replay the row is
+  still around to catch — the client cannot distinguish "consumed and expired"
+  from "consumed and still live" — and a merely expired token that was never
+  consumed is unaffected: it is still answered "The refresh token has expired."
+  and does not revoke anything.
 
 **Why there is no grace window.** The obvious accommodation — remember the previous
 generation briefly and treat a replay of it as a legitimate rotation — cannot be
@@ -798,6 +826,21 @@ with no tokens left. A revoked token row is kept for 24 hours past its expiry so
 a revocation can still be investigated. Consents are never removed by cleanup.
 The default bound is 500 rows per table per call, the maximum is 5000, and the
 returned counts say whether another pass is needed.
+
+A consumed refresh token row (one already rotated away) is kept past its own
+expiry when its family is still live — holds some other token that is neither
+expired nor revoked — **and** the row is among that family's most recent 200
+generations. Both conditions are required: a live family alone is not a bound,
+because a client that keeps refreshing renews its family's liveness on every
+call, and without the generation cap that would retain every past generation for
+as long as the client kept refreshing — for an hourly refresh cadence, on the
+order of 8,760 rows per family per year, unbounded growth for an authenticated
+client. The 200-generation cap turns that into a fixed per-family overhead
+instead: at most 200 extra rows, however long or however often the family
+refreshes. This retention exists so a replay of an old, already-rotated refresh
+token is still caught and revokes the family (see "What a client author must know
+about strict rotation"); once a row falls outside the 200-generation window, or
+its family has died, it sweeps like any other expired row.
 
 **A remote deployment schedules it for you.** `serve` builds a cleaner and runs
 it on a ticker for the life of the process: every 15 minutes, at most 4 passes per
