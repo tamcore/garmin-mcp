@@ -43,6 +43,17 @@ func ParseDate(value string) (Date, error) {
 	if day.Format(DateLayout) != trimmed {
 		return Date{}, validationError("date must be a real YYYY-MM-DD calendar date")
 	}
+	// The zero time.Time is this type's "unset" sentinel, and it is exactly
+	// 0001-01-01 UTC. Accepting that date would return a Date that reports itself
+	// unset: String would be "", IsZero would be true, and DateRange.Contains
+	// would silently drop the day rather than place it. A fuzz target caught this
+	// (ParseDate succeeded but did not round-trip), and refusing at the boundary
+	// keeps the sentinel unambiguous. No Garmin record carries year 1, so nothing
+	// real is rejected.
+	if day.IsZero() {
+		return Date{}, validationError(
+			"date must not be 0001-01-01, which this package reserves as the unset date")
+	}
 	return Date{day: day}, nil
 }
 
@@ -58,9 +69,14 @@ func NewCalendarDay(instant time.Time) Date {
 	if instant.IsZero() {
 		return Date{}
 	}
-	return Date{day: time.Date(
-		instant.Year(), instant.Month(), instant.Day(), 0, 0, 0, 0, time.UTC,
-	)}
+	day := time.Date(instant.Year(), instant.Month(), instant.Day(), 0, 0, 0, 0, time.UTC)
+	if day.IsZero() {
+		// Truncating a year-1 instant to midnight lands exactly on the unset
+		// sentinel; see ParseDate. Report unset rather than a Date that lies
+		// about being set.
+		return Date{}
+	}
+	return Date{day: day}
 }
 
 // NewDate takes the UTC calendar day of instant. A zero instant yields the zero
@@ -70,7 +86,11 @@ func NewDate(instant time.Time) Date {
 		return Date{}
 	}
 	utc := instant.UTC()
-	return Date{day: time.Date(utc.Year(), utc.Month(), utc.Day(), 0, 0, 0, 0, time.UTC)}
+	day := time.Date(utc.Year(), utc.Month(), utc.Day(), 0, 0, 0, 0, time.UTC)
+	if day.IsZero() {
+		return Date{}
+	}
+	return Date{day: day}
 }
 
 // IsZero reports whether the date is unset.
