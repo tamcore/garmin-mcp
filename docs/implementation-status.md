@@ -1118,6 +1118,81 @@ release that knows `2026-07-28` **and** accepts a credential on the server leg.
 
 These are deliberate and tracked, not silently dropped.
 
+### The Phase 6 security review ran, and these findings are still open
+
+The final security review is **done**. It read the three boundaries against the
+code rather than against the claims, and its three release blockers plus five more
+findings are fixed: the refresh grant that advertised a narrowed scope while
+persisting the wide one, `X-Forwarded-For` read client-most so a caller chose the
+rate limiter's key, the credentials page promising the email was not written to
+disk, the missing panic barrier, the inert `max-response-bytes`, the principal that
+could be silently rebound to another Garmin account, and the SQLite temp store
+spilling to a path the read-only container cannot write.
+
+What it verified as holding is worth as much as what it found, because these are
+the properties an operator is trusting: the MCP access token cannot reach Garmin
+(the outbound request type has no header field at all, so no tool can inject one);
+the Garmin DI token cannot reach an MCP client (`internal/tools` and
+`internal/resources` do not import the auth, store or crypto packages, and the
+response type retains no headers, so a Garmin `Set-Cookie` cannot ride out in a
+tool result); credentials cannot become tool arguments (no login tool exists and
+none of the 142 tools has a credential-shaped field); tenant isolation holds
+structurally, because every outbound path needs a session that cannot be built
+without a principal, and the only construction site reads the principal from the
+request context; write and destructive gating holds, including on stdio where the
+scope source is empty by construction; path traversal is impossible rather than
+merely unused, since the tool, resource and transport packages contain no
+filesystem calls at all; and key rotation cannot strand a record.
+
+**Still open, none blocking, in the order I would take them:**
+
+- `/authorize` and both credential-form routes are mounted OUTSIDE the rate-limit
+  gate that covers the token, revocation and metadata endpoints, and the login
+  session registry refuses at 256 rather than evicting. 256 unauthenticated
+  `GET /authorize` calls therefore deny every user's login for the transaction TTL,
+  repeatably. Separately there is no per-IP login-attempt limit at all — the only
+  budget is per-transaction and resets with each new one — so password guessing
+  through this server is unthrottled on that side, with the operator's egress IP
+  absorbing Garmin's response. `docs/threat-model.md` lists "login attempts must be
+  limited per IP" as a **must** and it appears in neither the landed nor the
+  not-landed list.
+- `walkPages` (`internal/garmin/api/activities.go`) exits only when a page comes
+  back short, so a Garmin response that ignores the requested `limit` and returns a
+  full page every time walks all 100 pages accumulating into one slice with no
+  total ceiling. The sibling walk in `challenges.go` names this exact attack,
+  enforces a cap inside the loop, and has a test for it.
+- The refresh grant never re-checks the client's CURRENT registration, so removing
+  a scope from a client leaves existing families minting tokens with it for the
+  full 30-day refresh lifetime. In the same area: withdrawing a redirect URI or
+  flipping a client to public revokes no family and no consent, and a replayed
+  authorization code is refused without revoking the family already minted from it
+  (RFC 6749 §4.1.2 SHOULD).
+- The pre-registered client secret is compared against an unsalted single-round
+  SHA-256 digest with no entropy floor on the secret behind it. The comparison is
+  constant time and a public client cannot present a secret, so this is about what
+  a leaked digest file or backup is worth offline.
+- TLS certificates are loaded once into `tls.Config.Certificates` with no
+  `GetCertificate` callback, so a cert-manager rotation is never picked up and the
+  pods serve the expired leaf until restarted, with no signal.
+- `hasTransportProtection` counts a non-empty `trusted-proxy-cidrs` as transport
+  protection, so a cleartext `0.0.0.0` bind is accepted with no override when one
+  CIDR is listed — and nothing enforces that connections actually come from those
+  CIDRs. On a flat pod network every workload can reach the listener in cleartext.
+  The gate is a declaration, not a control.
+- Test seams weaker than they read: `oauthserver`'s fake store honoured the scope
+  contract the real adapter broke, which is why nothing caught the blocker above;
+  `config`'s credential-field guards match on field NAMES and do not descend into
+  `config.OAuthClient`, so adding a `Password` field there is invisible to both;
+  and one remote test proves the no-fallback half of "the principal comes only from
+  a verified token" without ever presenting a forged token.
+
+Two smaller ones recorded so they are not rediscovered: `internal/loginweb`'s
+`dropCredentials` clears its locals but not `r.PostForm`, which still holds the
+password; and `client.Number`/`client.Text` accept `"NaN"` and `"Inf"` as present
+values, so a tool returns a `json: unsupported value` marshal error instead of a
+sanitized refusal — which is the opposite of what that package's own fuzz target
+asserts.
+
 ### Deliberate deviations from the upstream contract
 
 Each of these is also recorded in `docs/parity.md` and in the ADR 0006 register.
@@ -1520,9 +1595,17 @@ equivalence that was never verified.
 ## Next task
 
 The tool surface is finished: 137 of 138 manifest tools and all 5 resources, with
-the one refusal documented. Phase 5 is closed. What follows is not breadth.
+the one refusal documented. Phase 5 is closed, and every numbered item below is now
+closed too — they are kept struck through rather than deleted so the reasoning
+survives.
 
-In order:
+**What is actually next** is the open-findings list in "The Phase 6 security review
+ran" under Known gaps. Nothing there blocks a release. In rough order of value:
+`/authorize` outside the rate-limit gate together with the absent per-IP login
+limit, then `walkPages`' missing total ceiling, then the OAuth lifecycle gaps
+(client re-check on refresh, redirect-URI withdrawal, code-replay revocation).
+
+The closed items, in the order they were taken:
 
 1. ~~A store-level key-rotation driver.~~ **Landed.** `garmin-mcp rotate-key`
    re-seals every sealed record in both backends, resumably and without
@@ -1534,14 +1617,21 @@ In order:
    hand-corrected manifests that does not exist. The pin/manifest coupling is
    enforced by a test instead, which catches the failure a pin bump actually has.
    See `docs/parity.md`.
-3. **The `remoteLogin.bind` half-write.** `resolve` creates a principal and links
-   a Garmin account durably before `commit` stores the token set, so any commit
-   failure leaves a linked principal with no tokens. It self-heals on retry, which
-   is why it is recorded rather than treated as a blocker. The fix is one
-   transaction spanning principal creation, account linkage and the token write;
-   reversing the call order cannot work, because the token row requires the
-   principal.
-4. **The final security review**, last, once the above are in.
+3. ~~The `remoteLogin.bind` half-write.~~ **Fixed.** `store.BindGarminAccount`
+   resolves-or-creates the principal, links the account and saves the token set in
+   one transaction, and `internal/cmd` no longer orchestrates a multi-step durable
+   write. I had recorded this as self-healing on retry; that was only true of one of
+   its three cases — a linkage failure after the principal was created left an
+   unlinked principal durably claiming an email, and a concurrent same-account race
+   left a loser row that a retry never touched, because it resolves straight to the
+   winner. Those accumulated.
+
+4. ~~The final security review.~~ **Done.** Three release blockers and five more
+   findings are fixed; what it verified as holding, and the findings still open, are
+   in "The Phase 6 security review ran" under Known gaps. Nothing open is a blocker,
+   and the first two entries there are the ones with a real deployment consequence:
+   `/authorize` sits outside the rate-limit gate, and `walkPages` accumulates
+   without a ceiling.
 
 Explicitly **not** work, so that a cold agent does not go looking for it:
 
