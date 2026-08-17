@@ -48,7 +48,7 @@ func TestEveryRemoteResponseCarriesHSTSAndTheBrowserHeaders(t *testing.T) {
 	h := newRemote(t, &fakeAuthenticator{loginAttempt: remoteSucceeded()})
 	h.authorize()
 
-	for _, path := range []string{pathLogin, pathCredentials, "/nothing-here", "/login/style.css"} {
+	for _, path := range []string{pathLogin, pathCredentials, pathNothingHere, pathStylesheet} {
 		t.Run(path, func(t *testing.T) {
 			resp, _ := h.b.get(path)
 

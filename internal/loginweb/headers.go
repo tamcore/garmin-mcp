@@ -2,6 +2,7 @@ package loginweb
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -18,6 +19,43 @@ const contentSecurityPolicy = "default-src 'none'; " +
 	"form-action 'self'; " +
 	"base-uri 'none'; " +
 	"frame-ancestors 'none'"
+
+// redirectOrigin extracts the scheme, host and port from target — never the path,
+// query or fragment — reporting false if target does not parse into an absolute
+// URL with both. It is used only on a value the caller is about to redirect the
+// browser to, which by this point in every call site is the client's own
+// already-validated, registered redirect URI: never a request-supplied string.
+func redirectOrigin(target string) (string, bool) {
+	parsed, err := url.Parse(target)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", false
+	}
+	return parsed.Scheme + "://" + parsed.Host, true
+}
+
+// setOutboundRedirectCSP replaces the response's Content-Security-Policy with one
+// that additionally allows target's origin as a form-action destination, on top of
+// this origin. It must be called before the handler writes its status line — a
+// header set after that point is silently dropped.
+//
+// target must be the exact value the handler is about to redirect the browser to:
+// the client's already-validated, registered redirect URI, or a location built
+// from it. It is never read from the request. If target does not carry a usable
+// origin, the response keeps the unmodified constant policy rather than guessing:
+// a same-origin-only form-action is safe, merely non-functional for that redirect,
+// which is the failure this whole fix is closing, not one to reopen by widening
+// blindly.
+func setOutboundRedirectCSP(w http.ResponseWriter, target string) {
+	origin, ok := redirectOrigin(target)
+	if !ok {
+		return
+	}
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; "+
+		"style-src 'self'; "+
+		"form-action 'self' "+origin+"; "+
+		"base-uri 'none'; "+
+		"frame-ancestors 'none'")
+}
 
 // secureHeaders wraps next for the loopback profile.
 //

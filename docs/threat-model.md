@@ -307,6 +307,19 @@ authorization transaction that binds the capability to the client, the exact
 redirect URI, the resource and the PKCE challenge. The loopback profile is
 separate and separately tested.
 
+Every page's `form-action` is `'self'` only, with one narrow, load-bearing
+exception: the two responses that redirect the browser onward to a client's own
+redirect URI (the consent outcome, allow or deny, and an authorization refusal
+delivered by redirect) add that redirect URI's origin — scheme, host and port,
+never the path or query — to `form-action` for that one response. Chrome applies
+`form-action` to every hop of a form submission's redirect chain, not just the
+initial action, so without this addition the authorization-code flow could not
+complete in Chrome for any client. The added origin is read only from the
+transaction's already-validated, registered redirect URI, never from a
+request-supplied value, so the addition never widens the policy beyond the one
+client the browser is already being sent to. Every other response keeps the
+unmodified `form-action 'self'`.
+
 **`SameSite=Lax`, not `Strict`, is deliberate**: `Strict` is not sent on the
 cross-site top-level navigation that starts the flow, so the flow would break.
 

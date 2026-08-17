@@ -36,6 +36,8 @@ const (
 	pathCredentials = "/login/credentials"
 	pathMFA         = "/login/mfa"
 	pathConsent     = "/login/consent"
+	pathNothingHere = "/nothing-here"
+	pathStylesheet  = "/login/style.css"
 
 	fieldDecision = "decision"
 	decisionAllow = "allow"

@@ -150,6 +150,7 @@ func (s *RemoteServer) handleConsentSubmit(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	s.log(r.Context(), "the authorization transaction completed")
+	setOutboundRedirectCSP(w, completion.RedirectTo)
 	http.Redirect(w, r, completion.RedirectTo, http.StatusSeeOther)
 }
 
@@ -250,6 +251,7 @@ func (s *RemoteServer) refuseAuthorization(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if location := refusal.Location(); location != "" {
+		setOutboundRedirectCSP(w, location)
 		http.Redirect(w, r, location, http.StatusFound)
 		return
 	}

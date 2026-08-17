@@ -124,6 +124,13 @@ func TestARefusedAuthorizationIsDeliveredAsTheServerDecided(t *testing.T) {
 			if strings.Contains(body, "storage") {
 				t.Errorf("the refusal page leaks the internal cause:\n%s", body)
 			}
+
+			policy := resp.Header.Get("Content-Security-Policy")
+			if tc.wantHeader != "" {
+				assertFormAction(t, policy, "'self'", testRedirectOrigin)
+			} else if policy != "" {
+				assertFormAction(t, policy, "'self'")
+			}
 		})
 	}
 }
