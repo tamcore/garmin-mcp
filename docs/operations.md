@@ -358,6 +358,51 @@ Grant `garmin:write` and `garmin:destructive` only to a client that must have
 them, and remember that the operator flags `enable-write-tools` and
 `enable-destructive-tools` must be set as well. Neither half alone opens a tier.
 
+**What a client actually sees.** `tools/list` is not the full registered
+surface — it is narrowed, per request, to the tools the session's own scopes
+and this deployment's enablement would actually let it call. A model therefore
+never plans around a write or destructive tool it can only ever have refused;
+it is simply absent from the list, and the same `Decide` the call path runs is
+what removed it, not a separate guess. The shapes:
+
+| Deployment | Scopes presented | What `tools/list` shows |
+| --- | --- | --- |
+| stdio | none, by construction | read-only tools plus `server_info` only |
+| remote, `garmin:read`-only token | no tier scope | read-only tools plus `server_info` only |
+| remote, `garmin:write` granted, write tier enabled | `garmin:write` | read-only and write tools |
+| remote, `garmin:destructive` also granted, destructive tier also enabled, client declares elicitation | `garmin:write`, `garmin:destructive` | read-only, write, and destructive tools |
+| remote, `garmin:destructive` also granted, destructive tier also enabled, client declares **no** elicitation | `garmin:write`, `garmin:destructive` | read-only and write tools; destructive stays hidden |
+
+**A destructive tool is shown only to a client that could actually confirm
+it.** Passing the scope-and-enablement gate is not the whole call path: a
+destructive tool additionally requires the client to confirm through MCP
+elicitation, and that confirmation fails closed when the client declares no
+elicitation capability at all (`internal/mcpserver/confirm.go`'s
+`clientDeclaresElicitation`). `tools/list` applies that identical capability
+check, so a client holding `garmin:destructive` but no elicitation capability
+is never shown a destructive tool it could only ever have refused — the same
+principle that motivated narrowing `tools/list` in the first place, applied one
+gate deeper. Read-only and write tools never need confirmation, so this never
+narrows them.
+
+`server_info` answers "why is a tool missing" without a client having to infer
+it from an absence: it reports `enabledTiers` (this session's effective
+tiers — enablement, granted scope, AND the operator's tool allowlist/denylist,
+so a tier is only ever named here when at least one of its tools would
+actually pass `Decide`) and `grantedScopes` (the session's raw OAuth grant).
+`toolCount` is the total registered regardless of caller; `visibleToolCount`
+is how many `tools/list` returns for this session specifically, including the
+elicitation-capability narrowing above. Every returned tool also carries its
+policy tier in `_meta.tier`, so a client can read the tier off the wire tool
+object itself. `enabledTiers` does not report allowlist or denylist state
+directly — a client that needs to know *why* a tier or tool is narrowed reads
+`visibleToolCount` against `toolCount` and the tier lists it was told about out
+of band; `server_info` reports the effect of the filters, not their
+configuration. The filtered `tools/list` result itself carries `"cacheScope":
+"private"` rather than the wire default of `"public"`, because the result is
+caller-specific and a shared intermediary must not serve one caller's list to
+another.
+
 ### Public and confidential clients
 
 Prefer a **public** client where the client cannot keep a secret — a desktop or

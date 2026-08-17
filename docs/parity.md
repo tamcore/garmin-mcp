@@ -32,6 +32,27 @@ has a tool to refuse and the start-up tier validation covers them, and they are
 gated at call time on the intersection of operator enablement and a granted
 scope.
 
+**Registration is not the same as advertisement.** `tools/list` narrows this
+143-tool registry to what `policy.Decide` would actually allow the calling
+session: a stdio session sees only the read-only tier plus `server_info`; a
+remote session sees more only once the operator has enabled a higher tier *and*
+the caller's own token carries that tier's scope. The filter runs the identical
+`Decide` the call path uses — never a parallel classification — so a tool
+`tools/list` shows is always one `Decide` allows. For a destructive tool that is
+one gate short of "the same session could then call it end to end": calling it
+also needs the client to confirm through MCP elicitation, which fails closed
+when the client declares no elicitation capability at all, so `tools/list`
+additionally withholds a destructive tool from a client that declared none —
+the identical capability check `internal/mcpserver/confirm.go` applies at call
+time. Once that capability is declared, a tool `tools/list` shows is one the
+same session could actually call end to end. `server_info` reports the caller's
+effective tiers (a tier is named only when at least one of its tools would
+pass `Decide`, so it also reflects the operator's tool allowlist/denylist, not
+only enablement and scope), granted scopes, and how many tools it would see
+(`visibleToolCount`, narrowed by the same elicitation check), alongside the
+unfiltered registered total (`toolCount`). Each tool's `_meta.tier` on the wire
+names its policy tier. See `docs/operations.md` for the deployment-shape table.
+
 Per-tool status is the `Status` column of [Tools](#tools) below. The Go handler
 for each implemented tool is in
 [Implemented tools and their Go handlers](#implemented-tools-and-their-go-handlers),

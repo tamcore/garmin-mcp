@@ -8,7 +8,7 @@ Every stopping point updates this file in the same commit as the work it
 describes. Never mark an item done on the strength of a placeholder or
 `not implemented` handler.
 
-Last updated: 2026-08-17.
+Last updated: 2026-08-18.
 
 ## Phase status
 
@@ -35,6 +35,8 @@ commit subjects, and this table is the durable record.
 | `v0.0.2` | published | A confidential OAuth client may now supply its secret digest inline through `secret-hash`, not only through `secret-hash-file`. The file form cannot be satisfied by a Kubernetes projected Secret volume at all: its keys are symlinks, which the hardened file layer refuses before it even reaches the owner-only mode check, so no mode or `fsGroup` setting can fix it. Also: a public client carrying a digest is now refused in the composition root rather than silently ignored, and a batch of documentation that contradicted the build was corrected — the tool counts, the resource status, the health and readiness probes, the scheduled cleanup, and the destructive-confirmation shape a client actually receives. |
 | `v0.0.3` | published | The state directory can no longer be a Kubernetes volume mount root, because a mount root is owned by uid 0 and `chmod` needs ownership; `restrict` now verifies instead of chmodding when the mode is already exactly right, the permission-denied error names the remedy, and the supported subdirectory shape is documented. Also: the `master-key-file` example dropped, since that setting names a directory and the default is already correct, and the refresh-failure documentation now enumerates all three refusal descriptions. |
 | `v0.0.4` | published | Refresh-token reuse is detected regardless of the presented token's own expiry. Previously the grant refused an expired token before reaching the transaction that detects reuse, so replaying a consumed-and-expired token revoked nothing while a later generation of its family was still live — the theft signal was discarded. Consumed rows are now retained while their family is live, bounded to the most recent 200 generations so growth stays bounded; the revocation is filed under the reuse reason rather than a generic one, and an unrecognised reason is an error rather than a default; and one clock read serves both checks, so a token live at the first and expired at the second can no longer escape detection. |
+| unreleased | in progress | `tools/list` now returns a per-request view rather than the full 143-tool registry: a receiving middleware (`internal/mcpserver/middleware.go`'s `toolsListMiddleware`) filters the SDK's `ListToolsResult` to the tools `policy.Decide` would allow the calling session — the exact decision the `tools/call` gate applies, not a parallel tier classification — AND, for a destructive tool, to whether the caller declared the elicitation capability that same call path would need to confirm it (`clientDeclaresElicitation`, reused rather than re-tested). A client holding `garmin:destructive` but no elicitation capability is therefore never shown a destructive tool it could only ever have refused. The filtered result also carries `"cacheScope":"private"`, since it is caller-specific and the SDK's default `"public"` would let a shared intermediary serve one caller's list to another. Registration itself is unchanged; `compat/tools.json` and the manifest-pin tests still assert the full registered contract. `server_info` gains `enabledTiers` (this caller's effective tiers — a tier is named only when `policy.Decide` would allow at least one of its tools, so enablement, granted scope, AND the operator's tool allowlist/denylist all apply, keeping this number consistent with `visibleToolCount` rather than merely reflecting enablement-and-scope), `grantedScopes` (this caller's raw OAuth grant), and `visibleToolCount` (how many tools `tools/list` returns for this caller, narrowed by the same elicitation check); `toolCount` keeps its prior meaning, the unfiltered registered total. Each tool's `_meta.tier` on the wire names its policy tier (`mcp.Tool` embeds the SDK's `mcp.Meta`). New: `internal/policy`'s `Policy.EffectiveTiers` (now name-filter-aware) and `Policy.GrantedScopes`, both fail-closed on a scope-lookup error. Test coverage added: `internal/mcpserver/toolslist_test.go` now covers the elicitation-capability narrowing (both directions), the private cache scope, and a Streamable HTTP path with a real bearer-token-derived `ScopeSource` (`httpGrantScopes`) proving the filter reads scopes from the request context rather than a fixed value — the in-memory tests alone cannot catch a `Decide(context.Background(), ...)` regression, because their scope fakes are context-insensitive. `internal/tools`'s `newFullVisibilityHarness` now connects with an elicitation-capable client, and `TestRegisterAllRegistersExactlyTheDeclaredSurface` asserts the destructive tools are present, so the harness cannot silently stop covering that tier again. |
+| `v0.0.5` | tagged from this commit | `tools/list` now advertises only what the caller can actually call — the granted scopes intersected with the operator's enabled tiers, decided by the same `policy.Decide` the call path uses, plus the elicitation capability a destructive tool needs to be confirmable. The filtered result is marked privately cacheable, because it is caller-specific. `server_info` reports the effective tiers, the granted scopes and the visible tool count beside the registered total, and each tool carries its tier in `_meta`. |
 
 ## Measured coverage
 
@@ -54,21 +56,25 @@ the tag changes nothing.
 | `internal/identity` | 97.7% | |
 | `internal/loginweb` | 82.6% | |
 | `internal/mcplog` | 98.5% | |
-| `internal/mcpserver` | 89.0% | |
+| `internal/mcpserver` | 89.5% | |
 | `internal/notices` | 89.3% | |
 | `internal/oauthserver` | 92.4% | |
 | `internal/oauthstore` | 84.6% | |
-| `internal/policy` | 91.7% | |
+| `internal/policy` | 92.6% | |
 | `internal/ratelimit` | 95.7% | |
 | `internal/securefile` | 83.0% | |
 | `internal/store` | 83.8% | |
 | `internal/testkit` | 91.5% | |
 | `internal/tokenlink` | 80.0% | |
-| `internal/tools` | 85.8% | 85.8% |
+| `internal/tools` | 85.3% | 85.3% |
 | `migrations` | 100.0% | |
 
+`internal/mcpserver`, `internal/policy` and `internal/tools` were remeasured on
+2026-08-17 for the `tools/list` filtering work; every other row is still the
+2026-08-15 measurement.
+
 One package sits under the 80% review rule: `internal/cmd` at 74.3%.
-`internal/tools` left the list earlier and stands at 85.8%.
+`internal/tools` left the list earlier and stands at 85.3%.
 CI enforces a per-package floor with an explicit exception list, so a package
 that drops under the floor fails the build unless it is named there.
 
