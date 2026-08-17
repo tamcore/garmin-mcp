@@ -5,8 +5,9 @@
 **Implemented.** Both halves have landed. `internal/store` persists encrypted
 Garmin DI token sets through `FileStore` for the stdio deployment, and the
 migration-backed SQLite backend carries the whole multi-user record set. What
-remains open is operational rather than structural: backup and restore testing,
-and a store-level key-rotation driver. See the two lists in the Decision below.
+remains open is operational rather than structural: a store-level key-rotation
+driver. Backup and restore are the operator's responsibility and are documented
+rather than tested. See the two lists in the Decision below.
 
 ## Context
 
@@ -87,8 +88,11 @@ to add one.
 
 ### Still open
 
-- The forward-migration atomicity and backup/restore test plan. **No backup or
-  restore test exists.**
+- Forward-migration atomicity has no dedicated test. Backup and restore are
+  **out of scope by decision**: the database sits on an operator-controlled
+  volume, backing it up is the operator's job, and `docs/operations.md` carries
+  the procedure and the warning that the database and the key are two halves of
+  one backup.
 - A store-level key-rotation driver. Nothing re-seals existing records; see
   ADR 0005.
 - Cross-process compare-and-set is **not** provided by `FileStore`, which holds a

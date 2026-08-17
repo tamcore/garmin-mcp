@@ -382,7 +382,11 @@ verify. Inline token JSON
 is an explicitly insecure compatibility override and must be rejected in remote
 production mode. Deleting local tokens is unlinking, not remote revocation, and
 the documentation must state the difference. Encrypted-store tamper and wrong-key
-tests are required, together with backup and restore tests.
+tests are required. Backup and restore are **deliberately not tested here**: the
+database lives on an operator-controlled volume and backing it up is the
+operator's responsibility. `docs/operations.md` documents the procedure, including
+that the database and the master key are two halves of one backup and that a
+restore rolls consents back to the backup's moment.
 
 Landed: the envelope format, the AAD binding including the schema and CAS
 version, the owner-only key file with exclusive link-based install, the `0600` in
@@ -396,7 +400,8 @@ token JSON is refused unless explicitly enabled, and it now has exactly one
 caller.
 
 **Not landed:** no store re-seals existing records, so key rotation is a library
-capability and not an operator procedure; and there is no backup or restore test.
+capability and not an operator procedure. Backup and restore are out of scope by
+decision rather than missing — see above.
 `docs/operations.md` does exist, and its "Key management" section states the same
 limitation in an operator's terms — that a staged rotation is supported by
 `internal/cryptostore`, that nothing drives it, and that rotation should therefore

@@ -509,7 +509,7 @@ interrupted part-way.
 
 | Workflow | Jobs |
 |----------|------|
-| CI (`ci.yaml`) | `verify` (gofmt, `go mod tidy`, `go vet`, then `go vet` again for `GOOS=linux` and `darwin` so platform-specific files and their tests are type-checked), `dependency-review` (pull requests only, SHA-pinned, `fail-on-severity: low` and an explicit license allowlist), `lint` (golangci-lint plus `golangci-lint fmt --diff`), `test` (race, coverage profile, and the per-package coverage floor **enforced** against an explicit exception list in both directions), `test-fakegarmin` (race, coverage, and the declared-test assertion), `e2e` (race and the declared-test assertion), `fuzz-smoke` (every `Fuzz*` target for a bounded ten seconds, failing loudly when it discovers none), `reproducible-build` (two builds of `cmd/garmin-mcp`, each with its own `GOCACHE`, compared by hash), `vulncheck`, `build` (2 OS x 2 arch), `goreleaser` (`check` plus snapshot with `--skip=sign,sbom,docker`), `container` (build the image from a prepared context, then the hardening smoke test, then a start-up proof: the image runs nonroot with a read-only root filesystem and a mounted volume at `/data`, `/readyz` is polled until it reports ready rather than merely alive, the database and encryption key are checked to appear under the volume owner-only, and a read-only `/data` must make start-up fail promptly — every reserved docker exit status is rejected and the log must name a read-only filesystem, so a broken image cannot pass by failing for the wrong reason) |
+| CI (`ci.yaml`) | `verify` (gofmt, `go mod tidy`, `go vet`, then `go vet` again for `GOOS=linux` and `darwin` so platform-specific files and their tests are type-checked), `dependency-review` (pull requests only, SHA-pinned, `fail-on-severity: low` and an explicit license allowlist), `lint` (golangci-lint plus `golangci-lint fmt --diff`), `test` (race, coverage profile, and the per-package coverage floor **enforced** against an explicit exception list in both directions), `test-fakegarmin` (race, coverage, and the declared-test assertion), `e2e` (race and the declared-test assertion), `fuzz-smoke` (every `Fuzz*` target for a bounded ten seconds, failing loudly when it discovers none), `reproducible-build` (two builds of `cmd/garmin-mcp`, each with its own `GOCACHE`, compared by hash), `vulncheck`, `build` (2 OS x 2 arch), `goreleaser` (`check` plus snapshot with `--skip=sign,docker`), `container` (build the image from a prepared context, then the hardening smoke test, then a start-up proof: the image runs nonroot with a read-only root filesystem and a mounted volume at `/data`, `/readyz` is polled until it reports ready rather than merely alive, the database and encryption key are checked to appear under the volume owner-only, and a read-only `/data` must make start-up fail promptly — every reserved docker exit status is rejected and the log must name a read-only filesystem, so a broken image cannot pass by failing for the wrong reason) |
 | Release (`release.yaml`) | `v*` tags only. `gates` re-runs the whole CI workflow against the tagged commit, then `release` runs GoReleaser with the narrowest write permissions plus `id-token: write` for keyless cosign |
 
 Every third-party action is pinned to a full commit SHA with the intended
@@ -528,9 +528,10 @@ exception list checked in both directions — this paragraph claimed for some ti
 that it did not exist, which was simply wrong.
 
 An MCP conformance job is **not** on that list: the suite cannot score a domain
-server, and the evidence is in `docs/implementation-status.md` and ADR 0002. See
-the same status file for the current supply-chain coverage, which is checksum
-signing and archive SBOMs only.
+server, and the evidence is in `docs/implementation-status.md` and ADR 0002. Supply-chain coverage is
+**checksum signing only, by decision**: keyless cosign `sign-blob` over the
+checksum file. Container image signing, SBOMs and build provenance were configured
+and then deliberately removed — do not re-add them without being asked.
 
 ## Quality Gates [NOW]
 

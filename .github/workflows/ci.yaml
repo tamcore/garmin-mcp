@@ -443,7 +443,7 @@ jobs:
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: ${{ env.GORELEASER_VERSION }}
-          args: release --snapshot --clean --skip=sign,sbom,docker
+          args: release --snapshot --clean --skip=sign,docker
 
   container:
     name: Container build and hardening smoke test

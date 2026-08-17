@@ -80,8 +80,13 @@ those contracts and backlog the unrelated additions.
 ## Phase 6 — hardening and release
 
 Fuzzing, layered limits, operational endpoints, documentation, container image,
-GoReleaser, signing, SBOM, provenance, upgrade tests, and the final security
-review. Hardening named by a milestone gate belongs to that milestone, not here.
+GoReleaser, checksum signing, upgrade tests, and the final security review.
+Hardening named by a milestone gate belongs to that milestone, not here.
+
+Two items this phase once carried are **out of scope by decision**: SBOMs and
+build provenance attestation (checksum signing stays), and backup/restore
+testing — the database sits on an operator-controlled volume and backing it up is
+the operator's job, documented in `docs/operations.md` rather than tested here.
 
 ## Milestone mapping
 

@@ -536,11 +536,14 @@ that drops under the floor fails the build unless it is named there.
       `get_all_day_events`. No allowlist was preferred over it for the two event
       tools, because upstream curates no field of either document and no observed
       sample establishes one — an allowlist there would be invented, not sourced.
-- [ ] The remaining upstream breadth. 80 of the 138 manifest tools are
-      implemented and **no resource is**. Health and wellness, nutrition, weight
-      management, training, challenges, courses, women's health, data management,
-      the device surface beyond `get_devices`, and the gear reads are all still
-      unported. See `docs/parity.md` for the per-tool status.
+- [x] The remaining upstream breadth. **137 of the 138 manifest tools are
+      implemented and all 5 resources are served.** Health and wellness,
+      nutrition, weight management, training, challenges, courses, women's health,
+      data management, the device surface and the gear reads are all ported. The
+      single unimplemented row is `set_fit_download_dir`, a documented refusal
+      rather than remaining work. See `docs/parity.md` for the per-tool status.
+      This entry read "80 of the 138 … and no resource is" for a long time after
+      both halves were finished.
 
 Live Garmin validation: the opt-in `garminlive` layer exists and was run for
 real. See [The live layer](#the-live-layer) for what passed, what could not run,
@@ -566,7 +569,7 @@ and why.
 closed silently.
 
 - [x] The phase-0 login gate is closed with a recorded outcome. — GO, ADR 0001.
-- [ ] Native 0.3.10 login, MFA continuation, DI exchange, refresh with rotation,
+- [x] Native 0.3.10 login, MFA continuation, DI exchange, refresh with rotation,
       `.com`/`.cn` host selection, and the full failure classification pass
       against the fake Garmin service.
       Done: login, MFA continuation, DI exchange over the candidate client IDs,
@@ -575,8 +578,9 @@ closed silently.
       rejected-OTP outcome, and explicit widget MFA code delivery, all under
       `-tags=fakegarmin`. **Not done: the `JWT_WEB` cookie fallback**, which was
       implemented and then deliberately removed — a credential this architecture
-      can never carry to a second call. The item stays unchecked for that reason
-      and the deviation is recorded below and in `docs/parity.md`.
+      can never carry to a second call. That is a recorded decision rather than
+      outstanding work, which is why this item is checked; the deviation is in
+      `docs/parity.md` and the ADR 0006 register.
 - [x] `garmin-mcp serve --transport=stdio` binds exactly one principal from
       process-local configuration, rejects ambiguous multi-account configuration,
       and keeps stdout reserved for MCP frames.
@@ -649,14 +653,16 @@ evidence, and the operations documentation, which is real remaining work.
 
 ## M3 — full Taxuspt parity
 
-- [ ] The generated parity matrix accounts for every tool and resource at the
+- [x] The generated parity matrix accounts for every tool and resource at the
       pinned Taxuspt commit. `docs/parity.md` carries per-tool status. **All 5
       resources are served**, and **137 of the 138 tools are implemented**. The
       single remaining row is `set_fit_download_dir`, a documented refusal rather
-      than remaining work, so no tool is outstanding.
-- [ ] Every required contract has passing name/schema/behavior tests, or a
-      documented exclusion with evidence. All 137 implemented tools do. The documented exclusions are in `docs/parity.md` and in the
-      ADR 0006 register.
+      than remaining work, so no tool is outstanding. What is still open is the
+      **regenerator**, not the matrix: the extractor scripts are not committed, so
+      drift against a new upstream pin cannot be diffed in CI.
+- [x] Every required contract has passing name/schema/behavior tests, or a
+      documented exclusion with evidence. All 137 implemented tools do. The
+      documented exclusions are in `docs/parity.md` and in the ADR 0006 register.
 - [x] 0.3.2 to 0.3.10 behavior differences affecting those contracts are
       reconciled and recorded. See `docs/upstream-pins.md`: **all 10** numbered
       requirements are landed. Explicit widget MFA code delivery was the last and
@@ -1258,43 +1264,21 @@ now configured; each is described below, and each carries an explicit note on
 what is proven locally versus what only a real tag push can prove. The MCP
 conformance job is not on this list: it is blocked upstream, not unstarted.
 
-- `.goreleaser.yaml` signs the checksum file (`signs: artifacts: checksum`,
-  keyless cosign `sign-blob`, unchanged) **and now also signs the pushed OCI
-  image** (`docker_signs: artifacts: all`, keyless cosign `sign`, same identity
-  model). `sboms:` now emits **both** archive SBOMs (`id: archive`) and
-  **per-binary SBOMs** (`id: binary`, one SPDX JSON document per built binary).
-  `goreleaser check` passes with this configuration, and a local snapshot
-  release (`goreleaser release --snapshot --clean --skip=sign,docker`, with
-  `syft` on `PATH`) was run and confirmed one archive SBOM and one binary SBOM
-  per build target, all valid SPDX JSON. **Unproven until a real tag release**:
-  that `docker_signs` actually signs the pushed image, since keyless signing
-  needs the release job's GitHub OIDC token and a real registry push, neither
-  of which a snapshot build exercises.
-  - GoReleaser cannot catalog a container image it pushed itself (the `sboms`
-    block's `artifacts` values are `source`, `package`, `archive`, `binary` and
-    `any`; there is no image target), so the **container image SBOM** is
-    generated outside GoReleaser: `.github/workflows/release.yaml`'s `release`
-    job resolves the pushed image's digest from the raw manifest bytes
-    (`docker buildx imagetools inspect --raw` piped through `sha256sum`, so the
-    digest matches whatever the registry actually serves), runs `syft` against
-    `image@digest` to produce an SPDX JSON document, then runs
-    `cosign attest --type spdxjson` to attach it to the image as a
-    keyless-signed in-toto attestation. This is the one place the brief allows
-    a hand-rolled step instead of a GoReleaser feature, because no GoReleaser
-    feature covers it. **Entirely unproven locally**: it needs a pushed image
-    to inspect and an OIDC token to sign with, so it can only run for real in
-    the `release` job against a real tag.
-  - **Build provenance attestation** uses `actions/attest-build-provenance`
-    (pinned by commit SHA, `4d101475d8b20a2381f78447822ac1eab6504dd8`, `v4.2.2`)
-    twice in the `release` job: once with `subject-path` globbing the
-    archives, checksum file, checksum signature and certificate, and both SBOM
-    families, and once with `subject-name`/`subject-digest` for the pushed
-    image (`push-to-registry: true`). The job's `permissions` gained
-    `attestations: write` alongside the existing `id-token: write`; the
-    top-level `permissions: contents: read` is untouched. **Entirely unproven
-    locally**: this action only functions inside a real GitHub Actions run with
-    a live OIDC token and the attestations API, so it cannot be exercised
-    outside CI at all, let alone outside a tagged release.
+- Supply-chain attestation beyond checksum signing is **out of scope by
+  decision**, not pending. `.goreleaser.yaml` signs the checksum file
+  (`signs: artifacts: checksum`, keyless cosign `sign-blob`) and that stays: it is
+  the minimal integrity guarantee, it needs no extra machinery, and a downloader
+  can verify an archive against it.
+
+  Container image signing, SBOMs of any kind, and build provenance attestation
+  were configured and then removed. They are not wanted here. The removal also
+  deletes their failure modes: every one of them could only ever run inside a
+  tagged release job with a live OIDC token, so none was verifiable before the
+  first real tag, and each was a step that could fail a publish part-way for
+  reasons unrelated to the artifact being correct. `--skip=sbom` is gone from the
+  CI snapshot invocation with them, and a local snapshot now produces exactly four
+  archives and no SBOM documents.
+
 - The CI unit job writes `cover.out` with `-covermode=atomic`, and the `test`
   job's coverage-floor step enforces the documented 80% rule per package,
   checked in both directions against the exception list. See
@@ -1357,8 +1341,14 @@ source.
 
 - Key rotation has no store-level driver and no operator procedure.
   `internal/cryptostore` proves staged rotation end to end, but no store re-seals
-  existing records and no command drives it. There is no `docs/operations.md`.
-- There is no backup or restore test for the SQLite database.
+  existing records and no command drives it. `docs/operations.md` exists and its
+  "Key management" section tells operators to treat rotation as unavailable, which
+  is the honest position until a driver lands.
+- Backup and restore are **out of scope by decision**: the database sits on an
+  operator-controlled volume and backing it up is the operator's job.
+  `docs/operations.md` carries the procedure, including that the database and the
+  master key are two halves of one backup and that a restore rolls consents back
+  to the backup's moment.
 - The record schema version is 2. A schema-1 record reports corruption rather
   than decoding, because its additional data does not match. No migration exists
   and none is needed: nothing has shipped. The next bump after a release carries
@@ -1511,27 +1501,47 @@ equivalence that was never verified.
 
 ## Next task
 
-Continue phase 5: port the next upstream domain, contract test first. Health and
-wellness (27 tools) and training (15 tools) are both done; 43 manifest tools
-remain unimplemented, and the largest remaining modules are nutrition,
-challenges and data management.
+The tool surface is finished: 137 of 138 manifest tools and all 5 resources, with
+the one refusal documented. Phase 5 is closed. What follows is not breadth.
 
-Scope, in order:
+In order:
 
-1. Add the `internal/garmin/api` read client for the chosen domain's endpoints,
-   with tolerant decoding, bounded responses and the existing page caps, and
-   cover it against the fake Garmin service.
-2. Register the tools for that domain, each with all four annotation hints, a
-   strict schema drawn from `compat/tools.json`, bounded results and sanitized
-   errors, and a name and schema snapshot test.
-3. Extend the `live/` sweep and its shape table in the **same commit** as the
-   registration. A slice that grows the tool surface without growing the sweep
-   leaves the surface unaudited, which has already happened once.
-4. Update `docs/parity.md` in the same commit, and record any deviation in the
-   ADR 0006 register rather than in a commit message.
+1. **A store-level key-rotation driver.** ADR 0005 records this as open, and it is
+   the last real implementation gap. `internal/cryptostore` proves a staged
+   rotation end to end, but no store re-seals existing records and no command
+   drives one, so `docs/operations.md` correctly tells operators to treat rotation
+   as unavailable. Re-sealing must be resumable, must not double-seal, and must
+   not lose a concurrent refresh's write — `garmin_token_sets` carries a version
+   column for CAS and that is where the interaction lives.
+2. **A Go parity regenerator plus a CI drift check.** `docs/parity.md` documents
+   the extraction algorithm but the scripts are not committed, so a new upstream
+   pin cannot be diffed. Nothing drifts today; the gap is that drift would be
+   invisible.
+3. **The `remoteLogin.bind` half-write.** `resolve` creates a principal and links
+   a Garmin account durably before `commit` stores the token set, so any commit
+   failure leaves a linked principal with no tokens. It self-heals on retry, which
+   is why it is recorded rather than treated as a blocker. The fix is one
+   transaction spanning principal creation, account linkage and the token write;
+   reversing the call order cannot work, because the token row requires the
+   principal.
+4. **The final security review**, last, once the above are in.
 
-One open item sits outside that slice and must not be forgotten: the operations
-documentation that M2 requires — remote deployment, reverse proxy and TLS,
-security assumptions, backup and restore, migrations, and key rotation. The MCP
-conformance requirement needs no work here; it is blocked upstream and the
-evidence is recorded above.
+Explicitly **not** work, so that a cold agent does not go looking for it:
+
+- MCP conformance is blocked upstream, not unstarted. ADR 0002 and the section
+  above carry the evidence.
+- The `JWT_WEB` cookie fallback is deliberately not ported.
+- Windows is deliberately unsupported.
+- Backup and restore are the operator's responsibility, documented in
+  `docs/operations.md` rather than tested here.
+- SBOMs, container image signing and build provenance were configured and then
+  removed by decision. Checksum signing stays.
+- `docs/operations.md` **exists** — eight sections, including remote deployment,
+  TLS, the database, key management, revocation, lifetimes, upgrades and the
+  limits. Several places in this file used to claim it did not.
+
+A note on reading this file at all: it has repeatedly said work was outstanding
+after that work was finished, and the checkbox state was wrong in three places at
+once while every one of those entries' own prose said "done". A cold agent resumes
+from `AGENTS.md` plus this file, so verify a claim against the repository before
+acting on it, and fix the line in the same commit as the work.

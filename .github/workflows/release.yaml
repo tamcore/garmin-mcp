@@ -21,7 +21,6 @@ concurrency:
 env:
   GORELEASER_VERSION: v2.17.1
   COSIGN_VERSION: v2.6.5
-  SYFT_VERSION: v1.51.0
 
 jobs:
   # Publishing is gated on the full CI matrix re-running against the tagged
@@ -39,8 +38,7 @@ jobs:
     permissions:
       contents: write # create the GitHub release and upload artifacts
       packages: write # push the OCI image to GHCR
-      id-token: write # keyless cosign signing and attestation signing via GitHub OIDC
-      attestations: write # upload build provenance attestations to the GH API
+      id-token: write # keyless cosign signing of the checksum file via GitHub OIDC
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,9 +50,6 @@ jobs:
 
       - name: Install cosign
         run: go install github.com/sigstore/cosign/v2/cmd/cosign@${{ env.COSIGN_VERSION }}
-
-      - name: Install syft
-        run: go install github.com/anchore/syft/cmd/syft@${{ env.SYFT_VERSION }}
 
       - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
@@ -73,55 +68,3 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # GoReleaser's own SBOM integration cannot catalog an image it just
-      # pushed itself (only source, package, archive and binary artifacts are
-      # cataloguable), so the container image SBOM is generated here instead,
-      # after dockers_v2 has pushed it. The digest is recomputed from the raw
-      # manifest bytes rather than parsed out of a buildx-specific struct, so
-      # it matches whatever the registry actually serves.
-      - name: Resolve pushed image digest
-        id: image
-        run: |
-          ref="ghcr.io/tamcore/garmin-mcp:${GITHUB_REF_NAME}"
-          digest="sha256:$(docker buildx imagetools inspect "${ref}" --raw | sha256sum | cut -d' ' -f1)"
-          echo "ref=${ref}" >>"${GITHUB_OUTPUT}"
-          echo "digest=${digest}" >>"${GITHUB_OUTPUT}"
-
-      - name: Generate container image SBOM
-        run: |
-          syft "${{ steps.image.outputs.ref }}@${{ steps.image.outputs.digest }}" \
-            -o "spdx-json=dist/garmin-mcp_image.spdx.json"
-
-      # Attaches the image SBOM to the image itself as a keyless-signed in-toto
-      # attestation, discoverable with `cosign verify-attestation`. Same
-      # identity model as docker_signs and the checksum signing above.
-      - name: Sign and attach container image SBOM
-        run: |
-          cosign attest --yes \
-            --type spdxjson \
-            --predicate dist/garmin-mcp_image.spdx.json \
-            "${{ steps.image.outputs.ref }}@${{ steps.image.outputs.digest }}"
-
-      # Build provenance for the file artifacts GoReleaser publishes: archives,
-      # checksums, checksum signature/certificate, and the archive and binary
-      # SBOMs.
-      - name: Attest build provenance for release artifacts
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: |
-            dist/*.tar.gz
-            dist/*.zip
-            dist/*_SHA256SUMS
-            dist/*_SHA256SUMS.sig
-            dist/*_SHA256SUMS.pem
-            dist/*.sbom.json
-
-      # Build provenance for the pushed image, attached to the registry
-      # alongside the SBOM attestation and the cosign signature above.
-      - name: Attest build provenance for the container image
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-name: ghcr.io/tamcore/garmin-mcp
-          subject-digest: ${{ steps.image.outputs.digest }}
-          push-to-registry: true
