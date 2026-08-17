@@ -65,6 +65,7 @@ const (
 	argCount      = "num_activities"
 	argWeeks      = "weeks"
 	argMetric     = "metric"
+	argCourseID   = "course_id"
 )
 
 // sweepDay is the calendar day every day-scoped tool is asked for. It is yesterday
@@ -108,6 +109,7 @@ func accountCalls(now time.Time) []sweepCall {
 		{tools.ToolGetUserSummary, map[string]any{argDate: day}},
 		{tools.ToolGetExerciseTypes, nil},
 		{tools.ToolGetWorkouts, nil},
+		{tools.ToolGetCourses, nil},
 		{tools.ToolGetScheduledWorkouts, window},
 		{tools.ToolGetTrainingPlanWorkouts, reference},
 		{tools.ToolGetGarminCoachWorkouts, reference},
@@ -266,6 +268,8 @@ func sweptTools() map[string]bool {
 	calls := slices.Concat(
 		accountCalls(time.Time{}), healthCalls(time.Time{}), activityCalls("1"),
 		trainingCalls(time.Time{}), nutritionCalls(time.Time{}), challengeCalls(),
+		deviceCalls(), deviceScopedCalls("1", "2024-01-01"),
+		womensHealthCalls(time.Time{}), weighInReadCalls(time.Time{}),
 	)
 	for _, call := range calls {
 		swept[call.tool] = true

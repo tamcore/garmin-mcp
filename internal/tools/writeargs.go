@@ -138,6 +138,26 @@ func parseText(field, value string, limit int) (string, error) {
 	return value, nil
 }
 
+// parseXMLDocument validates a caller-supplied XML document argument, such as
+// upload_course's gpx_content. It is parseText plus one allowance: \r is
+// accepted alongside \n and \t. A GPX file exported on Windows is
+// CRLF-terminated, and parseText's own control-character refusal — correct
+// for a free-text name or note, which has no reason to carry a line ending
+// at all — would otherwise refuse the majority of GPX files a caller is
+// likely to have on hand before a single byte reaches Garmin.
+func parseXMLDocument(field, value string, limit int) (string, error) {
+	if len(value) > limit {
+		return "", invalidArgument(
+			field + " must not exceed " + strconv.Itoa(limit) + " characters")
+	}
+	for _, r := range value {
+		if (r < 0x20 && r != '\n' && r != '\t' && r != '\r') || r == 0x7f {
+			return "", invalidArgument(field + " must not contain control characters")
+		}
+	}
+	return value, nil
+}
+
 // parseRequiredText is parseText for an argument that may not be empty.
 func parseRequiredText(field, value string, limit int) (string, error) {
 	text, err := parseText(field, value, limit)

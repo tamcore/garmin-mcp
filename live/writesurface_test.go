@@ -282,6 +282,14 @@ func exercisedWrites() []string {
 		tools.ToolUpsertAndLog,
 		tools.ToolDeleteFoodLog,
 		tools.ToolSetNutritionDailySettings,
+		tools.ToolAddWeighIn,
+		tools.ToolAddWeighInWithTimestamps,
+		tools.ToolDeleteWeighIns,
+		tools.ToolUploadCourse,
+		tools.ToolDeleteCourse,
+		tools.ToolAddBodyComposition,
+		tools.ToolSetBloodPressure,
+		tools.ToolAddHydrationData,
 	}
 }
 

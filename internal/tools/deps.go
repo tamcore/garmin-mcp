@@ -184,24 +184,28 @@ func (d Deps) validate() error {
 // after construction and safe for concurrent use: it holds no per-request state, and
 // the per-principal session is built fresh from the request context on every call.
 type service struct {
-	caller     client.Caller
-	now        func() time.Time
-	bounds     Bounds
-	limits     client.Limits
-	catalog    *api.ExerciseCatalog
-	profile    *api.Profile
-	activities *api.Activities
-	wellness   *api.Wellness
-	devices    *api.Devices
-	details    *api.ActivityDetails
-	challenges *api.Challenges
-	writes     *api.ActivityWrites
-	gear       *api.Gear
-	workouts   *api.Workouts
-	calendar   *api.Calendar
-	strength   *api.StrengthWrites
-	files      *api.ActivityFiles
-	nutrition  *api.Nutrition
+	caller         client.Caller
+	now            func() time.Time
+	bounds         Bounds
+	limits         client.Limits
+	catalog        *api.ExerciseCatalog
+	profile        *api.Profile
+	activities     *api.Activities
+	wellness       *api.Wellness
+	devices        *api.Devices
+	details        *api.ActivityDetails
+	challenges     *api.Challenges
+	writes         *api.ActivityWrites
+	gear           *api.Gear
+	workouts       *api.Workouts
+	calendar       *api.Calendar
+	strength       *api.StrengthWrites
+	files          *api.ActivityFiles
+	nutrition      *api.Nutrition
+	womensHealth   *api.WomensHealth
+	weight         *api.Weight
+	courses        *api.Courses
+	dataManagement *api.DataManagement
 }
 
 func newService(deps Deps) (*service, error) {
@@ -260,6 +264,15 @@ func (s *service) buildReadClients(rc *client.Client) error {
 	if s.challenges, err = api.NewChallenges(rc); err != nil {
 		return fmt.Errorf("building the challenges client: %w", err)
 	}
+	if s.womensHealth, err = api.NewWomensHealth(rc); err != nil {
+		return fmt.Errorf("building the women's-health client: %w", err)
+	}
+	if s.weight, err = api.NewWeight(rc); err != nil {
+		return fmt.Errorf("building the weight-management client: %w", err)
+	}
+	if s.courses, err = api.NewCourses(rc); err != nil {
+		return fmt.Errorf("building the course-management client: %w", err)
+	}
 	return nil
 }
 
@@ -279,6 +292,9 @@ func (s *service) buildWriteClients(rc *client.Client) error {
 	}
 	if s.nutrition, err = api.NewNutrition(rc); err != nil {
 		return fmt.Errorf("building the nutrition client: %w", err)
+	}
+	if s.dataManagement, err = api.NewDataManagement(rc); err != nil {
+		return fmt.Errorf("building the data-management client: %w", err)
 	}
 	return nil
 }

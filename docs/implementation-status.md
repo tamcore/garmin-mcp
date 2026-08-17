@@ -544,13 +544,11 @@ evidence, and the operations documentation, which is real remaining work.
 
 - [ ] The generated parity matrix accounts for every tool and resource at the
       pinned Taxuspt commit. `docs/parity.md` carries per-tool status. **All 5
-      resources are served**; 21 of the 138 tools are still `not-implemented`,
-      and one of those — `set_fit_download_dir` — is a documented refusal rather
-      than remaining work, so **20 tools remain**: devices (5), weight management
-      (5), courses (3), data management (3), women's health (3) and gear (1).
+      resources are served**, and **137 of the 138 tools are implemented**. The
+      single remaining row is `set_fit_download_dir`, a documented refusal rather
+      than remaining work, so no tool is outstanding.
 - [ ] Every required contract has passing name/schema/behavior tests, or a
-      documented exclusion with evidence. The implemented 117 do; the rest have no
-      handler yet. The documented exclusions are in `docs/parity.md` and in the
+      documented exclusion with evidence. All 137 implemented tools do. The documented exclusions are in `docs/parity.md` and in the
       ADR 0006 register.
 - [x] 0.3.2 to 0.3.10 behavior differences affecting those contracts are
       reconciled and recorded. See `docs/upstream-pins.md`: **all 10** numbered
@@ -717,9 +715,11 @@ the string form.
 
 ### The write half
 
-The write half drives **26 of the 27 write and destructive tools** against the
-real service. `upload_workout` is the one exclusion, and it is recorded rather
-than silent: `upload_workouts` sends the same document to the same endpoint
+The write half drives **every registered write and destructive tool but one**
+against the real service — 38 of the 39 as of 2026-08-17, and the count is
+deliberately not restated per slice, because an accounting test is what keeps it
+true and a number in prose is what goes stale. `upload_workout` is the one
+exclusion, and it is recorded rather than silent: `upload_workouts` sends the same document to the same endpoint
 through the same api-layer method and additionally proves the per-item reporting
 the single form has none of. An accounting test fails when a registered write or
 destructive tool is neither exercised nor excused with a reason, so this list

@@ -62,9 +62,10 @@ type mutation struct {
 // that, passes without any test being trusted to register anything, and why an
 // identifier Garmin named for some other object does not.
 type writeCaller struct {
-	inner client.Caller
-	owned *ownedObjects
-	foods *foodLedger
+	inner    client.Caller
+	owned    *ownedObjects
+	foods    *foodLedger
+	weighins *weighInLedger
 }
 
 // Do applies the guard and then dispatches.
@@ -75,6 +76,12 @@ func (c writeCaller) Do(
 		return c.inner.Do(ctx, principal, req)
 	}
 	if resp, err, handled := c.doNutrition(ctx, principal, req); handled {
+		return resp, err
+	}
+	if resp, err, handled := c.doWeighIn(ctx, principal, req); handled {
+		return resp, err
+	}
+	if resp, err, handled := c.doCourse(ctx, principal, req); handled {
 		return resp, err
 	}
 
@@ -232,8 +239,8 @@ func gearLinkActivity(path string) (int64, bool) {
 	return positiveID(parts[3])
 }
 
-// classifyDelete recognises the three removals: an activity, a workout template,
-// and one calendar entry.
+// classifyDelete recognises the four removals: an activity, a workout template,
+// one calendar entry, and a course.
 func classifyDelete(path string) (mutation, bool) {
 	if id, ok := idAfter(path, client.PathActivityPrefix); ok {
 		return mutation{needs: true, kind: kindActivity, id: id}, true
@@ -243,6 +250,9 @@ func classifyDelete(path string) (mutation, bool) {
 	}
 	if id, ok := idAfter(path, client.PathWorkoutSchedule); ok {
 		return mutation{needs: true, kind: kindSchedule, id: id}, true
+	}
+	if id, ok := idAfter(path, client.PathCourseBase); ok {
+		return mutation{needs: true, kind: kindCourse, id: id}, true
 	}
 	return mutation{}, false
 }

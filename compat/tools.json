@@ -81,8 +81,8 @@
   "counts": {
     "tools": 138,
     "byStatus": {
-      "implemented": 117,
-      "not-implemented": 21
+      "implemented": 137,
+      "not-implemented": 1
     },
     "byEffect": {
       "destructive": 8,
@@ -3158,7 +3158,7 @@
     },
     {
       "name": "get_courses",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/courses.py",
         "line": 173,
@@ -3216,10 +3216,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetCourses",
+        "file": "internal/tools/getcourses.go",
+        "registeredName": "get_courses"
       },
       "tests": {
         "unit": [],
@@ -3229,7 +3229,7 @@
     },
     {
       "name": "upload_course",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/courses.py",
         "line": 203,
@@ -3324,10 +3324,10 @@
         "Reads a GPX file from a caller-supplied local path before POSTing it to Garmin."
       ],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerUploadCourse",
+        "file": "internal/tools/coursesupload.go",
+        "registeredName": "upload_course"
       },
       "tests": {
         "unit": [],
@@ -3337,7 +3337,7 @@
     },
     {
       "name": "delete_course",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/courses.py",
         "line": 289,
@@ -3403,10 +3403,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerDeleteCourse",
+        "file": "internal/tools/coursedelete.go",
+        "registeredName": "delete_course"
       },
       "tests": {
         "unit": [],
@@ -3416,7 +3416,7 @@
     },
     {
       "name": "add_body_composition",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/data_management.py",
         "line": 22,
@@ -3538,10 +3538,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerAddBodyComposition",
+        "file": "internal/tools/bodycomposition.go",
+        "registeredName": "add_body_composition"
       },
       "tests": {
         "unit": [],
@@ -3551,7 +3551,7 @@
     },
     {
       "name": "set_blood_pressure",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/data_management.py",
         "line": 75,
@@ -3627,10 +3627,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerSetBloodPressure",
+        "file": "internal/tools/bloodpressure.go",
+        "registeredName": "set_blood_pressure"
       },
       "tests": {
         "unit": [],
@@ -3640,7 +3640,7 @@
     },
     {
       "name": "add_hydration_data",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/data_management.py",
         "line": 98,
@@ -3711,10 +3711,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerAddHydrationData",
+        "file": "internal/tools/hydration.go",
+        "registeredName": "add_hydration_data"
       },
       "tests": {
         "unit": [],
@@ -3794,7 +3794,7 @@
     },
     {
       "name": "get_device_last_used",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/devices.py",
         "line": 62,
@@ -3851,10 +3851,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetDeviceLastUsed",
+        "file": "internal/tools/get_device_last_used.go",
+        "registeredName": "get_device_last_used"
       },
       "tests": {
         "unit": [],
@@ -3864,7 +3864,7 @@
     },
     {
       "name": "get_device_settings",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/devices.py",
         "line": 95,
@@ -3939,10 +3939,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetDeviceSettings",
+        "file": "internal/tools/get_device_settings.go",
+        "registeredName": "get_device_settings"
       },
       "tests": {
         "unit": [],
@@ -3952,7 +3952,7 @@
     },
     {
       "name": "get_primary_training_device",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/devices.py",
         "line": 177,
@@ -4009,10 +4009,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetPrimaryTrainingDevice",
+        "file": "internal/tools/get_primary_training_device.go",
+        "registeredName": "get_primary_training_device"
       },
       "tests": {
         "unit": [],
@@ -4022,7 +4022,7 @@
     },
     {
       "name": "get_device_solar_data",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/devices.py",
         "line": 229,
@@ -4092,10 +4092,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetDeviceSolarData",
+        "file": "internal/tools/get_device_solar_data.go",
+        "registeredName": "get_device_solar_data"
       },
       "tests": {
         "unit": [],
@@ -4105,7 +4105,7 @@
     },
     {
       "name": "get_device_alarms",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/devices.py",
         "line": 279,
@@ -4168,10 +4168,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetDeviceAlarms",
+        "file": "internal/tools/get_device_alarms.go",
+        "registeredName": "get_device_alarms"
       },
       "tests": {
         "unit": [],
@@ -4181,7 +4181,7 @@
     },
     {
       "name": "get_gear",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/gear_management.py",
         "line": 42,
@@ -4269,10 +4269,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetGear",
+        "file": "internal/tools/get_gear.go",
+        "registeredName": "get_gear"
       },
       "tests": {
         "unit": [],
@@ -9621,7 +9621,7 @@
     },
     {
       "name": "get_weigh_ins",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/weight_management.py",
         "line": 22,
@@ -9688,10 +9688,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetWeighIns",
+        "file": "internal/tools/weighinreads.go",
+        "registeredName": "get_weigh_ins"
       },
       "tests": {
         "unit": [],
@@ -9701,7 +9701,7 @@
     },
     {
       "name": "get_daily_weigh_ins",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/weight_management.py",
         "line": 86,
@@ -9764,10 +9764,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetDailyWeighIns",
+        "file": "internal/tools/weighinreads.go",
+        "registeredName": "get_daily_weigh_ins"
       },
       "tests": {
         "unit": [],
@@ -9777,7 +9777,7 @@
     },
     {
       "name": "delete_weigh_ins",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/weight_management.py",
         "line": 136,
@@ -9851,10 +9851,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerDeleteWeighIns",
+        "file": "internal/tools/weighindelete.go",
+        "registeredName": "delete_weigh_ins"
       },
       "tests": {
         "unit": [],
@@ -9864,7 +9864,7 @@
     },
     {
       "name": "add_weigh_in",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/weight_management.py",
         "line": 156,
@@ -9936,10 +9936,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerAddWeighIn",
+        "file": "internal/tools/weighinwrites.go",
+        "registeredName": "add_weigh_in"
       },
       "tests": {
         "unit": [],
@@ -9949,7 +9949,7 @@
     },
     {
       "name": "add_weigh_in_with_timestamps",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/weight_management.py",
         "line": 176,
@@ -10031,10 +10031,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerAddWeighInWithTimestamps",
+        "file": "internal/tools/weighinwrites.go",
+        "registeredName": "add_weigh_in_with_timestamps"
       },
       "tests": {
         "unit": [],
@@ -10044,7 +10044,7 @@
     },
     {
       "name": "get_pregnancy_summary",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/womens_health.py",
         "line": 49,
@@ -10103,10 +10103,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetPregnancySummary",
+        "file": "internal/tools/get_pregnancy_summary.go",
+        "registeredName": "get_pregnancy_summary"
       },
       "tests": {
         "unit": [],
@@ -10116,7 +10116,7 @@
     },
     {
       "name": "get_menstrual_data_for_date",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/womens_health.py",
         "line": 60,
@@ -10181,10 +10181,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetMenstrualDataForDate",
+        "file": "internal/tools/get_menstrual_data_for_date.go",
+        "registeredName": "get_menstrual_data_for_date"
       },
       "tests": {
         "unit": [],
@@ -10194,7 +10194,7 @@
     },
     {
       "name": "get_menstrual_calendar_data",
-      "status": "not-implemented",
+      "status": "implemented",
       "upstream": {
         "module": "src/garmin_mcp/womens_health.py",
         "line": 75,
@@ -10265,10 +10265,10 @@
       "mcpAuthorizationRequired": true,
       "notes": [],
       "go": {
-        "package": "",
-        "handler": "",
-        "file": "",
-        "registeredName": ""
+        "package": "github.com/tamcore/garmin-mcp/internal/tools",
+        "handler": "registerGetMenstrualCalendarData",
+        "file": "internal/tools/get_menstrual_calendar_data.go",
+        "registeredName": "get_menstrual_calendar_data"
       },
       "tests": {
         "unit": [],

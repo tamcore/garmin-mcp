@@ -41,7 +41,7 @@ date.
 | `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the published exercise catalog with its compiled-in fallback, FIT activity decoding through `github.com/muktihari/fit`, the training scores, thresholds and trends, nutrition, challenges and badges, and the device inventory | 90.7% |
 | `internal/mcpserver` | Server, registry, stdio and Streamable HTTP transports, bearer middleware, session binding, origin and forwarded-header guards, elicitation confirmation, `server_info` | 89.3% |
 | `internal/resources` | The five constant MCP documents — four workout templates and the structure reference — with the manifest contract, the render, and the check that this server's own upload path accepts every template | 95.7% |
-| `internal/tools` | 122 registered tools — 86 read-only, 29 write, 7 destructive — with contracts snapshot-tested against `compat/tools.json` | 85.7% |
+| `internal/tools` | 142 registered tools — 98 read-only, 35 write, 9 destructive — the whole pinned manifest bar one documented refusal, with contracts snapshot-tested against `compat/tools.json` | 85.8% |
 | `internal/policy` | Three tiers, explicit name lists validated against the registered set at start-up, the enablement-and-scope intersection, confirmation requirement | 91.7% |
 | `internal/identity` | Principal type, request context, and the bearer resolver that takes the principal only from a verified token | 97.7% |
 | `internal/oauthserver` | The authorization server: PKCE S256 only, exact issuer and redirect matching, single-use bound codes, hashed opaque tokens, rotating refresh with family revocation, consent | 92.4% |
@@ -312,6 +312,24 @@ export GARMIN_LIVE_WRITE_ACK=i-accept-live-garmin-writes
 Acknowledging live *traffic* never acknowledges live *mutation*: the two values
 are separate on purpose, so a credential set that later points at a different
 account cannot start mutating it by inheriting one export.
+
+**Three further gates guard the writes that cannot be fully undone.** Each is
+separate, default off, and skips with a reason naming exactly what is at stake,
+because the write half's owned-objects-only rule cannot reach any of them:
+
+```sh
+# a per-day nutrition-goal override Garmin exposes no way to remove
+export GARMIN_LIVE_NUTRITION_SETTINGS_ACK=i-accept-live-nutrition-settings-override
+# delete_weigh_ins takes a date, not an identifier, and defaults to deleting all
+export GARMIN_LIVE_WEIGHIN_DELETE_ACK=i-accept-live-weighin-delete
+# add_body_composition and set_blood_pressure append records with no delete tool
+export GARMIN_LIVE_HEALTH_WRITE_ACK=i-accept-live-irreversible-health-writes
+```
+
+`add_hydration_data` needs none of them: hydration is a daily total and the
+tool's own value is signed, so the test undoes itself with a compensating write
+and verifies the total returned to what it was. A write is gated only when
+nothing can put the account back.
 
 The acknowledgement values are exact: a truthy `1` does not open either gate.
 `GARMIN_LIVE_MFA_CODE` is optional and only needed for an account that

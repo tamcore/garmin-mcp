@@ -79,6 +79,12 @@ func schemaDeviations() map[string]map[string]string {
 			"output_dir": "a tool argument must not choose a server filesystem path; " +
 				"the bytes are returned as an embedded MCP resource instead",
 		},
+		"upload_course": {
+			"gpx_path": "a tool argument must not choose a server filesystem path; " +
+				"the caller supplies the GPX document's own bytes as gpx_content instead of a path",
+			"gpx_content": "the renamed counterpart of the manifest's gpx_path, declared instead " +
+				"because this server accepts no caller-supplied filesystem path anywhere",
+		},
 	}
 }
 
@@ -135,8 +141,14 @@ func assertSchemaAgrees(t *testing.T, tool string, declared, wanted map[string]a
 
 	declaredProps := properties(declared)
 	wantedProps := properties(wanted)
+	// A deviation name is stripped from BOTH sides: a pure removal (like
+	// download_activity_file's output_dir) is absent from declaredProps already, so
+	// stripping it from declaredProps is a no-op; a rename (like upload_course's
+	// gpx_path/gpx_content pair) lists both the manifest name and its declared
+	// replacement, so each is stripped from the side that actually carries it.
 	for name := range schemaDeviations()[tool] {
 		delete(wantedProps, name)
+		delete(declaredProps, name)
 	}
 
 	declaredNames := slices.Sorted(maps.Keys(declaredProps))
@@ -146,8 +158,15 @@ func assertSchemaAgrees(t *testing.T, tool string, declared, wanted map[string]a
 			tool, declaredNames, wantedNames)
 	}
 
-	if got, want := requiredOf(declared), requiredOf(wanted); !slices.Equal(got, want) {
-		t.Errorf("%s: required arguments drifted: declared %v, manifest %v", tool, got, want)
+	declaredRequired := requiredOf(declared)
+	wantedRequired := requiredOf(wanted)
+	for name := range schemaDeviations()[tool] {
+		declaredRequired = removeName(declaredRequired, name)
+		wantedRequired = removeName(wantedRequired, name)
+	}
+	if !slices.Equal(declaredRequired, wantedRequired) {
+		t.Errorf("%s: required arguments drifted: declared %v, manifest %v",
+			tool, declaredRequired, wantedRequired)
 	}
 	if additional, ok := declared["additionalProperties"].(bool); !ok || additional {
 		t.Errorf("%s: declared additionalProperties = %v, want false",
@@ -303,6 +322,17 @@ func properties(schema map[string]any) map[string]map[string]any {
 	for name, value := range raw {
 		property, _ := value.(map[string]any)
 		out[name] = property
+	}
+	return out
+}
+
+// removeName returns names with every occurrence of value removed.
+func removeName(names []string, value string) []string {
+	out := names[:0:0]
+	for _, name := range names {
+		if name != value {
+			out = append(out, name)
+		}
 	}
 	return out
 }

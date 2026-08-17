@@ -39,7 +39,10 @@ const sweepPageSize = client.DefaultMaxPageSize
 // custom food has no calendar analogue and no int64 identifier either, so its own
 // pass, sweepFoods, matches leftovers by name the same way foodguard_test.go's
 // storedCustomFood binds a create, rather than by fetching a single item — Garmin
-// exposes no per-item GET for a custom food.
+// exposes no per-item GET for a custom food. A course carries an int64 identifier
+// but the same missing per-item GET, so sweepCourses matches its leftovers by name
+// too, over the one whole listing course-service's GetCourses gives rather than a
+// page.
 // It reports what it removed to stderr, and stays silent when there was nothing.
 // A leftover means a previous run was killed or a delete failed, which is a defect
 // worth seeing rather than a quiet repair.
@@ -63,14 +66,57 @@ func (w *writeEnv) sweep() error {
 	if err != nil {
 		return err
 	}
+	courses, err := w.sweepCourses(ctx)
+	if err != nil {
+		return err
+	}
 
-	if workouts+activities+foods > 0 {
+	if workouts+activities+foods+courses > 0 {
 		suiteLogger().Info(
 			"live: the sweeper removed leftovers a previous run left behind",
 			slog.Int("workouts", workouts), slog.Int("activities", activities),
-			slog.Int("foods", foods), slog.String("prefix", objectPrefix))
+			slog.Int("foods", foods), slog.Int("courses", courses),
+			slog.String("prefix", objectPrefix))
 	}
 	return nil
+}
+
+// sweepCourses removes prefixed leftovers from the course listing and reports how
+// many it removed.
+//
+// Unlike sweepWorkouts and sweepActivities, this walks no page: course-service's
+// GetCourses (courses.go) takes no page parameter of its own, only the whole listing.
+func (w *writeEnv) sweepCourses(ctx context.Context) (int, error) {
+	list, err := w.courses.GetCourses(ctx, w.session)
+	if err != nil {
+		return 0, fmt.Errorf("listing courses to sweep leftovers: %w", err)
+	}
+
+	removed := 0
+	for _, course := range list {
+		value, present := course.CourseID.Int64Exact()
+		if !present {
+			continue
+		}
+		id, err := client.NewID(value)
+		if err != nil {
+			continue
+		}
+		var namePtr *string
+		if name, ok := course.Name.Value(); ok {
+			namePtr = &name
+		}
+		if !w.owned.ownSwept(kindCourse, namePtr, value, w.startedAt) {
+			continue
+		}
+
+		if _, err := w.courses.DeleteCourse(ctx, w.session, id); err != nil {
+			return removed, fmt.Errorf("removing a course a previous run left behind: %w", err)
+		}
+		w.owned.release(kindCourse, value)
+		removed++
+	}
+	return removed, nil
 }
 
 // sweepWorkouts removes prefixed leftovers from the workout library and reports how

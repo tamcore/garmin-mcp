@@ -282,3 +282,45 @@ func assertNoRawPayload(t *testing.T, advice string) {
 		}
 	}
 }
+
+// newDomainToolServer builds a server carrying one domain's tools and nothing else.
+//
+// Every domain test file needs the same three steps — a stdio resolver, a policy
+// that admits exactly this domain's read-only names plus the built-in, and a server
+// wired to this domain's registrar — and writing them out per domain made two
+// byte-identical copies that the duplication linter was right to object to. The
+// three things that actually differ are parameters.
+func newDomainToolServer(
+	t *testing.T,
+	name string,
+	registrations []registration,
+	registrar mcpserver.ToolRegistrar,
+) *mcpserver.Server {
+	t.Helper()
+
+	resolver, err := identity.NewStdioResolver(identity.StdioConfig{
+		PrincipalIDs: []string{harnessPrincipal},
+	})
+	if err != nil {
+		t.Fatalf("identity.NewStdioResolver() = %v", err)
+	}
+	pol, err := policy.New(policy.Config{
+		Mode: policy.ModeLocal,
+		ReadOnlyTools: append([]string{mcpserver.ServerInfoToolName},
+			namesOf(registrations)...),
+	}, nil)
+	if err != nil {
+		t.Fatalf("policy.New() = %v", err)
+	}
+
+	server, err := mcpserver.New(mcpserver.Deps{
+		Info:       mcpserver.Info{Name: name, Version: harnessVersion},
+		Policy:     pol,
+		Principals: resolver,
+		Registrars: []mcpserver.ToolRegistrar{registrar},
+	})
+	if err != nil {
+		t.Fatalf("mcpserver.New() = %v", err)
+	}
+	return server
+}

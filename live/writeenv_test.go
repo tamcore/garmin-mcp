@@ -79,8 +79,9 @@ type writeEnv struct {
 	// when it is non-empty.
 	skip string
 
-	owned *ownedObjects
-	foods *foodLedger
+	owned    *ownedObjects
+	foods    *foodLedger
+	weighins *weighInLedger
 
 	// names renders every generated name of this run, and startedAt is the one
 	// instant the run is stamped with. They are fields rather than package state so
@@ -101,6 +102,8 @@ type writeEnv struct {
 	details   *api.ActivityDetails
 	calendar  *api.Calendar
 	nutrition *api.Nutrition
+	weight    *api.Weight
+	courses   *api.Courses
 }
 
 // A writeSuite is the lifecycle of the one write environment a run may have: build it
@@ -184,7 +187,8 @@ func buildWriteEnv(now func() time.Time) (*writeEnv, error) {
 
 	owned := newOwnedObjects()
 	foods := newFoodLedger()
-	caller := writeCaller{inner: read.refresher, owned: owned, foods: foods}
+	weighins := newWeighInLedger()
+	caller := writeCaller{inner: read.refresher, owned: owned, foods: foods, weighins: weighins}
 	session, err := client.NewSession(caller, livePrincipal)
 	if err != nil {
 		return nil, fmt.Errorf("building the guarded write session: %w", err)
@@ -194,6 +198,7 @@ func buildWriteEnv(now func() time.Time) (*writeEnv, error) {
 	w := &writeEnv{
 		owned:         owned,
 		foods:         foods,
+		weighins:      weighins,
 		names:         newNameSequence(startedAt),
 		startedAt:     startedAt,
 		session:       session,
@@ -227,6 +232,12 @@ func (w *writeEnv) buildDomainClients(rest *client.Client) error {
 	}
 	if w.nutrition, err = api.NewNutrition(rest); err != nil {
 		return fmt.Errorf("building the nutrition client: %w", err)
+	}
+	if w.weight, err = api.NewWeight(rest); err != nil {
+		return fmt.Errorf("building the weight client: %w", err)
+	}
+	if w.courses, err = api.NewCourses(rest); err != nil {
+		return fmt.Errorf("building the course client: %w", err)
 	}
 	return nil
 }

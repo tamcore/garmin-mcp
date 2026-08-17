@@ -76,6 +76,11 @@ func (w *writeEnv) keepCleanLog(t *testing.T, id, mealDate string) {
 	})
 }
 
+// keepCleanWeighIn is keepClean for a weigh-in sample, and removeOutstandingWeighIns
+// and removeWeighIn are its outstanding-removal and domain-client counterparts. All
+// three live in weighinguard_test.go, next to the ledger they operate on, so this
+// file stays inside the package's 400-line limit.
+
 // removeOutstanding deletes everything still in the ledger when the suite ends.
 //
 // It closes the one hole t.Cleanup cannot: a tool that creates an object and then
@@ -102,6 +107,7 @@ func (w *writeEnv) removeOutstanding() int {
 	}
 	left += w.removeOutstandingFoodLogs()
 	left += w.removeOutstandingFoods()
+	left += w.removeOutstandingWeighIns()
 	return left
 }
 
@@ -161,6 +167,8 @@ func (w *writeEnv) remove(kind ownedKind, id int64) error {
 		_, err = w.workouts.Delete(ctx, w.session, target)
 	case kindSchedule:
 		_, err = w.workouts.Unschedule(ctx, w.session, target)
+	case kindCourse:
+		_, err = w.courses.DeleteCourse(ctx, w.session, target)
 	default:
 		return fmt.Errorf("no removal is defined for a %s", kind)
 	}

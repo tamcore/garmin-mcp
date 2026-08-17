@@ -117,6 +117,11 @@ func (s *Server) elicitParams(decision policy.Decision) *mcp.ElicitParams {
 					"description": "Set true to allow this operation to proceed.",
 				},
 			},
+			// Required, so a client cannot satisfy the prompt by accepting it and
+			// sending nothing. The SDK validates the answer against this schema
+			// before it reaches interpretElicitResult, which refuses the same case
+			// again rather than trusting that validation to stay where it is.
+			"required": []any{confirmationProperty},
 		},
 	}
 }
@@ -183,17 +188,25 @@ func classifyElicitError(ctx context.Context, err error) error {
 // interpretElicitResult treats anything short of an explicit acceptance as a
 // refusal. A "cancel" action means the user dismissed the prompt without choosing,
 // and a dismissal is not consent.
+//
+// Consent is exactly one answer: the action is "accept" AND the confirmation
+// property is present AND it is the boolean true. Everything else is a refusal,
+// including an accepted form that carries no content at all.
+//
+// That last case used to be read as consent, on the reasoning that accepting the
+// prompt is itself consent to what the prompt described. It is not safe: a client
+// that answers "accept" with an empty object — because its user tapped the dialog
+// away, because it does not render the checkbox, or because it fills nothing it was
+// not asked to fill — would have had a destructive operation executed. AGENTS.md
+// says a destructive tool fails closed when confirmation cannot be obtained, and an
+// answer this server cannot read as a yes has not obtained it.
 func interpretElicitResult(result *mcp.ElicitResult) error {
 	if result == nil || result.Action != "accept" {
 		return policy.ErrConfirmationDeclined
 	}
-	// An accepted form that leaves the box unticked is still a refusal. A client
-	// that omits the property has accepted the prompt itself, which is consent to
-	// the operation the prompt described.
-	if value, present := result.Content[confirmationProperty]; present {
-		if confirmed, ok := value.(bool); ok && !confirmed {
-			return policy.ErrConfirmationDeclined
-		}
+	confirmed, ok := result.Content[confirmationProperty].(bool)
+	if !ok || !confirmed {
+		return policy.ErrConfirmationDeclined
 	}
 	return nil
 }

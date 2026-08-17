@@ -15,7 +15,6 @@ import (
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
-	"github.com/tamcore/garmin-mcp/internal/identity"
 	"github.com/tamcore/garmin-mcp/internal/mcpserver"
 	"github.com/tamcore/garmin-mcp/internal/policy"
 	"github.com/tamcore/garmin-mcp/internal/testkit"
@@ -105,31 +104,7 @@ func newScoresHarnessAt(
 func newScoresServer(t *testing.T, svc *service) *mcpserver.Server {
 	t.Helper()
 
-	resolver, err := identity.NewStdioResolver(identity.StdioConfig{
-		PrincipalIDs: []string{harnessPrincipal},
-	})
-	if err != nil {
-		t.Fatalf("identity.NewStdioResolver() = %v", err)
-	}
-	pol, err := policy.New(policy.Config{
-		Mode: policy.ModeLocal,
-		ReadOnlyTools: append([]string{mcpserver.ServerInfoToolName},
-			namesOf(scoresRegistrations())...),
-	}, nil)
-	if err != nil {
-		t.Fatalf("policy.New() = %v", err)
-	}
-
-	server, err := mcpserver.New(mcpserver.Deps{
-		Info:       mcpserver.Info{Name: "garmin-mcp-scores-test", Version: harnessVersion},
-		Policy:     pol,
-		Principals: resolver,
-		Registrars: []mcpserver.ToolRegistrar{scoresRegistrar{svc: svc}},
-	})
-	if err != nil {
-		t.Fatalf("mcpserver.New() = %v", err)
-	}
-	return server
+	return newDomainToolServer(t, "garmin-mcp-scores-test", scoresRegistrations(), scoresRegistrar{svc: svc})
 }
 
 // hillScoreDocument is two scored days plus the window aggregates. The maximum arrives

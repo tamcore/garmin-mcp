@@ -105,12 +105,32 @@ var wantReadOnlyToolNames = []string{
 	tools.ToolGetNonCompletedBadgeChallenges,
 	tools.ToolGetRacePredictions,
 	tools.ToolGetInProgressVirtualChallenges,
+
+	// Devices, gear, women's health and the weigh-in reads.
+	tools.ToolGetDeviceLastUsed,
+	tools.ToolGetDeviceSettings,
+	tools.ToolGetPrimaryTrainingDevice,
+	tools.ToolGetDeviceSolarData,
+	tools.ToolGetDeviceAlarms,
+	tools.ToolGetGear,
+	tools.ToolGetMenstrualCalendarData,
+	tools.ToolGetMenstrualDataForDate,
+	tools.ToolGetPregnancySummary,
+	tools.ToolGetWeighIns,
+	tools.ToolGetDailyWeighIns,
+	tools.ToolGetCourses,
 }
 
 // wantWriteToolNames is the write tier. Every one of them needs the operator's
 // enablement and the caller's write scope, so a default deployment refuses all of
 // them and a stdio deployment refuses them whatever the operator enabled.
 var wantWriteToolNames = []string{
+	tools.ToolUploadCourse,
+	tools.ToolAddBodyComposition,
+	tools.ToolSetBloodPressure,
+	tools.ToolAddHydrationData,
+	tools.ToolAddWeighIn,
+	tools.ToolAddWeighInWithTimestamps,
 	tools.ToolSetNutritionDailySettings,
 	tools.ToolCreateCustomFood,
 	tools.ToolUpdateCustomFood,
@@ -145,6 +165,8 @@ var wantWriteToolNames = []string{
 // wantDestructiveToolNames is the destructive tier, which the server's confirmation
 // middleware covers because each tool declares itself destructive.
 var wantDestructiveToolNames = []string{
+	tools.ToolDeleteCourse,
+	tools.ToolDeleteWeighIns,
 	tools.ToolDeleteCustomFood,
 	tools.ToolDeleteFoodLog,
 	"delete_activity",
@@ -181,6 +203,14 @@ var nonIdempotentTools = []string{
 	tools.ToolLogCustomFood,
 	tools.ToolLogFood,
 	tools.ToolUpsertAndLog,
+	// Weight: each add appends a new weigh-in rather than converging.
+	tools.ToolAddWeighIn,
+	tools.ToolAddWeighInWithTimestamps,
+	// Courses and data management: each append creates a new record.
+	tools.ToolUploadCourse,
+	tools.ToolAddBodyComposition,
+	tools.ToolSetBloodPressure,
+	tools.ToolAddHydrationData,
 }
 
 // forbiddenArgumentNames are the argument names no tool may ever accept: an account

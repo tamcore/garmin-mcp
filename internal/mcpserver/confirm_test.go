@@ -159,3 +159,99 @@ func TestWriteToolDoesNotRequireConfirmation(t *testing.T) {
 		t.Fatalf("the write handler ran %d times, want 1", calls)
 	}
 }
+
+// TestAnAcceptedFormWithoutATrueConfirmIsRefused closes a fail-open in the
+// destructive gate.
+//
+// interpretElicitResult refused only an explicit confirm:false. An accepted form
+// that omitted the field, or carried something that was not a boolean, fell through
+// to consent — so a client answering {"confirm":"false"} had its destructive
+// operation executed, and so did one that accepted the prompt carrying nothing at
+// all. AGENTS.md states destructive tools fail closed when confirmation cannot be
+// obtained, and an answer this server cannot read as a yes is not a yes.
+func TestAnAcceptedFormWithoutATrueConfirmIsRefused(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		content map[string]any
+	}{
+		{"the field is absent", map[string]any{}},
+		{"the content is nil", nil},
+		{"the value is the string false", map[string]any{fieldConfirm: "false"}},
+		{"the value is the string true", map[string]any{fieldConfirm: "true"}},
+		{"the value is null", map[string]any{fieldConfirm: nil}},
+		{"the value is a number", map[string]any{fieldConfirm: 0}},
+		{"the value is false", map[string]any{fieldConfirm: false}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			server, probes, _ := tieredServer(t, destructiveEnabled(t))
+			ctx := context.Background()
+			session := connectClient(t, ctx, server, &mcp.ClientOptions{
+				ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+					return &mcp.ElicitResult{Action: actionAccept, Content: tc.content}, nil
+				},
+			})
+
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{
+				Name:      destructiveTool,
+				Arguments: map[string]any{textArg: testText},
+			})
+
+			// The answer is refused either by the SDK validating it against the
+			// requested schema, which surfaces as a transport error, or by this
+			// server reading it as a refusal, which surfaces as an error result.
+			// Which one fires depends on the shape of the bad answer; what must
+			// hold for every one of them is that the tool did not run.
+			if err == nil && !result.IsError {
+				t.Error("the destructive tool reported success without an " +
+					"affirmative confirmation")
+			}
+			if calls, _, _ := probes[destructiveTool].snapshot(); calls != 0 {
+				t.Errorf("the handler ran %d times without an affirmative confirmation", calls)
+			}
+		})
+	}
+}
+
+// TestTheConfirmationSchemaRequiresTheField makes the contract explicit: a client
+// cannot satisfy the prompt by accepting it and sending nothing.
+func TestTheConfirmationSchemaRequiresTheField(t *testing.T) {
+	t.Parallel()
+
+	var asked *mcp.ElicitRequest
+	server, _, _ := tieredServer(t, destructiveEnabled(t))
+	ctx := context.Background()
+	session := connectClient(t, ctx, server, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			asked = req
+			return &mcp.ElicitResult{Action: actionAccept, Content: map[string]any{fieldConfirm: true}}, nil
+		},
+	})
+	if _, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      destructiveTool,
+		Arguments: map[string]any{textArg: testText},
+	}); err != nil {
+		t.Fatalf("CallTool returned error: %v", err)
+	}
+
+	if asked == nil || asked.Params == nil {
+		t.Fatal("no elicitation was requested")
+	}
+	schema, ok := asked.Params.RequestedSchema.(map[string]any)
+	if !ok {
+		t.Fatalf("the requested schema is %T, want an object", asked.Params.RequestedSchema)
+	}
+	required, _ := schema["required"].([]any)
+	found := false
+	for _, name := range required {
+		if text, _ := name.(string); text == fieldConfirm {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the confirmation schema does not require %q: %v", fieldConfirm, schema["required"])
+	}
+}

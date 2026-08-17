@@ -46,6 +46,7 @@ func resultShapes() map[string][]string {
 	for _, group := range []map[string][]string{
 		accountShapes(), activityShapes(), healthShapes(), trainingShapes(),
 		nutritionShapes(), challengeShapes(),
+		deviceShapes(), womensHealthShapes(), weighInReadShapes(),
 	} {
 		maps.Copy(shapes, group)
 	}
@@ -72,6 +73,7 @@ func accountShapes() map[string][]string {
 		tools.ToolGetUserSummary:       {argDate},
 		tools.ToolGetExerciseTypes:     {"categories", keyCount, "source", "exercise_count"},
 		tools.ToolGetWorkouts:          {keyWorkouts, keyCount, keyTruncated},
+		tools.ToolGetCourses:           {"courses", keyCount, keyTruncated},
 		tools.ToolGetWorkoutByID:       {argWorkoutID},
 		tools.ToolDownloadWorkout:      {"id", "format", "media_type", "bytes", "uri"},
 		tools.ToolGetTrainingPlanWorkouts: {

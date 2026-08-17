@@ -26,6 +26,7 @@ const (
 	kindActivity ownedKind = iota + 1
 	kindWorkout
 	kindSchedule
+	kindCourse
 )
 
 // The class labels a refusal message and a guard probe use.
@@ -33,6 +34,7 @@ const (
 	labelActivity = "activity"
 	labelWorkout  = "workout"
 	labelSchedule = "calendar entry"
+	labelCourse   = "course"
 )
 
 // String is the class name a refusal message uses. It names the class and never
@@ -45,6 +47,8 @@ func (k ownedKind) String() string {
 		return labelWorkout
 	case kindSchedule:
 		return labelSchedule
+	case kindCourse:
+		return labelCourse
 	default:
 		return "unrecognised object"
 	}
@@ -59,6 +63,8 @@ func (k ownedKind) createdField() string {
 		return "activityId"
 	case kindWorkout:
 		return "workoutId"
+	case kindCourse:
+		return "courseId"
 	default:
 		return ""
 	}
@@ -67,12 +73,18 @@ func (k ownedKind) createdField() string {
 // nameField is the field that carries this class's name, in the create request this
 // suite sends and in the object Garmin serves for it. The two are the same field, which
 // is what makes the read-back comparable with what was sent.
+//
+// kindCourse's create response nests no other object, so this is the one field
+// courseguard_test.go's own read-back (a list search rather than a per-item GET, since
+// Garmin's course service has none) compares against.
 func (k ownedKind) nameField() string {
 	switch k {
 	case kindActivity:
 		return "activityName"
 	case kindWorkout:
 		return "workoutName"
+	case kindCourse:
+		return "courseName"
 	default:
 		return ""
 	}
@@ -278,7 +290,7 @@ func leakedObjects() string {
 	}
 	w.removeOutstanding()
 
-	lines := slices.Concat(w.owned.outstanding(), w.foods.outstanding())
+	lines := slices.Concat(w.owned.outstanding(), w.foods.outstanding(), w.weighins.outstanding())
 	if len(lines) == 0 {
 		return ""
 	}
@@ -293,7 +305,8 @@ func leakedObjects() string {
 
 // deletionOrder is the order the sweeper and the leak report walk the classes:
 // calendar entries before the workouts they point at, so no sweep leaves a dangling
-// entry behind.
+// entry behind. A course points at nothing else this suite owns, so its position in
+// the order carries no such constraint.
 func deletionOrder() []ownedKind {
-	return []ownedKind{kindSchedule, kindActivity, kindWorkout}
+	return []ownedKind{kindSchedule, kindActivity, kindWorkout, kindCourse}
 }

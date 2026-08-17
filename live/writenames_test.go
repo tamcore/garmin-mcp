@@ -20,6 +20,7 @@ const (
 	labelNameActivity        nameLabel = "activity"
 	labelNameActivityRenamed nameLabel = "activity-renamed"
 	labelNameBatch           nameLabel = "batch"
+	labelNameCourse          nameLabel = "course"
 	labelNameCustomFood      nameLabel = "customfood"
 	labelNameDescription     nameLabel = "description"
 	labelNameGear            nameLabel = "gear"
@@ -36,10 +37,10 @@ const (
 // and not here renders names no sweep will ever recognise, so the two are one list.
 func suiteLabels() []nameLabel {
 	return []nameLabel{
-		labelNameActivity, labelNameActivityRenamed, labelNameBatch, labelNameCustomFood,
-		labelNameDescription, labelNameGear, labelNameStrength, labelNameStrengthWorkout,
-		labelNameTemplate, labelNameWalkRun, labelNameWorkout, labelNameWorkoutUpdated,
-		labelNameZ2Walk,
+		labelNameActivity, labelNameActivityRenamed, labelNameBatch, labelNameCourse,
+		labelNameCustomFood, labelNameDescription, labelNameGear, labelNameStrength,
+		labelNameStrengthWorkout, labelNameTemplate, labelNameWalkRun, labelNameWorkout,
+		labelNameWorkoutUpdated, labelNameZ2Walk,
 	}
 }
 

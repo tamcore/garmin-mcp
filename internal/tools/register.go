@@ -10,12 +10,13 @@ import (
 // Log categories. Each is the manifest's sensitivity label for the tools that carry
 // it, so a log line names the domain a call touched without naming the call.
 const (
-	categoryProfile   = "profile"
-	categoryHealth    = "health"
-	categoryNutrition = "nutrition"
-	categoryLocation  = "location"
-	categoryDevice    = "device"
-	categoryOrdinary  = "ordinary"
+	categoryProfile      = "profile"
+	categoryHealth       = "health"
+	categoryNutrition    = "nutrition"
+	categoryLocation     = "location"
+	categoryDevice       = "device"
+	categoryWomensHealth = "womens-health"
+	categoryOrdinary     = "ordinary"
 )
 
 // noArguments is the input type of every tool that takes no argument.
@@ -185,6 +186,26 @@ func readOnlyRegistrations() []registration {
 		{getNonCompletedBadgeChallengesContract, registerGetNonCompletedBadgeChallenges},
 		{getRacePredictionsContract, registerGetRacePredictions},
 		{getInProgressVirtualChallengesContract, registerGetInProgressVirtualChallenges},
+
+		// Devices and gear inventory.
+		{getDeviceLastUsedContract, registerGetDeviceLastUsed},
+		{getDeviceSettingsContract, registerGetDeviceSettings},
+		{getPrimaryTrainingDeviceContract, registerGetPrimaryTrainingDevice},
+		{getDeviceSolarDataContract, registerGetDeviceSolarData},
+		{getDeviceAlarmsContract, registerGetDeviceAlarms},
+		{getGearContract, registerGetGear},
+
+		// Women's health.
+		{getMenstrualCalendarDataContract, registerGetMenstrualCalendarData},
+		{getMenstrualDataForDateContract, registerGetMenstrualDataForDate},
+		{getPregnancySummaryContract, registerGetPregnancySummary},
+
+		// Weight management: the reads.
+		{getWeighInsContract, registerGetWeighIns},
+		{getDailyWeighInsContract, registerGetDailyWeighIns},
+
+		// Courses.
+		{getCoursesContract, registerGetCourses},
 	}
 }
 
@@ -208,6 +229,16 @@ func writeRegistrations() []registration {
 		{logCustomFoodContract, registerLogCustomFood},
 		{logFoodContract, registerLogFood},
 		{upsertAndLogContract, registerUpsertAndLog},
+
+		// Weight management: the two adds.
+		{addWeighInContract, registerAddWeighIn},
+		{addWeighInWithTimestampsContract, registerAddWeighInWithTimestamps},
+
+		// Courses and the data-management writes.
+		{uploadCourseContract, registerUploadCourse},
+		{addBodyCompositionContract, registerAddBodyComposition},
+		{setBloodPressureContract, registerSetBloodPressure},
+		{addHydrationDataContract, registerAddHydrationData},
 
 		{setActivityNameContract, registerSetActivityName},
 		{setActivityTypeContract, registerSetActivityType},
@@ -244,6 +275,12 @@ func destructiveRegistrations() []registration {
 		// Nutrition: the two removals.
 		{deleteCustomFoodContract, registerDeleteCustomFood},
 		{deleteFoodLogContract, registerDeleteFoodLog},
+
+		// Weight management: the day's removal.
+		{deleteWeighInsContract, registerDeleteWeighIns},
+
+		// Courses: the removal.
+		{deleteCourseContract, registerDeleteCourse},
 
 		{deleteActivityContract, registerDeleteActivity},
 		{deleteWorkoutContract, registerDeleteWorkout},

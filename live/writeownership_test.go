@@ -170,7 +170,7 @@ func seededLedger(t *testing.T) *ownedObjects {
 	owned := newOwnedObjects()
 	name := objectPrefix + string(labelNameWorkout) + "-" +
 		strconv.FormatInt(nameStampFloor().Unix(), 10) + "-1"
-	for _, kind := range []ownedKind{kindActivity, kindWorkout} {
+	for _, kind := range []ownedKind{kindActivity, kindWorkout, kindCourse} {
 		if !owned.ownCreated(kind, createdObject{
 			id: ownedID, sent: name, stored: name, storedID: ownedID,
 		}) {
@@ -198,6 +198,7 @@ func probesFor(id int64) []pathProbe {
 	schedule := client.PathWorkoutSchedule + "/" + text
 
 	gear := client.PathGearPrefix + "/%s/" + probeGearUUID + "/activity/" + text
+	course := client.PathCourseBase + "/" + text
 
 	return []pathProbe{
 		{http.MethodPut, fmt.Sprintf(gear, "link"), labelGearLink},
@@ -209,6 +210,7 @@ func probesFor(id int64) []pathProbe {
 		{http.MethodDelete, workout, labelWorkout},
 		{http.MethodPost, schedule, "workout schedule"},
 		{http.MethodDelete, schedule, labelSchedule},
+		{http.MethodDelete, course, labelCourse},
 	}
 }
 
