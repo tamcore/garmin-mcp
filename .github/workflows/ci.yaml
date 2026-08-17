@@ -287,6 +287,12 @@ jobs:
     runs-on: ubuntu-latest
     # Bounds a hung dependency download or a fuzz target that never returns
     # control (a hang is a real fuzz finding, not only a crash). 7 targets at
+    # The race detector is deliberately NOT enabled here. It slows fuzzing by
+    # roughly an order of magnitude, and on a GitHub runner that made the engine
+    # miss its own shutdown deadline and report "context deadline exceeded" as a
+    # failure — a red build caused by timing rather than by a finding, which is
+    # worse than no gate. The race detector still covers this code in the unit,
+    # fakegarmin and e2e jobs, which run every one of these parsers.
     # FUZZ_SMOKE_TIME=10s each cost well under a minute of actual fuzzing; the
     # rest of the budget is checkout, toolchain setup and compilation.
     timeout-minutes: 15
@@ -332,7 +338,7 @@ jobs:
             dir="./$(dirname "${file}")"
             for name in $(grep -oh '^func Fuzz[A-Za-z0-9_]*' "${file}" | sed -E 's/^func //'); do
               echo "== ${name} (${dir}) =="
-              go test -race -run='^$' -fuzz="^${name}\$" -fuzztime="${FUZZ_SMOKE_TIME}" "${dir}"
+              go test -run='^$' -fuzz="^${name}\$" -fuzztime="${FUZZ_SMOKE_TIME}" "${dir}"
               ran=$((ran + 1))
             done
           done
