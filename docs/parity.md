@@ -692,6 +692,31 @@ Reason: a remote tool must never be able to write an arbitrary server filesystem
 path. Precedence rule: credential and tenant security above the pinned Taxuspt
 contract.
 
+### The `JWT_WEB` cookie fallback is not ported
+
+`python-garminconnect` 0.3.10 recovers from a failed DI ticket exchange by
+re-fetching the CAS service ticket through the web front end, scraping a
+`JWT_WEB` cookie out of the session jar, and authenticating subsequent API calls
+with that cookie instead of a bearer token (`Client._establish_session`,
+`get_api_headers`).
+
+This server does not. The reason is architectural, not effort: upstream is one
+long-lived process where the fallback session and the next API call share a
+single in-memory object, while every tool call here authenticates through
+`Refresher.Do`, which reads the **persisted** per-principal DI token set. Upstream
+itself never persists the cookie — `Client.dumps` serializes only the DI fields —
+and its refresh path depends on the CAS ticket-granting cookie in that same
+in-memory session. On stdio the `auth` command exits before `serve` starts, so
+process memory cannot bridge them either.
+
+A caller therefore sees a login failure where upstream might have recovered. That
+is the accepted cost: a credential no later call can read is not a fallback, and a
+Garmin session cookie is full account access, so carrying one for no reachable
+benefit is the wrong trade.
+
+Reason: credential lifecycle coherence above the pinned upstream behavior.
+Reintroduction requires a durable credential lifecycle first.
+
 ### `set_fit_download_dir` is not registered
 
 Its whole purpose is to persist a caller-supplied server filesystem path. It is

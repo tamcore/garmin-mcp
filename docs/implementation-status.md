@@ -36,7 +36,7 @@ the tag changes nothing.
 | `internal/config` | 90.8% | |
 | `internal/cryptostore` | 89.9% | |
 | `internal/garmin/api` | 90.7% | 90.7% |
-| `internal/garmin/auth` | 67.3% | 88.2% |
+| `internal/garmin/auth` | 65.9% | 88.3% |
 | `internal/garmin/client` | 94.3% | 94.6% |
 | `internal/garmin/protocol` | 96.7% | |
 | `internal/identity` | 97.7% | |
@@ -477,10 +477,12 @@ closed silently.
       against the fake Garmin service.
       Done: login, MFA continuation, DI exchange over the candidate client IDs,
       session validation, refresh with rotation and CAS, host selection, the
-      request-time host guard, and the fallback classification, all under
-      `-tags=fakegarmin`, and explicit widget MFA code delivery. **Not done: a
-      distinct rejected-OTP outcome, and the `JWT_WEB` fallback.** The item stays
-      unchecked until those close.
+      request-time host guard, the fallback classification, a distinct
+      rejected-OTP outcome, and explicit widget MFA code delivery, all under
+      `-tags=fakegarmin`. **Not done: the `JWT_WEB` cookie fallback**, which was
+      implemented and then deliberately removed — a credential this architecture
+      can never carry to a second call. The item stays unchecked for that reason
+      and the deviation is recorded below and in `docs/parity.md`.
 - [x] `garmin-mcp serve --transport=stdio` binds exactly one principal from
       process-local configuration, rejects ambiguous multi-account configuration,
       and keeps stdout reserved for MCP frames.
@@ -1145,16 +1147,49 @@ previously said; it computes each package's percentage from `cover.out` and
 fails in both directions against the explicit exception list
 (`cmd/garmin-mcp`, `internal/garmin/auth`). A bounded **fuzz smoke** job
 (`fuzz-smoke`) and a **two-clean-build reproducibility** check
-(`reproducible-build`) are now added too. What still does not exist:
-**container image signing**, **container image and per-binary SBOMs**, and
-**build provenance attestation**. The MCP conformance job is not on this list:
-it is blocked upstream, not unstarted.
+(`reproducible-build`) are now added too. **Container image signing,
+container image and per-binary SBOMs, and build provenance attestation** are
+now configured; each is described below, and each carries an explicit note on
+what is proven locally versus what only a real tag push can prove. The MCP
+conformance job is not on this list: it is blocked upstream, not unstarted.
 
-- `.goreleaser.yaml` signs the **checksum file only** (`artifacts: checksum`,
-  keyless cosign `sign-blob`) and emits **archive SBOMs only**
-  (`sboms: artifacts: archive`). There is no image signing block, no container
-  image SBOM, no per-binary SBOM, and no build provenance attestation. None of
-  this is "configured but unverified": it is not configured.
+- `.goreleaser.yaml` signs the checksum file (`signs: artifacts: checksum`,
+  keyless cosign `sign-blob`, unchanged) **and now also signs the pushed OCI
+  image** (`docker_signs: artifacts: all`, keyless cosign `sign`, same identity
+  model). `sboms:` now emits **both** archive SBOMs (`id: archive`) and
+  **per-binary SBOMs** (`id: binary`, one SPDX JSON document per built binary).
+  `goreleaser check` passes with this configuration, and a local snapshot
+  release (`goreleaser release --snapshot --clean --skip=sign,docker`, with
+  `syft` on `PATH`) was run and confirmed one archive SBOM and one binary SBOM
+  per build target, all valid SPDX JSON. **Unproven until a real tag release**:
+  that `docker_signs` actually signs the pushed image, since keyless signing
+  needs the release job's GitHub OIDC token and a real registry push, neither
+  of which a snapshot build exercises.
+  - GoReleaser cannot catalog a container image it pushed itself (the `sboms`
+    block's `artifacts` values are `source`, `package`, `archive`, `binary` and
+    `any`; there is no image target), so the **container image SBOM** is
+    generated outside GoReleaser: `.github/workflows/release.yaml`'s `release`
+    job resolves the pushed image's digest from the raw manifest bytes
+    (`docker buildx imagetools inspect --raw` piped through `sha256sum`, so the
+    digest matches whatever the registry actually serves), runs `syft` against
+    `image@digest` to produce an SPDX JSON document, then runs
+    `cosign attest --type spdxjson` to attach it to the image as a
+    keyless-signed in-toto attestation. This is the one place the brief allows
+    a hand-rolled step instead of a GoReleaser feature, because no GoReleaser
+    feature covers it. **Entirely unproven locally**: it needs a pushed image
+    to inspect and an OIDC token to sign with, so it can only run for real in
+    the `release` job against a real tag.
+  - **Build provenance attestation** uses `actions/attest-build-provenance`
+    (pinned by commit SHA, `4d101475d8b20a2381f78447822ac1eab6504dd8`, `v4.2.2`)
+    twice in the `release` job: once with `subject-path` globbing the
+    archives, checksum file, checksum signature and certificate, and both SBOM
+    families, and once with `subject-name`/`subject-digest` for the pushed
+    image (`push-to-registry: true`). The job's `permissions` gained
+    `attestations: write` alongside the existing `id-token: write`; the
+    top-level `permissions: contents: read` is untouched. **Entirely unproven
+    locally**: this action only functions inside a real GitHub Actions run with
+    a live OIDC token and the attestations API, so it cannot be exercised
+    outside CI at all, let alone outside a tagged release.
 - The CI unit job writes `cover.out` with `-covermode=atomic`, and the `test`
   job's coverage-floor step enforces the documented 80% rule per package,
   checked in both directions against the exception list. See
@@ -1165,8 +1200,12 @@ it is blocked upstream, not unstarted.
   (`FuzzNumberUnmarshalJSON`, `FuzzTextUnmarshalJSON`, `FuzzParseDate`),
   `internal/tools` (`FuzzSanitizeUntyped`) and `internal/garmin/api`
   (`FuzzParseFITActivity`). The `fuzz-smoke` CI job discovers every declared
-  `FuzzX` function and runs each for a bounded 10s under `-race`; none performs
-  I/O or reaches the network.
+  `FuzzX` function and runs each for a bounded 10s; none performs I/O or reaches
+  the network. The race detector is deliberately off in that job: it slows
+  fuzzing by about an order of magnitude, and on a GitHub runner that made the
+  engine miss its own shutdown deadline and fail the build on timing rather than
+  on a finding. Those parsers still run under `-race` in the unit, fakegarmin
+  and e2e jobs.
 - The `reproducible-build` job builds `cmd/garmin-mcp` twice in one job, each
   from its own `GOCACHE` so the second build is a real recompile, with
   `-trimpath` and fixed `-ldflags` version/commit literals, and fails if the
@@ -1252,11 +1291,40 @@ source.
   The registry's existing lease and attempt-budget behavior already kept the
   transaction retryable on any verify failure, so the addition is classification
   and error-matching (`errors.Is(err, protocol.ErrMFARejected)`) only.
-- The `JWT_WEB` cookie fallback after a failed DI exchange is not implemented.
-  Upstream consumes the CAS ticket through the web front end when the DI exchange
-  fails; this project requires the DI token set and reports
-  `ErrTokenExchangeFailed`. A Garmin-side DI change therefore becomes a hard
-  login failure rather than a degraded one.
+- The `JWT_WEB` cookie fallback is **deliberately not ported**. It was built,
+  reviewed and then removed, and the reason is architectural rather than a
+  matter of effort. Upstream recovers with it because one long-lived Python
+  process holds the fallback session and the next API call in the same
+  in-memory object. This server has no such continuity: every tool call
+  authenticates through `Refresher.Do`, which reads the **persisted** per-principal
+  DI token set, and upstream itself never persists `jwt_web` (`Client.dumps`
+  serializes only `di_token`, `di_refresh_token` and `di_client_id`, and its
+  own JWT_WEB refresh depends on the CAS ticket-granting cookie inside the same
+  in-memory session). On stdio the `auth` command exits before `serve` starts,
+  so process memory cannot bridge the two. A credential that no later call can
+  read is not a fallback.
+
+  The removal followed a working implementation, so what it cost is recorded
+  honestly: the port passed both tagged suites, sealed the cookie two pointers
+  deep with alias-stripping leak tests, and narrowed the trigger well below
+  upstream's bare `except Exception`. What it could not do was reach a second
+  call. Review also found that shipping it would have made a previously
+  unreachable state reachable in `internal/cmd`: `remoteLogin.bind` resolves and
+  **links** a Garmin account durably before `commit` stores the token set, so a
+  result carrying no token set would have linked an account and then failed, while
+  `internal/cmd/tty.go` printed "the tokens are stored encrypted". Reintroducing
+  `JWT_WEB` requires a deliberate durable credential lifecycle first — a
+  process-local map is not one — and is not currently in scope.
+
+  Related latent defect, independent of `JWT_WEB` and **not fixed**: that same
+  resolve-before-commit ordering means any `commit` failure — expired staged
+  tokens, a cancelled token gate, a store read or save error — leaves a
+  principal created and a Garmin account linked with no token set. It is
+  self-healing on retry, because the next successful login resolves the
+  already-linked principal and commits onto it, which is why it is recorded here
+  rather than treated as a release blocker. The durable fix is one transaction
+  spanning principal creation, account linkage and the token write; reversing the
+  call order alone cannot work, because the token row requires the principal.
 - The login state machine is still not on the top-level login path.
   `auth.Machine` is exhaustively tested, but `Authenticator.Login` and
   `CompleteMFA` report progress through `Result` states, and the machine is
