@@ -28,6 +28,12 @@ const (
 	readTool        = "read_thing"
 	writeTool       = "write_thing"
 	destructiveTool = "delete_thing"
+
+	// tierReadOnly, tierWrite and tierDestructive are policy.Tier's String() form,
+	// shared so tests do not repeat the literal.
+	tierReadOnly    = "read-only"
+	tierWrite       = "write"
+	tierDestructive = "destructive"
 )
 
 // syncBuffer is a concurrency-safe log sink. The server logs from the request

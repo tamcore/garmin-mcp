@@ -204,7 +204,7 @@ func assertPropertyAgrees(t *testing.T, tool, property string, declared, wanted 
 }
 
 func TestDeclaredSchemasMatchTheSchemasOnTheWire(t *testing.T) {
-	h := newHarness(t, readScript())
+	h := newFullVisibilityHarness(t, readScript())
 
 	contracts := tools.Contracts()
 	for _, tool := range listedTools(t, h) {

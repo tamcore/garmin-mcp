@@ -254,6 +254,11 @@ func (s *Server) Registry() *Registry { return s.registry }
 // ToolNames returns the registered tool names, sorted, as a fresh slice.
 func (s *Server) ToolNames() []string { return s.registry.Names() }
 
+// Policy returns the tier and scope gate this server was built with, so a
+// caller can ask it the same question the tools/list filter and the tools/call
+// gate both ask.
+func (s *Server) Policy() *policy.Policy { return s.deps.Policy }
+
 // nextRequestID returns a fresh per-process correlation id.
 func (s *Server) nextRequestID() string {
 	return "req-" + strconv.FormatUint(s.requestIDs.Add(1), 10)

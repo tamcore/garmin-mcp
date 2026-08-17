@@ -223,7 +223,7 @@ var forbiddenArgumentNames = []string{
 }
 
 func TestRegisterAllRegistersExactlyTheDeclaredSurface(t *testing.T) {
-	h := newHarness(t, readScript())
+	h := newFullVisibilityHarness(t, readScript())
 
 	got := listedToolNames(t, h)
 	want := append([]string{mcpserver.ServerInfoToolName}, wantToolNames()...)
@@ -231,6 +231,17 @@ func TestRegisterAllRegistersExactlyTheDeclaredSurface(t *testing.T) {
 
 	if !slices.Equal(got, want) {
 		t.Errorf("registered tools = %v, want %v", got, want)
+	}
+
+	// Explicit, rather than left to be inferred from the full-set diff above:
+	// this harness declares elicitation capability precisely so the destructive
+	// tier is not silently missing from "the whole surface" it promises.
+	for _, name := range wantDestructiveToolNames {
+		if !slices.Contains(got, name) {
+			t.Errorf("destructive tool %s is missing from tools/list; "+
+				"newFullVisibilityHarness must give its client an elicitation "+
+				"capability or the destructive tier is invisible", name)
+		}
 	}
 }
 
@@ -263,7 +274,7 @@ func TestEachTierListMatchesTheRegisteredSurface(t *testing.T) {
 }
 
 func TestEveryToolDeclaresAllFourAnnotationHintsForItsTier(t *testing.T) {
-	h := newHarness(t, readScript())
+	h := newFullVisibilityHarness(t, readScript())
 
 	for _, tool := range listedTools(t, h) {
 		t.Run(tool.Name, func(t *testing.T) {
@@ -308,7 +319,7 @@ func TestNoToolDescriptionRepeatsUpstreamsIdempotencyClaim(t *testing.T) {
 }
 
 func TestNoToolAcceptsAnAccountSelectorOrAFilesystemPath(t *testing.T) {
-	h := newHarness(t, readScript())
+	h := newFullVisibilityHarness(t, readScript())
 
 	for _, tool := range listedTools(t, h) {
 		properties, _ := schemaOf(t, tool)["properties"].(map[string]any)
@@ -322,7 +333,7 @@ func TestNoToolAcceptsAnAccountSelectorOrAFilesystemPath(t *testing.T) {
 }
 
 func TestEveryToolCarriesADescriptionAndAStrictObjectSchema(t *testing.T) {
-	h := newHarness(t, readScript())
+	h := newFullVisibilityHarness(t, readScript())
 
 	for _, tool := range listedTools(t, h) {
 		if strings.TrimSpace(tool.Description) == "" {

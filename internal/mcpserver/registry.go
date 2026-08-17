@@ -200,6 +200,11 @@ func AddTool[In, Out any](registry *Registry, spec ToolSpec, handler mcp.ToolHan
 	}
 
 	tool := &mcp.Tool{
+		// _meta is the SDK's supported per-tool metadata slot at v1.7.0 (mcp.Tool
+		// embeds mcp.Meta, marshaled as "_meta"). It carries the policy tier so a
+		// client can answer "why is this tool missing from my list" from the wire
+		// itself, without MCP defining a standard tier field of its own.
+		Meta:        mcp.Meta{"tier": spec.Tier.String()},
 		Name:        spec.Name,
 		Title:       spec.Title,
 		Description: spec.Description,

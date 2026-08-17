@@ -90,11 +90,21 @@ func newCatalogHarness(t *testing.T, script testkit.Script, catalog *api.Exercis
 		newRegistrar(t, fake, tools.Bounds{}, client.Limits{}, catalog))
 }
 
-// startHarness runs one registrar over an in-memory MCP session.
+// startHarness runs one registrar over an in-memory MCP session, using the
+// restrictive default policy.
 func startHarness(t *testing.T, fake *testkit.Server, registrar *tools.Registrar) harness {
 	t.Helper()
+	return startHarnessWith(t, fake, newServer(t, registrar), nil)
+}
 
-	server := newServer(t, registrar)
+// startHarnessWith is startHarness for a caller that already built the server
+// and wants an explicit client option set — which is how newFullVisibilityHarness
+// both substitutes its own policy and declares the elicitation capability a
+// destructive tool needs before tools/list will show it.
+func startHarnessWith(
+	t *testing.T, fake *testkit.Server, server *mcpserver.Server, opts *mcp.ClientOptions,
+) harness {
+	t.Helper()
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -107,7 +117,7 @@ func startHarness(t *testing.T, fake *testkit.Server, registrar *tools.Registrar
 
 	session, err := mcp.NewClient(&mcp.Implementation{
 		Name: "garmin-mcp-tools-test", Version: "test",
-	}, nil).Connect(ctx, clientTransport, nil)
+	}, opts).Connect(ctx, clientTransport, nil)
 	if err != nil {
 		cancel()
 		t.Fatalf("connecting the test client: %v", err)
@@ -119,6 +129,17 @@ func startHarness(t *testing.T, fake *testkit.Server, registrar *tools.Registrar
 	})
 
 	return harness{fake: fake, session: session}
+}
+
+// elicitationCapableClientOptions declares the capability that lets a session
+// confirm a destructive tool, so a client using it sees the destructive tier in
+// tools/list rather than having it silently withheld as unconfirmable.
+func elicitationCapableClientOptions() *mcp.ClientOptions {
+	return &mcp.ClientOptions{
+		ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "accept"}, nil
+		},
+	}
 }
 
 func newRegistrar(
@@ -151,13 +172,15 @@ func newRegistrar(
 
 func newServer(t *testing.T, registrar *tools.Registrar) *mcpserver.Server {
 	t.Helper()
+	return newServerWithPolicy(t, registrar, restrictivePolicy(t))
+}
 
-	resolver, err := identity.NewStdioResolver(identity.StdioConfig{
-		PrincipalIDs: []string{testPrincipal},
-	})
-	if err != nil {
-		t.Fatalf("identity.NewStdioResolver() = %v", err)
-	}
+// restrictivePolicy is the default test policy: both higher tiers unenabled and
+// no scope source, which is what a stdio deployment actually runs with. Tests
+// that assert a write or destructive call is refused rely on this default.
+func restrictivePolicy(t *testing.T) *policy.Policy {
+	t.Helper()
+
 	pol, err := policy.New(policy.Config{
 		Mode:             policy.ModeLocal,
 		ReadOnlyTools:    tools.ReadOnlyTools(),
@@ -166,6 +189,42 @@ func newServer(t *testing.T, registrar *tools.Registrar) *mcpserver.Server {
 	}, nil)
 	if err != nil {
 		t.Fatalf("policy.New() = %v", err)
+	}
+	return pol
+}
+
+// fullVisibilityPolicy enables both higher tiers and grants both their scopes,
+// so policy.Decide allows every registered tool and tools/list returns the
+// whole declared surface. It exists only for tests asserting something about
+// that whole surface (a schema shape, an annotation, a name); tests about what
+// one deployment shape's caller may see belong in internal/mcpserver instead.
+func fullVisibilityPolicy(t *testing.T) *policy.Policy {
+	t.Helper()
+
+	pol, err := policy.New(policy.Config{
+		Mode:              policy.ModeLocal,
+		ReadOnlyTools:     tools.ReadOnlyTools(),
+		WriteTools:        tools.WriteTools(),
+		DestructiveTools:  tools.DestructiveTools(),
+		EnableWrite:       true,
+		EnableDestructive: true,
+	}, grantedScopes{scopes: []policy.Scope{policy.ScopeWrite, policy.ScopeDestructive}})
+	if err != nil {
+		t.Fatalf("policy.New() = %v", err)
+	}
+	return pol
+}
+
+func newServerWithPolicy(
+	t *testing.T, registrar *tools.Registrar, pol *policy.Policy,
+) *mcpserver.Server {
+	t.Helper()
+
+	resolver, err := identity.NewStdioResolver(identity.StdioConfig{
+		PrincipalIDs: []string{testPrincipal},
+	})
+	if err != nil {
+		t.Fatalf("identity.NewStdioResolver() = %v", err)
 	}
 
 	server, err := mcpserver.New(mcpserver.Deps{
@@ -178,6 +237,24 @@ func newServer(t *testing.T, registrar *tools.Registrar) *mcpserver.Server {
 		t.Fatalf("mcpserver.New() = %v", err)
 	}
 	return server
+}
+
+// newFullVisibilityHarness is newHarness but with every tier enabled and
+// granted, and a client that declares the elicitation capability, so
+// tools/list returns the whole declared surface including the destructive
+// tier: a destructive tool tools/list would only ever show as a capability the
+// caller could actually confirm (internal/mcpserver's toolsListMiddleware), so
+// a client that cannot confirm must not be used here or the "whole surface"
+// this harness promises would quietly lose 9 tools. Use it only for tests
+// about the surface itself; behavioral tests keep the restrictive default
+// newHarness gives them.
+func newFullVisibilityHarness(t *testing.T, script testkit.Script) harness {
+	t.Helper()
+
+	fake := testkit.NewServer(t, script)
+	registrar := newRegistrar(t, fake, tools.Bounds{}, client.Limits{}, nil)
+	server := newServerWithPolicy(t, registrar, fullVisibilityPolicy(t))
+	return startHarnessWith(t, fake, server, elicitationCapableClientOptions())
 }
 
 // call invokes a tool and requires it to succeed.

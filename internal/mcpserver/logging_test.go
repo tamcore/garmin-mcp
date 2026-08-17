@@ -43,7 +43,7 @@ func TestEveryToolCallIsLoggedOnceWithCoarseFields(t *testing.T) {
 	if record["category"] != testCategory {
 		t.Errorf("category = %v, want diagnostics", record["category"])
 	}
-	if record["tier"] != "read-only" {
+	if record["tier"] != tierReadOnly {
 		t.Errorf("tier = %v, want read-only", record["tier"])
 	}
 	if record["outcome"] != "ok" {

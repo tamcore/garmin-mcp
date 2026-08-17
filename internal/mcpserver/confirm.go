@@ -168,7 +168,17 @@ func clientDeclaresElicitation(req *mcp.CallToolRequest) bool {
 	if req.Session == nil {
 		return false
 	}
-	capabilities := req.ClientCapabilities()
+	return elicitationCapable(req.ClientCapabilities())
+}
+
+// elicitationCapable is the one test of the declared capability, shared by every
+// gate that must agree on it: this is the single-source-of-truth property that
+// matters, not the request shape it is read from. tools/call confirmation reads it
+// off a *mcp.CallToolRequest through clientDeclaresElicitation above;
+// toolsListMiddleware reads the identical capability off a *mcp.ListToolsRequest,
+// because a destructive tool tools/list advertises as a capability must be one
+// this same test would let the client actually confirm.
+func elicitationCapable(capabilities *mcp.ClientCapabilities) bool {
 	return capabilities != nil && capabilities.Elicitation != nil
 }
 

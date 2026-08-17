@@ -21,7 +21,7 @@ import (
 func TestPublishedSchemasCarryTheDeclaredBounds(t *testing.T) {
 	t.Parallel()
 
-	h := newHarness(t, readScript())
+	h := newFullVisibilityHarness(t, readScript())
 
 	published := map[string]map[string]any{}
 	for _, tool := range listedTools(t, h) {

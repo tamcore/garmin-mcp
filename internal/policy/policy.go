@@ -266,6 +266,56 @@ func (p *Policy) checkTier(ctx context.Context, tool string, tier Tier) (Decisio
 	return Decision{}, false
 }
 
+// EffectiveTiers reports the tiers ctx's caller may use in this deployment.
+//
+// TierReadOnly is always included: it is never scope-gated, so no caller can be
+// without it. TierWrite and TierDestructive are included only when Decide would
+// actually allow at least one registered tool in that tier — the identical
+// per-tool decision the tools/list filter and the tools/call gate both apply,
+// intersecting operator enablement, granted scope, AND the allowlist/denylist
+// name filters. A tier enabled and granted but emptied by the allowlist (or
+// entirely denylisted) is therefore reported absent, which is what keeps this
+// report and VisibleToolCount from disagreeing about the same deployment: a
+// tier can never be named here with zero of its tools actually reachable.
+func (p *Policy) EffectiveTiers(ctx context.Context) []Tier {
+	tiers := []Tier{TierReadOnly}
+	if p.tierHasAnAllowedTool(ctx, TierWrite) {
+		tiers = append(tiers, TierWrite)
+	}
+	if p.tierHasAnAllowedTool(ctx, TierDestructive) {
+		tiers = append(tiers, TierDestructive)
+	}
+	return tiers
+}
+
+// tierHasAnAllowedTool reports whether Decide allows at least one registered
+// tool in tier, for ctx's caller.
+func (p *Policy) tierHasAnAllowedTool(ctx context.Context, tier Tier) bool {
+	for name, toolTier := range p.tiers {
+		if toolTier == tier && p.Decide(ctx, name).Allowed {
+			return true
+		}
+	}
+	return false
+}
+
+// GrantedScopes reports the scopes ctx's caller holds, or none when they cannot
+// be determined.
+//
+// Unlike Decide and EffectiveTiers, a lookup failure here is not narrowed to a
+// safe default and reported as such — it is simply empty, because this is a
+// descriptive report rather than an authorization decision: server_info is
+// always read-only and must always answer, and there is nothing for a scope
+// lookup failure to protect here that a false empty answer would not already
+// protect on its own.
+func (p *Policy) GrantedScopes(ctx context.Context) []Scope {
+	granted, err := p.scopes.GrantedScopes(ctx)
+	if err != nil {
+		return nil
+	}
+	return granted
+}
+
 // refuse builds a denied Decision. Reason never contains the tool name, because
 // a tool name can itself disclose a sensitive domain.
 func refuse(tool string, tier Tier, cause error, reason string) Decision {

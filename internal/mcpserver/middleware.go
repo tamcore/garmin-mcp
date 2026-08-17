@@ -18,6 +18,9 @@ import (
 // methodCallTool is the JSON-RPC method every gate here cares about.
 const methodCallTool = "tools/call"
 
+// methodListTools is the JSON-RPC method toolsListMiddleware narrows.
+const methodListTools = "tools/list"
+
 // callRecord is the mutable per-call scratchpad the logging middleware installs
 // and the gates below it write into.
 //
@@ -64,6 +67,7 @@ func recordFromContext(ctx context.Context) *callRecord {
 //	   Last, so it is the final word before the handler runs.
 func (s *Server) installMiddleware() {
 	s.mcpServer.AddReceivingMiddleware(
+		s.toolsListMiddleware(),
 		argumentsMiddleware(),
 		s.principalMiddleware(),
 		s.loggingMiddleware(),
@@ -71,6 +75,81 @@ func (s *Server) installMiddleware() {
 		ratelimit.Middleware(s.deps.Limiter, s.classifyTool, rateLimitObserver{}),
 		s.policyMiddleware(),
 	)
+}
+
+// toolsListMiddleware narrows a tools/list result to what policy.Decide
+// currently allows the caller to call.
+//
+// A list is a capability advertisement: a client plans around what it can call,
+// and a tool it can only ever have refused is not a capability, it is wasted
+// prompt budget. This applies the *same* Decide the tools/call gate below
+// applies — not a parallel classification of tools into tiers — so a tool shown
+// here can never be one the call path would then refuse. It runs first in the
+// chain because it needs nothing the other gates set up: Decide reads scopes
+// from the request context directly, the same context every transport already
+// carries the verified grant on (or, on stdio, carries none, which is exactly
+// how read-only-only falls out of the same rule without a special case here).
+//
+// The registry itself never narrows: RegisterTools recorded every tool once at
+// start-up and that set is untouched. Only this per-request view does, and only
+// for tools/list; tools/call already refuses what this hides, so a client that
+// somehow retained a hidden name from an old page gains nothing by calling it.
+func (s *Server) toolsListMiddleware() mcp.Middleware {
+	return func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			result, err := next(ctx, method, req)
+			if method != methodListTools || err != nil {
+				return result, err
+			}
+			listResult, ok := result.(*mcp.ListToolsResult)
+			if !ok {
+				return result, err
+			}
+
+			elicitation := elicitationDeclaredFor(req)
+			visible := make([]*mcp.Tool, 0, len(listResult.Tools))
+			for _, tool := range listResult.Tools {
+				if s.toolVisible(ctx, elicitation, tool.Name) {
+					visible = append(visible, tool)
+				}
+			}
+			listResult.Tools = visible
+
+			// The result is caller-specific from here on: it reflects this
+			// session's own scopes and elicitation capability, so a shared
+			// intermediary must not serve it to a different caller. The SDK
+			// default of "public" is wrong for this filtered view.
+			listResult.CacheScope = "private"
+			return listResult, nil
+		}
+	}
+}
+
+// toolVisible is the single decision both toolsListMiddleware and server_info's
+// VisibleToolCount apply, so the two can never disagree about what a caller can
+// reach: allowed by policy, and — for a tool needing destructive confirmation —
+// only when the caller declared it can actually be asked to confirm. A tool
+// tools/list shows must always be one the tools/call gate could then run to
+// completion, not merely one Decide alone would allow.
+func (s *Server) toolVisible(ctx context.Context, elicitation bool, name string) bool {
+	decision := s.deps.Policy.Decide(ctx, name)
+	if !decision.Allowed {
+		return false
+	}
+	return !decision.RequiresConfirmation || elicitation
+}
+
+// elicitationDeclaredFor reports whether the caller of a tools/list request
+// declared the elicitation capability, using the exact same test
+// clientDeclaresElicitation applies to a tools/call request. A ListToolsRequest is
+// a distinct SDK type from CallToolRequest, so this reads the capability off it
+// directly rather than duplicating a second capability test.
+func elicitationDeclaredFor(req mcp.Request) bool {
+	listReq, ok := req.(*mcp.ListToolsRequest)
+	if !ok || listReq.Session == nil {
+		return false
+	}
+	return elicitationCapable(listReq.ClientCapabilities())
 }
 
 // argumentsMiddleware makes a tool call's arguments safe to validate.
