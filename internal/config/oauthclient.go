@@ -33,10 +33,12 @@ const (
 // the value is treated as immutable — [Config.Clone] copies the slices rather than
 // sharing them.
 //
-// The secret digest is the hex SHA-256 of the client secret, never the secret, so
-// this deployment holds nothing recoverable. It is supplied through
-// [OAuthClient.SecretHashPath]; the inline companion exists only for a local
-// experiment and is refused outright in remote mode.
+// The secret digest is the hex SHA-256 of the client secret, never the secret. It
+// is supplied through [OAuthClient.SecretHashPath], a regular owner-only file, or
+// inline through [OAuthClient.SecretHash] — exactly one of the two, never both.
+// The digest is not a replayable credential, but it is password-verifier
+// material: it is unsalted single-round SHA-256, so a low-entropy client secret
+// is recoverable offline from a leaked digest. Use a high-entropy secret.
 type OAuthClient struct {
 	// ID is the client identifier. It is required and must be unique.
 	ID string
@@ -57,8 +59,10 @@ type OAuthClient struct {
 	// SecretHashPath is the file holding the hex SHA-256 of a confidential
 	// client's secret. It is the supported way to supply the digest.
 	SecretHashPath string
-	// SecretHash is an inline digest. It is an explicitly insecure compatibility
-	// override, permitted only outside remote mode.
+	// SecretHash is an inline digest: a supported alternative to
+	// [OAuthClient.SecretHashPath], for a deployment where the digest arrives
+	// through an environment variable rather than a mountable regular file. It
+	// carries the same password-verifier weight as the file form.
 	SecretHash Secret
 }
 
@@ -318,9 +322,7 @@ func (c OAuthClient) validateCredential(position int) []error {
 		return []error{c.reject(position,
 			"must supply its secret digest either inline or by file, not both", ErrSecretConflict)}
 	case c.SecretHash.IsSet():
-		return []error{c.reject(position,
-			"is confidential and must supply its secret digest through "+
-				keyClientSecretHashFile+", never inline", ErrInsecureSetting)}
+		return nil
 	case c.SecretHashPath == "":
 		return []error{c.reject(position,
 			"is confidential and registers no secret digest", ErrMissingSetting)}

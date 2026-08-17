@@ -55,8 +55,11 @@ func (m AuthMethod) IsValid() bool {
 // a plain type, so neither the configuration loader nor the storage adapter has to
 // construct a validated value itself: they fill in a spec and call [NewClient].
 //
-// SecretHashHex is the hex-encoded SHA-256 of the client secret, never the secret,
-// so this server holds no recoverable client secret at rest.
+// SecretHashHex is the hex-encoded SHA-256 of the client secret, never the
+// secret itself. The digest is not a replayable credential, but it is
+// password-verifier material: it is unsalted single-round SHA-256, so a
+// low-entropy client secret is recoverable offline from a leaked digest. The
+// operator must choose a high-entropy secret.
 type ClientSpec struct {
 	// ID is the client identifier. No vendor identifier is ever defaulted or
 	// hardcoded: every client in this server exists because an operator

@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"os"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/tamcore/garmin-mcp/internal/config"
 	"github.com/tamcore/garmin-mcp/internal/garmin/auth"
+	"github.com/tamcore/garmin-mcp/internal/oauthserver"
 	"github.com/tamcore/garmin-mcp/internal/ratelimit"
 	"github.com/tamcore/garmin-mcp/internal/store"
 )
@@ -246,11 +249,11 @@ func TestAClientRegistrationIsProjectedOntoTheServersShape(t *testing.T) {
 	}
 }
 
-// TestASecretDigestIsOnlyAcceptedFromAFile keeps the secret plumbing narrow: a
-// public client has no digest at all, an inline digest is refused because remote
-// mode will not take secret material from the environment, and a confidential
-// client that registers none can authenticate nobody.
-func TestASecretDigestIsOnlyAcceptedFromAFile(t *testing.T) {
+// TestASecretDigestIsAcceptedInlineOrFromAFile keeps the secret plumbing's
+// structural rules: a public client has no digest at all, an inline digest is a
+// supported source for a confidential client, and a confidential client that
+// registers none can authenticate nobody.
+func TestASecretDigestIsAcceptedInlineOrFromAFile(t *testing.T) {
 	t.Parallel()
 
 	digest, err := clientDigest(config.OAuthClient{ID: "public-client", Public: true})
@@ -258,21 +261,115 @@ func TestASecretDigestIsOnlyAcceptedFromAFile(t *testing.T) {
 		t.Errorf("clientDigest(public) = %q, %v, want no digest and no error", digest, err)
 	}
 
-	_, err = clientDigest(config.OAuthClient{
+	const inlineDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
+	got, err := clientDigest(config.OAuthClient{
 		ID:         "inline-client",
-		SecretHash: config.NewSecret("0123456789abcdef"),
+		SecretHash: config.NewSecret(inlineDigest),
 	})
-	if !errors.Is(err, ErrInsecureDeployment) {
-		t.Errorf("an inline digest = %v, want ErrInsecureDeployment", err)
+	if err != nil {
+		t.Errorf("an inline digest = %v, want it accepted", err)
 	}
-	if err != nil && strings.Contains(err.Error(), "0123456789abcdef") {
-		t.Error("the refusal echoes the digest material")
+	if got != inlineDigest {
+		t.Errorf("clientDigest(inline) = %q, want %q", got, inlineDigest)
 	}
 
 	if _, err := clientDigest(config.OAuthClient{ID: "confidential-client"}); err == nil {
 		t.Error("a confidential client with no digest was accepted")
 	}
 }
+
+// sha256Hex returns the hex SHA-256 digest of secret, the same computation an
+// operator runs offline to populate secret-hash or secret-hash-file.
+func sha256Hex(secret string) string {
+	sum := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(sum[:])
+}
+
+// TestAConfidentialClientAcceptsAnInlineDigest proves the inline digest is a
+// supported way to register a confidential client: the built client
+// authenticates the secret whose digest was supplied, and refuses any other.
+func TestAConfidentialClientAcceptsAnInlineDigest(t *testing.T) {
+	t.Parallel()
+
+	const rawSecret = "correct-horse-battery-staple-0123456789"
+	digest := sha256Hex(rawSecret)
+
+	registration := confidentialRegistration()
+	registration.SecretHash = config.NewSecret(digest)
+
+	client, err := buildClient(registration)
+	if err != nil {
+		t.Fatalf("buildClient(inline digest) = %v, want it accepted", err)
+	}
+	if err := client.Authenticate(oauthserver.SecretFromString(rawSecret)); err != nil {
+		t.Errorf("Authenticate(the registered secret) = %v, want nil", err)
+	}
+	if err := client.Authenticate(oauthserver.SecretFromString("wrong-secret")); err == nil {
+		t.Error("Authenticate(a different secret) succeeded")
+	}
+}
+
+// TestAPublicClientCarryingAnInlineDigestIsRefused keeps the structural rule
+// that method "none" carries no digest, inline or by file.
+func TestAPublicClientCarryingAnInlineDigestIsRefused(t *testing.T) {
+	t.Parallel()
+
+	registration := config.OAuthClient{ID: "public-client", Public: true}
+	registration.SecretHash = config.NewSecret(sha256Hex("whatever"))
+
+	if _, err := clientDigest(registration); err == nil {
+		t.Error("a public client with an inline digest was accepted")
+	}
+}
+
+// TestBothDigestSourcesSetIsRefused keeps a registration from silently picking
+// one of two contradictory sources.
+func TestBothDigestSourcesSetIsRefused(t *testing.T) {
+	t.Parallel()
+
+	registration := confidentialRegistration()
+	registration.SecretHashPath = testDigestFilePath
+	registration.SecretHash = config.NewSecret(sha256Hex("whatever"))
+
+	if _, err := clientDigest(registration); err == nil {
+		t.Error("a registration with both an inline digest and a digest file was accepted")
+	}
+}
+
+// TestAnInlineDigestIsTrimmed keeps surrounding whitespace, which a
+// newline-terminated environment variable commonly carries, from making
+// ParseLookup's exact 64-hex-character check fail on an otherwise valid
+// digest.
+func TestAnInlineDigestIsTrimmed(t *testing.T) {
+	t.Parallel()
+
+	digest := sha256Hex("padded-secret")
+	registration := confidentialRegistration()
+	registration.SecretHash = config.NewSecret("  " + digest + "\n")
+
+	got, err := clientDigest(registration)
+	if err != nil {
+		t.Fatalf("clientDigest(padded inline digest) = %v, want it accepted", err)
+	}
+	if got != digest {
+		t.Errorf("clientDigest = %q, want the trimmed digest %q", got, digest)
+	}
+}
+
+// confidentialRegistration is the smallest confidential registration that
+// builds through [buildClient]; it carries no digest of its own.
+func confidentialRegistration() config.OAuthClient {
+	return config.OAuthClient{
+		ID:           "confidential-client",
+		RedirectURIs: []string{"https://client.example.test/callback"},
+		Scopes:       []string{"garmin:read"},
+		Resources:    []string{"https://mcp.example.test/mcp"},
+	}
+}
+
+// testDigestFilePath is a placeholder path used only to prove the
+// both-sources-set conflict; its content is never read in that case.
+const testDigestFilePath = "/run/secrets/example-client.sha256"
 
 // TestAStopTheOperatorAskedForIsNotAFailure keeps a clean shutdown out of the exit
 // status a supervisor reads as a crash. A cancelled read surfaces as an ordinary

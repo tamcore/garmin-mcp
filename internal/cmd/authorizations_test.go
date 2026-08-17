@@ -283,16 +283,15 @@ func TestDuplicateClientRegistrationsAreRefused(t *testing.T) {
 	}
 }
 
-// TestAnInlineClientDigestIsRefused keeps the "-file" rule enforced where a future
-// caller would reach it first, not only in configuration validation.
-func TestAnInlineClientDigestIsRefused(t *testing.T) {
+// TestAnInlineClientDigestIsAccepted keeps the inline digest usable where a
+// future caller would reach it first, not only in configuration validation.
+func TestAnInlineClientDigestIsAccepted(t *testing.T) {
 	cfg := remoteConfig(t)
 	cfg.OAuthClients[0].Public = false
 	cfg.OAuthClients[0].SecretHash = config.NewSecret(
 		"5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8")
 
-	_, err := newConfigClients(cfg)
-	if !errors.Is(err, ErrInsecureDeployment) {
-		t.Errorf("error %v does not match ErrInsecureDeployment", err)
+	if _, err := newConfigClients(cfg); err != nil {
+		t.Errorf("newConfigClients(inline digest) = %v, want it accepted", err)
 	}
 }

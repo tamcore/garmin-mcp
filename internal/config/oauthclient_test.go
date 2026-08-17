@@ -61,6 +61,15 @@ func TestValidateAcceptsRemoteRegistries(t *testing.T) {
 			mutate: func(c *Config) { c.OAuthClients = []OAuthClient{confidentialClient()} },
 		},
 		{
+			name: "one confidential client with an inline digest",
+			mutate: func(c *Config) {
+				client := confidentialClient()
+				client.SecretHashPath = ""
+				client.SecretHash = NewSecret(sentinelDigest)
+				c.OAuthClients = []OAuthClient{client}
+			},
+		},
+		{
 			name: "a loopback redirect over cleartext",
 			mutate: func(c *Config) {
 				client := publicClient()
@@ -168,16 +177,6 @@ func TestValidateRejectsUnusableRegistries(t *testing.T) {
 			sentinel: ErrMissingSetting,
 		},
 		{
-			name: "a confidential client with an inline digest",
-			mutate: func(c *Config) {
-				client := confidentialClient()
-				client.SecretHashPath = ""
-				client.SecretHash = NewSecret(sentinelDigest)
-				c.OAuthClients = []OAuthClient{client}
-			},
-			sentinel: ErrInsecureSetting,
-		},
-		{
 			name: "a public client carrying a digest",
 			mutate: func(c *Config) {
 				client := publicClient()
@@ -185,6 +184,15 @@ func TestValidateRejectsUnusableRegistries(t *testing.T) {
 				c.OAuthClients = []OAuthClient{client}
 			},
 			sentinel: ErrInvalidConfig,
+		},
+		{
+			name: "a confidential client with both an inline digest and a digest file",
+			mutate: func(c *Config) {
+				client := confidentialClient()
+				client.SecretHash = NewSecret(sentinelDigest)
+				c.OAuthClients = []OAuthClient{client}
+			},
+			sentinel: ErrSecretConflict,
 		},
 		{
 			name: "a client with no scope",

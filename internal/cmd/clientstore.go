@@ -102,20 +102,27 @@ func authMethodOf(registration config.OAuthClient) string {
 	return string(oauthserver.AuthMethodSecretBasic)
 }
 
-// clientDigest reads a confidential client's secret digest.
+// clientDigest reads a confidential client's secret digest, inline or from a
+// file.
 //
-// A public client has none by construction. The inline form is refused here as
-// well as in configuration validation, because this function is what a future
-// caller would reach first, and a check that lives only in the layer above is a
-// check that stops running when a new caller appears.
+// A public client has none by construction. This function re-checks the same
+// structural rules configuration validation already enforced, because it is
+// what a future caller would reach first, and a check that lives only in the
+// layer above is a check that stops running when a new caller appears.
 func clientDigest(registration config.OAuthClient) (string, error) {
+	hasDigest := registration.SecretHash.IsSet() || registration.SecretHashPath != ""
 	switch {
+	case registration.Public && hasDigest:
+		return "", fmt.Errorf("public client %q must not register a secret digest: %w",
+			registration.ID, oauthserver.ErrInvalidClient)
 	case registration.Public:
 		return "", nil
-	case registration.SecretHash.IsSet():
+	case registration.SecretHash.IsSet() && registration.SecretHashPath != "":
 		return "", fmt.Errorf(
-			"client %q supplies its secret digest inline, which remote mode refuses: %w",
-			registration.ID, ErrInsecureDeployment)
+			"client %q supplies its secret digest both inline and by file: %w",
+			registration.ID, oauthserver.ErrInvalidClient)
+	case registration.SecretHash.IsSet():
+		return strings.TrimSpace(registration.SecretHash.Reveal()), nil
 	case registration.SecretHashPath == "":
 		return "", fmt.Errorf("confidential client %q registers no secret digest: %w",
 			registration.ID, oauthserver.ErrInvalidClient)
