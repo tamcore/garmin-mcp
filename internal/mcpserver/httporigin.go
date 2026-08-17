@@ -144,9 +144,11 @@ func (g originGuard) grant(w http.ResponseWriter, origin string) {
 // worth nothing otherwise — which is the default, because the zero value trusts
 // nobody.
 //
-// Nothing security-relevant is derived from these headers. The issuer, the
-// resource, and every URL this server publishes come from configuration; the
-// forwarded address is a log label and nothing more.
+// The forwarded address is NOT merely a log label: it keys the per-address budget
+// of the rate limiter in front of the token, revocation and metadata endpoints,
+// which is the only limit on this server's unauthenticated OAuth surface. That is
+// why the walk below goes right to left. The issuer, the resource, and every URL
+// this server publishes still come from configuration, never from a header.
 type forwardedTrust struct {
 	proxies []netip.Prefix
 }
@@ -168,19 +170,43 @@ func newForwardedTrust(cidrs []string) (forwardedTrust, error) {
 // clientIP returns the address to attribute the request to.
 //
 // It is the peer address unless the peer is a trusted proxy, in which case it is
-// the client-most entry of X-Forwarded-For. A malformed entry is discarded
-// rather than repaired: an unparseable address is not evidence of anything.
+// the RIGHT-MOST X-Forwarded-For entry that is not itself a trusted proxy. A
+// malformed entry is discarded rather than repaired: an unparseable address is not
+// evidence of anything.
+//
+// The direction is the security property, not a style choice. A proxy APPENDS to
+// this header and preserves whatever the client sent, so with ingress-nginx's
+// use-forwarded-headers, HAProxy, or most cloud load balancers, a caller sending
+// "X-Forwarded-For: 1.2.3.4" produces "1.2.3.4, <real client>". Reading the
+// client-most entry therefore returns a string the caller chose. Since this value
+// keys the per-address rate-limit budget on the unauthenticated OAuth endpoints,
+// that let a caller mint a fresh budget per request by rotating the header, which
+// is exactly the limit that is supposed to bound credential stuffing.
+//
+// Walking from the right, every entry a trusted proxy appended is skipped, and the
+// first entry outside the trusted set is the nearest address this deployment has
+// any reason to believe. Anything further left was supplied by something upstream
+// of the trust boundary and is ignored.
 func (t forwardedTrust) clientIP(r *http.Request) string {
 	peer := peerIP(r.RemoteAddr)
 	if !t.trusts(peer) {
 		return peer
 	}
-	forwarded, _, _ := strings.Cut(r.Header.Get("X-Forwarded-For"), ",")
-	candidate, err := netip.ParseAddr(strings.TrimSpace(forwarded))
-	if err != nil {
-		return peer
+
+	entries := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for i := len(entries) - 1; i >= 0; i-- {
+		candidate, err := netip.ParseAddr(strings.TrimSpace(entries[i]))
+		if err != nil {
+			// A malformed entry is not evidence, and it is also not a reason to
+			// keep walking left past it into caller-controlled territory.
+			return peer
+		}
+		if !t.trusts(candidate.String()) {
+			return candidate.String()
+		}
 	}
-	return candidate.String()
+	// Every entry was a trusted proxy, so the header names no client.
+	return peer
 }
 
 // trusts reports whether an address is inside a configured proxy range.

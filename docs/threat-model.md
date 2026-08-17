@@ -1,7 +1,7 @@
 # Threat model
 
 **Read this first.** The MCP server, the OAuth authorization server, the browser
-login pages, the logger, the SQLite store and 47 tools all exist now, and most of
+login pages, the logger, the SQLite store and 142 tools all exist now, and most of
 the controls below have landed. Sections marked **[TARGET]** are requirements
 written with `must` and `will`; a `must` sentence is a requirement, never a claim
 that the code exists. The section
@@ -89,8 +89,10 @@ Six limits on the list above, stated so it cannot be over-read:
 - Consent scopes are compared by containment, not held in the consent key. That
   is what makes scope widening need fresh consent while narrowing does not; it is
   a deliberate design, not an approximation.
-- No MCP resource exists, so the resource half of every control below is
-  untested by construction.
+- Five MCP resources exist and are registered: four workout templates and the
+  structure reference. They are compile-time constants, rendered once at
+  registration and served with no request and no principal, so they carry no
+  per-principal data and no caller input reaches them.
 
 ## Assets [TARGET]
 
@@ -327,8 +329,16 @@ component-by-component path resolution for the store and key paths. The download
 path takes no caller-supplied filename at all and returns a bounded embedded
 resource, refusing an oversized payload rather than truncating it.
 
-**Not landed:** no fuzz target exists anywhere in the repository. That is the one
-outstanding requirement in this category.
+**Landed since:** eight fuzz targets exist — `internal/tools`
+(`FuzzSanitizeUntyped`), `internal/garmin/protocol` (`FuzzClassifyJSONLogin`,
+`FuzzClassifyWidgetPages`, `FuzzParseWidgetMFAVars`), `internal/garmin/api`
+(`FuzzParseFITActivity`) and `internal/garmin/client` (`FuzzNumberUnmarshalJSON`,
+`FuzzTextUnmarshalJSON`, `FuzzParseDate`) — with a committed corpus and a
+`fuzz-smoke` CI job that discovers every target and fails loudly if it finds none.
+That job has already caught a real defect: `ParseDate` accepted `0001-01-01`, the
+zero `time.Time` this package uses as its unset sentinel, so a successfully parsed
+date reported itself unset and a date-window filter dropped the day instead of
+placing it.
 
 ### 8. Reverse-proxy host and header spoofing
 
@@ -406,17 +416,26 @@ composition root opens the key and `doctor` branches on the sentinels. Inline
 token JSON is refused unless explicitly enabled, and it now has exactly one
 caller.
 
-**Not landed:** no store re-seals existing records, so key rotation is a library
-capability and not an operator procedure. Backup and restore are out of scope by
-decision rather than missing — see above.
-`docs/operations.md` does exist, and its "Key management" section states the same
-limitation in an operator's terms — that a staged rotation is supported by
-`internal/cryptostore`, that nothing drives it, and that rotation should therefore
-be treated as unavailable rather than attempted.
+**Landed since:** `garmin-mcp rotate-key` is a real operator procedure. It re-seals
+every sealed record in both backends — the index root, Garmin identities, Garmin
+token sets, OAuth client state, and the FileStore record — reads through the
+retired key while any record still needs it, fails closed on an unknown key
+version, and is resumable because each record's own envelope is the progress
+marker. `docs/operations.md` §4 documents the procedure. Backup and restore remain
+out of scope by decision — see above.
+
+The residual limits are stated there rather than here: rotation is offline, the
+retiring key is never deleted automatically, and a FileStore run can only speak for
+the principal the configuration binds.
+
+This section previously said no store re-sealed anything and that rotation should
+be treated as unavailable rather than attempted. That was true when written and is
+no longer; it is noted because an operator who read the old text would skip a
+rotation they should perform.
 
 ### 11. Malicious tool arguments and accidental destructive actions
 
-Landed for the 100 registered tools. Each declares all four annotation hints and a
+Landed for the 142 registered tools — 98 read-only, 35 write, 9 destructive. Each declares all four annotation hints and a
 strict schema, scope and operator policy are enforced before any Garmin call, the
 three tier name lists are validated against the registered set in both directions
 at start-up, allowlist and denylist are intersected with the tiers, and

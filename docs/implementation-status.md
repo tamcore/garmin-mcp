@@ -1344,11 +1344,12 @@ source.
 
 ### Storage and key-management gaps
 
-- Key rotation has no store-level driver and no operator procedure.
-  `internal/cryptostore` proves staged rotation end to end, but no store re-seals
-  existing records and no command drives it. `docs/operations.md` exists and its
-  "Key management" section tells operators to treat rotation as unavailable, which
-  is the honest position until a driver lands.
+- Key rotation is **landed**, not open: `garmin-mcp rotate-key` re-seals every
+  sealed record in both backends, and `docs/operations.md` §4 carries the
+  procedure. The residual limits are that it is offline, that the retiring key is
+  never deleted automatically, and that a FileStore run can only speak for the
+  principal the configuration binds. This entry described it as unavailable for
+  several commits after it shipped.
 - Backup and restore are **out of scope by decision**: the database sits on an
   operator-controlled volume and backing it up is the operator's job.
   `docs/operations.md` carries the procedure, including that the database and the
@@ -1523,13 +1524,10 @@ the one refusal documented. Phase 5 is closed. What follows is not breadth.
 
 In order:
 
-1. **A store-level key-rotation driver.** ADR 0005 records this as open, and it is
-   the last real implementation gap. `internal/cryptostore` proves a staged
-   rotation end to end, but no store re-seals existing records and no command
-   drives one, so `docs/operations.md` correctly tells operators to treat rotation
-   as unavailable. Re-sealing must be resumable, must not double-seal, and must
-   not lose a concurrent refresh's write — `garmin_token_sets` carries a version
-   column for CAS and that is where the interaction lives.
+1. ~~A store-level key-rotation driver.~~ **Landed.** `garmin-mcp rotate-key`
+   re-seals every sealed record in both backends, resumably and without
+   double-sealing, with the CAS interaction inside `internal/store`. ADR 0005's two
+   open items are closed; see `docs/operations.md` §4.
 2. ~~A Go parity regenerator plus a CI drift check.~~ **Narrowed and closed.** A
    full Go re-implementation is rejected on dependency and correctness grounds,
    and committing the Python extractor requires a golden reproduction of

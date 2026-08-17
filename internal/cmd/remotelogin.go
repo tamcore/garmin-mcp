@@ -22,37 +22,33 @@ const (
 	pendingLoginTTL = 10 * time.Minute
 )
 
-// A principalDirectory resolves, creates and links the principals a remote login
-// binds.
+// A principalDirectory resolves and binds the principals a remote login needs.
 //
-// The interface lives with its consumer, so this file depends on four operations
+// The interface lives with its consumer, so this file depends on two operations
 // rather than on the whole SQLite store, and a test can supply either.
 type principalDirectory interface {
 	// PrincipalByGarminAccount returns the principal a Garmin account is linked
-	// to, or an error wrapping store.ErrPrincipalNotFound.
+	// to, or an error wrapping store.ErrPrincipalNotFound. It is used only to
+	// decide whether the token gate below needs to be taken before the bind: an
+	// account with no linked principal yet has nothing a refresh could be racing.
 	PrincipalByGarminAccount(ctx context.Context, accountID store.Secret) (store.Principal, error)
-	// PrincipalByEmail returns the principal registered under a login handle, or
-	// an error wrapping store.ErrPrincipalNotFound.
-	PrincipalByEmail(ctx context.Context, email string) (store.Principal, error)
-	// CreatePrincipal mints a principal for a login handle.
-	CreatePrincipal(ctx context.Context, email string) (store.Principal, error)
-	// LinkGarminAccount attaches a Garmin account to a principal, refusing an
-	// account another principal already owns.
-	LinkGarminAccount(ctx context.Context, principalID string, identity store.GarminIdentity) error
+	// BindGarminAccount resolves or creates the principal for a Garmin account,
+	// links the account to it, and stores the token set a completed login
+	// produced, as one atomic operation: any failure along the way leaves no new
+	// principal and no partial linkage behind.
+	BindGarminAccount(ctx context.Context, in store.GarminBindInput) (store.Principal, error)
 }
 
 // remoteLoginDeps is what the seam is assembled from. Every field is required.
 type remoteLoginDeps struct {
 	// authenticator runs the Garmin login.
 	authenticator *auth.Authenticator
-	// directory resolves and creates principals.
+	// directory resolves and binds principals.
 	directory principalDirectory
-	// tokens is the store a committed token set is written to.
-	tokens auth.TokenStore
 	// staging holds a login's token set until its principal exists.
 	staging *stagedTokens
-	// gate serializes the commit against a concurrent refresh of the same
-	// principal.
+	// gate serializes the bind against a concurrent refresh of a principal that
+	// already exists.
 	gate *auth.TokenGate
 	// now is the clock of the pending-login registry. Nil selects time.Now.
 	now func() time.Time
@@ -82,7 +78,6 @@ type remoteLoginDeps struct {
 type remoteLogin struct {
 	authenticator *auth.Authenticator
 	directory     principalDirectory
-	tokens        auth.TokenStore
 	staging       *stagedTokens
 	gate          *auth.TokenGate
 	pending       *pendingLogins
@@ -95,7 +90,7 @@ var _ loginweb.Authenticator = (*remoteLogin)(nil)
 // missing one would be a silent downgrade of a security property rather than a
 // missing convenience.
 func newRemoteLogin(deps remoteLoginDeps) (*remoteLogin, error) {
-	if deps.authenticator == nil || deps.directory == nil || deps.tokens == nil ||
+	if deps.authenticator == nil || deps.directory == nil ||
 		deps.staging == nil || deps.gate == nil {
 		return nil, errors.New("cmd: the remote login seam is missing a dependency")
 	}
@@ -106,7 +101,6 @@ func newRemoteLogin(deps remoteLoginDeps) (*remoteLogin, error) {
 	return &remoteLogin{
 		authenticator: deps.authenticator,
 		directory:     deps.directory,
-		tokens:        deps.tokens,
 		staging:       deps.staging,
 		gate:          deps.gate,
 		pending:       newPendingLogins(maxPendingLogins, pendingLoginTTL, now),
@@ -181,11 +175,16 @@ func (r *remoteLogin) attempt(
 	return out, nil
 }
 
-// bind resolves the principal of a completed login and commits its token set.
+// bind resolves the principal of a completed login and binds its token set to it.
 //
 // It fails closed on an account Garmin did not name: without an account identifier
 // there is nothing to key isolation on, and falling back to the email would key it
 // on exactly the value the design refuses.
+//
+// Resolving the principal, linking the Garmin account, and storing the token set
+// all happen inside the one store call: a failure at any point leaves no new
+// principal and no partial linkage behind, rather than the durable half-write a
+// multi-step commit here used to risk.
 func (r *remoteLogin) bind(
 	ctx context.Context, staged, email string, result auth.Result,
 ) (string, error) {
@@ -195,117 +194,44 @@ func (r *remoteLogin) bind(
 			"the login was accepted but named no garmin account: %w", ErrNoGarminAccount)
 	}
 
-	principal, err := r.resolve(ctx, account, email, result.GarminDisplayName())
-	if err != nil {
-		return "", err
-	}
-	if err := r.commit(ctx, staged, principal); err != nil {
-		return "", err
-	}
-	return principal, nil
-}
-
-// resolve finds the principal the Garmin account belongs to, or creates one.
-//
-// The lookup is on the account and the creation carries the email, which is the
-// division the whole design rests on: the account is the key, the email is the
-// handle. A creation that loses the unique-email race reads the winner, and a
-// linkage that loses the unique-account race reads the winner too, so two browsers
-// logging in at once end with one principal rather than two.
-func (r *remoteLogin) resolve(
-	ctx context.Context, account store.Secret, email, displayName string,
-) (string, error) {
-	switch linked, err := r.directory.PrincipalByGarminAccount(ctx, account); {
-	case err == nil:
-		return linked.ID, nil
-	case !errors.Is(err, store.ErrPrincipalNotFound):
-		return "", fmt.Errorf("resolving the principal of the garmin account: %w", err)
-	}
-
-	principal, err := r.principalFor(ctx, email)
-	if err != nil {
-		return "", err
-	}
-
-	err = r.directory.LinkGarminAccount(ctx, principal,
-		store.GarminIdentity{AccountID: account, DisplayName: displayName})
-	if errors.Is(err, store.ErrGarminAccountLinked) {
-		return r.linkedElsewhere(ctx, account)
-	}
-	if err != nil {
-		return "", fmt.Errorf("linking the garmin account: %w", err)
-	}
-	return principal, nil
-}
-
-// principalFor returns the principal registered under a login handle, creating one
-// when the handle is new.
-func (r *remoteLogin) principalFor(ctx context.Context, email string) (string, error) {
-	created, err := r.directory.CreatePrincipal(ctx, email)
-	if err == nil {
-		return created.ID, nil
-	}
-	if !errors.Is(err, store.ErrPrincipalExists) {
-		return "", fmt.Errorf("creating the principal: %w", err)
-	}
-
-	existing, err := r.directory.PrincipalByEmail(ctx, email)
-	if err != nil {
-		return "", fmt.Errorf("resolving the principal for a registered handle: %w", err)
-	}
-	return existing.ID, nil
-}
-
-// linkedElsewhere reads the principal that won a concurrent linkage of the same
-// Garmin account. One Garmin account is one principal, so the loser of that race
-// uses the winner rather than creating a second tenant.
-func (r *remoteLogin) linkedElsewhere(ctx context.Context, account store.Secret) (string, error) {
-	winner, err := r.directory.PrincipalByGarminAccount(ctx, account)
-	if err != nil {
-		return "", fmt.Errorf("resolving the principal after a concurrent linkage: %w", err)
-	}
-	return winner.ID, nil
-}
-
-// commit moves the staged token set onto the resolved principal.
-//
-// It runs under the same token gate the authenticator and the refresher share, so
-// this write queues behind a concurrent refresh of the same principal instead of
-// racing it: a returning account may already hold a token set that a refresh is
-// rotating right now, and an unserialized write here would overwrite a refresh
-// token it never saw.
-func (r *remoteLogin) commit(ctx context.Context, staged, principal string) error {
 	set, err := r.staging.take(staged)
 	if err != nil {
-		return fmt.Errorf("reading what the login produced: %w", err)
+		return "", fmt.Errorf("reading what the login produced: %w", err)
 	}
 
-	release, err := r.gate.Acquire(ctx, principal)
+	release, err := r.acquireExistingGate(ctx, account)
 	if err != nil {
-		return fmt.Errorf("awaiting the token gate: %w", err)
+		return "", err
 	}
 	defer release()
 
-	baseline, err := r.storedVersion(ctx, principal)
+	principal, err := r.directory.BindGarminAccount(ctx, store.GarminBindInput{
+		Account:     account,
+		Email:       email,
+		DisplayName: result.GarminDisplayName(),
+		Tokens:      storeTokenSet(set),
+	})
 	if err != nil {
-		return err
+		return "", fmt.Errorf("binding the garmin account: %w", err)
 	}
-	if _, err := r.tokens.Save(ctx, principal, set, baseline); err != nil {
-		return fmt.Errorf("storing what the login produced: %w", err)
-	}
-	return nil
+	return principal.ID, nil
 }
 
-// storedVersion reports the principal's current token version, or zero when
-// nothing is stored.
-func (r *remoteLogin) storedVersion(ctx context.Context, principal string) (int64, error) {
-	_, version, err := r.tokens.Load(ctx, principal)
-	switch {
+// acquireExistingGate takes the token gate of the principal a Garmin account is
+// already linked to, so the bind below queues behind a concurrent refresh of that
+// principal instead of racing it. An account with no linked principal yet needs no
+// gate: nothing can be refreshing a principal that does not exist.
+func (r *remoteLogin) acquireExistingGate(ctx context.Context, account store.Secret) (func(), error) {
+	switch existing, err := r.directory.PrincipalByGarminAccount(ctx, account); {
 	case err == nil:
-		return version, nil
-	case errors.Is(err, auth.ErrNoTokens):
-		return 0, nil
+		release, err := r.gate.Acquire(ctx, existing.ID)
+		if err != nil {
+			return nil, fmt.Errorf("awaiting the token gate: %w", err)
+		}
+		return release, nil
+	case errors.Is(err, store.ErrPrincipalNotFound):
+		return func() {}, nil
 	default:
-		return 0, fmt.Errorf("reading the stored token set: %w", err)
+		return nil, fmt.Errorf("resolving the principal of the garmin account: %w", err)
 	}
 }

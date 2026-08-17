@@ -3,6 +3,7 @@ package oauthstore_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -249,5 +250,68 @@ func TestRevokePrincipalRevokesEverythingAndIsIdempotent(t *testing.T) {
 	}
 	if err := f.adapter.RevokePrincipal(ctx, f.principal); err != nil {
 		t.Fatalf("second RevokePrincipal: %v", err)
+	}
+}
+
+// TestRotateRefreshTokenPersistsTheNarrowedScopeOfTheNewAccessToken guards the
+// adapter seam where a narrowed refresh used to be silently widened again.
+//
+// OAuth lets a refresh narrow scope. internal/oauthserver narrows it and reports
+// the narrow set in the token response, but verification reads the scopes off the
+// PERSISTED row. This adapter is the only thing that carries the narrowed set into
+// the store, and it used not to: the rotation inherited the consumed token's
+// scopes, so a client that deliberately narrowed a token to hand to a lower-trust
+// consumer was told it was read-only while the row still granted write and
+// destructive scope.
+//
+// The mutant this kills: dropping the Scopes field from the store.RefreshRotation
+// this adapter builds. Note that oauthserver's own fake store cannot catch it —
+// the fake persists the AccessToken it is handed, so it is faithful to the
+// intended contract and blind to the adapter that broke it.
+func TestRotateRefreshTokenPersistsTheNarrowedScopeOfTheNewAccessToken(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+
+	// The family being consumed must be WIDER than what the rotation narrows to,
+	// or there is nothing to detect: the fixture's own scope set is the narrow one,
+	// so seeding through seedFamily would make this test pass either way. That is
+	// the first version of this test, and it passed with the fix removed.
+	narrower := mustScopes(t, "garmin.read")
+	wider := mustScopes(t, "garmin.read garmin.write")
+	if len(wider.Strings()) <= len(narrower.Strings()) {
+		t.Fatal("the test's wide set is not wider than its narrow set")
+	}
+	if err := f.adapter.SaveConsent(ctx, oauthserver.Consent{
+		Key:       f.consentKey(),
+		Scopes:    wider,
+		GrantedAt: f.clock.Now(),
+	}); err != nil {
+		t.Fatalf("SaveConsent: %v", err)
+	}
+	wideAccess, presented := f.pair("family-narrowing", "narrowing", 0)
+	wideAccess.Scopes = wider
+	presented.Scopes = wider
+	if err := f.adapter.SaveTokenPair(ctx, wideAccess, presented); err != nil {
+		t.Fatalf("SaveTokenPair: %v", err)
+	}
+
+	// The rotation the server produces after narrowing: same family, fewer scopes
+	// than the token being consumed.
+	nextAccess, nextRefresh := f.pair(presented.Family, "narrowing-next", 1)
+	nextAccess.Scopes = narrower
+	nextRefresh.Scopes = narrower
+
+	if err := f.adapter.RotateRefreshToken(ctx, presented.Lookup, nextAccess, nextRefresh); err != nil {
+		t.Fatalf("RotateRefreshToken: %v", err)
+	}
+
+	stored, err := f.adapter.AccessToken(ctx, nextAccess.Lookup)
+	if err != nil {
+		t.Fatalf("AccessToken after the narrowing rotation: %v", err)
+	}
+	if got := strings.Join(stored.Scopes.Strings(), " "); got != "garmin.read" {
+		t.Fatalf("the rotated access token verifies with scopes %q, want %q: the client was "+
+			"told its refreshed token was narrowed, and verification reads this row rather "+
+			"than the response it was given", got, "garmin.read")
 	}
 }

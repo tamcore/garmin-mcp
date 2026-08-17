@@ -307,7 +307,6 @@ func newRemoteLoginServer(
 	logins, err := newRemoteLogin(remoteLoginDeps{
 		authenticator: deps.authenticator,
 		directory:     parts.sqlite,
-		tokens:        deps.tokens,
 		staging:       deps.staging,
 		gate:          deps.tokenGate,
 	})

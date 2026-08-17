@@ -43,6 +43,7 @@ const (
 	mcpPath         = "/mcp"
 	proxyCIDR       = "10.0.0.0/8"
 	proxyPeer       = "10.1.2.3:5000"
+	proxyPeerIP     = "10.1.2.3"
 	forwardedClient = "198.51.100.7"
 )
 

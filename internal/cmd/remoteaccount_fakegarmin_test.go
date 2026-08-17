@@ -28,7 +28,6 @@ func newRemoteSeam(t *testing.T, remote *remoteDeployment) *remoteLogin {
 	seam, err := newRemoteLogin(remoteLoginDeps{
 		authenticator: newFakeAuthenticator(t, remote.deps.tokens),
 		directory:     remote.sqlite,
-		tokens:        remote.deps.tokens,
 		staging:       remote.deps.staging,
 		gate:          remote.deps.tokenGate,
 	})
@@ -96,7 +95,6 @@ func TestAFailedLoginLeavesNoPrincipalBehind(t *testing.T) {
 	seam, err := newRemoteLogin(remoteLoginDeps{
 		authenticator: newAuthenticatorOn(t, server, remote.deps.tokens),
 		directory:     remote.sqlite,
-		tokens:        remote.deps.tokens,
 		staging:       remote.deps.staging,
 		gate:          remote.deps.tokenGate,
 	})
@@ -137,7 +135,6 @@ func TestRemoteLoginBindsAnMFAContinuation(t *testing.T) {
 	seam, err := newRemoteLogin(remoteLoginDeps{
 		authenticator: newAuthenticatorOn(t, server, remote.deps.tokens),
 		directory:     remote.sqlite,
-		tokens:        remote.deps.tokens,
 		staging:       remote.deps.staging,
 		gate:          remote.deps.tokenGate,
 	})

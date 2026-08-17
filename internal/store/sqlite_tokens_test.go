@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -356,5 +357,63 @@ func TestRevokeTokenFamilyRefusesBadInput(t *testing.T) {
 		if !errors.Is(err, store.ErrInvalidArgument) {
 			t.Errorf("reason %q: err = %v, want ErrInvalidArgument", reason, err)
 		}
+	}
+}
+
+// TestRotateRefreshTokenPersistsTheNarrowedScopeSet is the property an
+// authorization server's honesty depends on.
+//
+// OAuth lets a refresh NARROW scope, and this server's refresh grant does narrow
+// it and reports the narrow set in the token response. Verification, though, reads
+// the scopes off the PERSISTED row. Before RefreshRotation carried a scope set,
+// the rotation inherited the consumed token's scopes unconditionally, so a client
+// that deliberately narrowed a token — to hand to a subagent, a log scraper, any
+// lower-trust consumer — was told it held a read-only credential while the row
+// still carried write and destructive scope. That defeats the scope half of the
+// write/destructive intersection, which is the control that is meant to be
+// necessary and never sufficient.
+//
+// The mutant this kills: dropping Scopes and going back to stored.scopes.
+func TestRotateRefreshTokenPersistsTheNarrowedScopeSet(t *testing.T) {
+	t.Parallel()
+	opened, _ := newTestStore(t)
+	ctx := context.Background()
+
+	principal := seedPrincipal(t, opened)
+	client := seedClient(t, opened)
+	wide := []string{testScope, otherScope}
+	if err := opened.GrantConsent(ctx, principal.ID, client.ID, wide); err != nil {
+		t.Fatalf("GrantConsent: %v", err)
+	}
+	access := store.NewSecret("wide-access-token")
+	refresh := store.NewSecret("wide-refresh-token")
+	if _, err := opened.IssueTokenFamily(ctx, store.TokenGrant{
+		PrincipalID:     principal.ID,
+		ClientID:        client.ID,
+		Scopes:          wide,
+		Audience:        testAudience,
+		AccessToken:     access,
+		RefreshToken:    refresh,
+		AccessLifetime:  10 * time.Minute,
+		RefreshLifetime: 24 * time.Hour,
+	}); err != nil {
+		t.Fatalf("IssueTokenFamily: %v", err)
+	}
+
+	narrowed := rotation(refresh, "narrow-access-token", "narrow-refresh-token")
+	narrowed.Scopes = []string{testScope}
+	if _, err := opened.RotateRefreshToken(ctx, narrowed); err != nil {
+		t.Fatalf("RotateRefreshToken: %v", err)
+	}
+
+	stored, err := opened.LookupAccessToken(ctx, store.NewSecret("narrow-access-token"))
+	if err != nil {
+		t.Fatalf("LookupAccessToken after the narrowing rotation: %v", err)
+	}
+	if got := strings.Join(stored.Scopes, " "); got != testScope {
+		t.Fatalf("the rotated access token persisted scopes %q, want %q: the client was told "+
+			"its refreshed token was narrowed, so a wider persisted set hands it authority "+
+			"it was told it does not have — verification reads this row, not the response",
+			got, testScope)
 	}
 }

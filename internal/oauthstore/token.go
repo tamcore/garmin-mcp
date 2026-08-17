@@ -147,6 +147,10 @@ func (a *Adapter) RotateRefreshToken(ctx context.Context, presented oauthserver.
 		NextAccessToken:  accessMaterial,
 		NextRefreshToken: refreshMaterial,
 		NextGeneration:   refresh.Generation,
+		// The narrowed set the server computed and reported to the client, not the
+		// consumed token's. Verification reads the persisted row, so inheriting the
+		// old scopes here would hand back a token wider than the client was told.
+		Scopes:           access.Scopes.Strings(),
 		IssuedAt:         access.IssuedAt,
 		AccessExpiresAt:  access.ExpiresAt,
 		RefreshExpiresAt: refresh.ExpiresAt,

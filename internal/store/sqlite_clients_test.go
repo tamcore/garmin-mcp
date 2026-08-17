@@ -238,7 +238,7 @@ func TestConsentGrantReadAndRegrant(t *testing.T) {
 	}
 
 	// A re-grant replaces the scope list, in order.
-	wider := []string{testScope, "garmin.write"}
+	wider := []string{testScope, otherScope}
 	if err := opened.GrantConsent(ctx, principal.ID, client.ID, wider); err != nil {
 		t.Fatalf("second GrantConsent: %v", err)
 	}

@@ -179,11 +179,25 @@ func TestClientIPTrustsForwardedHeadersOnlyFromAConfiguredProxy(t *testing.T) {
 		},
 		"no configured proxy means no trust": {
 			remoteAddr: proxyPeer, forwarded: forwardedClient,
-			want: "10.1.2.3",
+			want: proxyPeerIP,
 		},
-		"the client-most entry of a chain is taken": {
+		"trusted proxies in the chain are skipped from the right": {
 			remoteAddr: proxyPeer, forwarded: "198.51.100.7, 10.1.2.3",
 			trusted: []string{proxyCIDR}, want: forwardedClient,
+		},
+		// The reason the walk goes right to left. A proxy APPENDS and preserves
+		// what the client sent, so a caller who sets the header supplies the
+		// left-hand entries. Reading the client-most one returns a string the
+		// caller chose — and since this value keys the per-address rate-limit
+		// budget on the unauthenticated OAuth endpoints, rotating the header
+		// would mint a fresh budget per request.
+		"a spoofed left-hand entry is ignored in favour of the appended one": {
+			remoteAddr: proxyPeer, forwarded: "1.2.3.4, 198.51.100.7",
+			trusted: []string{proxyCIDR}, want: forwardedClient,
+		},
+		"a chain of nothing but trusted proxies names no client": {
+			remoteAddr: proxyPeer, forwarded: "10.9.9.9, 10.1.2.3",
+			trusted: []string{proxyCIDR}, want: "10.1.2.3",
 		},
 		"a malformed forwarded value is discarded": {
 			remoteAddr: proxyPeer, forwarded: "not-an-ip",

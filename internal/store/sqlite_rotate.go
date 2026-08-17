@@ -32,6 +32,19 @@ type RefreshRotation struct {
 	// is; a caller that mints its own records passes what it minted.
 	NextGeneration uint64
 
+	// Scopes is the scope set to persist on the replacement pair. An empty slice
+	// inherits the presented token's scopes, which is a refresh that narrowed
+	// nothing.
+	//
+	// This field is why the caller cannot be trusted to merely report a narrowed
+	// scope to its client: OAuth lets a refresh narrow scope, and the authorization
+	// server does narrow it and returns the narrow set in the response. Before this
+	// existed the rotation inherited the CONSUMED token's scopes unconditionally, so
+	// a client that deliberately narrowed a token to hand to a lower-trust consumer
+	// was told it was read-only while the persisted row still carried write and
+	// destructive scope — and verification reads the row, not the response.
+	Scopes []string
+
 	// IssuedAt, AccessExpiresAt and RefreshExpiresAt are the absolute instants of the
 	// replacement pair. Each zero value falls back to the store's clock and the
 	// matching lifetime above, so a caller that has records writes exactly what it
@@ -191,10 +204,20 @@ func (s *SQLiteStore) prepareRotation(stored storedToken, rotation RefreshRotati
 	if generation == 0 {
 		generation = stored.generation + 1
 	}
+	scopes := stored.scopes
+	if len(rotation.Scopes) > 0 {
+		// Validated the same way every other scope write is, so a rotation cannot
+		// persist a shape the rest of the store would refuse.
+		narrowed, err := encodeScopes(rotation.Scopes)
+		if err != nil {
+			return preparedGrant{}, err
+		}
+		scopes = narrowed
+	}
 	return preparedGrant{
 		accessHash:       hashes[0],
 		refreshHash:      hashes[1],
-		scopes:           stored.scopes,
+		scopes:           scopes,
 		audience:         stored.audience,
 		generation:       generation,
 		issuedAt:         issuedAt,

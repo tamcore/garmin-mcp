@@ -22,20 +22,17 @@ const (
 // testAccount is the confirmed Garmin account a resolved login carries.
 func testAccount() store.Secret { return store.NewSecret(testLoginAccount) }
 
-// fakeDirectory is a principal directory with no database behind it. It records
-// what it was asked, so a test can assert that a second login reuses the principal
-// the first one created rather than minting another.
+// fakeDirectory is a principal directory with no database behind it. The real
+// resolve-link-save logic now lives in store.SQLiteStore.BindGarminAccount, tested
+// against a real SQLite database in internal/store; this fake exists only so a
+// cmd-level test can supply a principalDirectory without a database, for behavior
+// that never reaches it (a login refused before any bind is attempted).
 type fakeDirectory struct {
-	byEmail   map[string]store.Principal
 	byAccount map[string]store.Principal
-	created   int
 }
 
 func newFakeDirectory() *fakeDirectory {
-	return &fakeDirectory{
-		byEmail:   make(map[string]store.Principal),
-		byAccount: make(map[string]store.Principal),
-	}
+	return &fakeDirectory{byAccount: make(map[string]store.Principal)}
 }
 
 func (f *fakeDirectory) PrincipalByGarminAccount(
@@ -48,153 +45,49 @@ func (f *fakeDirectory) PrincipalByGarminAccount(
 	return principal, nil
 }
 
-func (f *fakeDirectory) LinkGarminAccount(
-	_ context.Context, principalID string, identity store.GarminIdentity,
-) error {
-	f.byAccount[identity.AccountID.Reveal()] = store.Principal{ID: principalID}
-	return nil
+func (f *fakeDirectory) BindGarminAccount(
+	_ context.Context, in store.GarminBindInput,
+) (store.Principal, error) {
+	principal := store.Principal{ID: testLoginPrincipal, Email: in.Email, GarminLinked: true}
+	f.byAccount[in.Account.Reveal()] = principal
+	return principal, nil
 }
 
-func (f *fakeDirectory) PrincipalByEmail(
-	_ context.Context, email string,
-) (store.Principal, error) {
-	principal, ok := f.byEmail[email]
-	if !ok {
-		return store.Principal{}, store.ErrPrincipalNotFound
+// TestAcquireExistingGateSkipsTheGateForANewAccount covers the reason a fresh
+// account needs no serialization: nothing can be refreshing a principal that does
+// not exist yet, so the bind proceeds without ever taking the gate.
+func TestAcquireExistingGateSkipsTheGateForANewAccount(t *testing.T) {
+	seam := &remoteLogin{directory: newFakeDirectory(), gate: auth.NewTokenGate()}
+
+	release, err := seam.acquireExistingGate(t.Context(), testAccount())
+	if err != nil {
+		t.Fatalf("acquireExistingGate returned error: %v", err)
 	}
-	return principal, nil
+	release() // must not panic on the no-op release
 }
 
-func (f *fakeDirectory) CreatePrincipal(
-	_ context.Context, email string,
-) (store.Principal, error) {
-	f.created++
-	principal := store.Principal{ID: testLoginPrincipal, Email: email}
-	f.byEmail[email] = principal
-	return principal, nil
-}
-
-// racingDirectory reports "not found", then refuses the creation as a duplicate,
-// and only then reports the row — which is exactly what a lost insert race looks
-// like from one of the two callers.
-type racingDirectory struct {
-	lookups int
-}
-
-func (r *racingDirectory) PrincipalByEmail(
-	_ context.Context, _ string,
-) (store.Principal, error) {
-	// The handle is unknown until the concurrent creation lands, which is what the
-	// refused CreatePrincipal below reports; from then on it reads the winner.
-	r.lookups++
-	return store.Principal{ID: testLoginPrincipal}, nil
-}
-
-func (r *racingDirectory) CreatePrincipal(
-	_ context.Context, _ string,
-) (store.Principal, error) {
-	return store.Principal{}, store.ErrPrincipalExists
-}
-
-func (r *racingDirectory) PrincipalByGarminAccount(
-	_ context.Context, _ store.Secret,
-) (store.Principal, error) {
-	return store.Principal{}, store.ErrPrincipalNotFound
-}
-
-func (r *racingDirectory) LinkGarminAccount(
-	_ context.Context, _ string, _ store.GarminIdentity,
-) error {
-	return nil
-}
-
-// TestRemoteLoginResolvesOnePrincipalPerAccount covers the multi-user rule the
-// stdio path does not have: the account comes from the credentials, and a
-// returning user is the same principal rather than a new one.
-func TestRemoteLoginResolvesOnePrincipalPerAccount(t *testing.T) {
+// TestAcquireExistingGateTakesTheGateForAReturningAccount covers the other half:
+// an account already linked to a principal must queue behind that principal's own
+// gate — the same one the authenticator and refresher use — so this bind cannot
+// race a concurrent refresh of that principal's token set.
+func TestAcquireExistingGateTakesTheGateForAReturningAccount(t *testing.T) {
 	directory := newFakeDirectory()
-	seam := &remoteLogin{directory: directory}
+	directory.byAccount[testLoginAccount] = store.Principal{ID: testLoginPrincipal}
+	gate := auth.NewTokenGate()
+	seam := &remoteLogin{directory: directory, gate: gate}
 
-	first, err := seam.resolve(t.Context(), testAccount(), testLoginEmail, "Rider")
+	release, err := seam.acquireExistingGate(t.Context(), testAccount())
 	if err != nil {
-		t.Fatalf("resolve returned error: %v", err)
+		t.Fatalf("acquireExistingGate returned error: %v", err)
 	}
-	// The second login arrives under a different handle. It is the same Garmin
-	// account, so it must be the same principal: the account is the key and the
-	// email is only the handle.
-	second, err := seam.resolve(t.Context(), testAccount(), "renamed@example.test", "Rider")
-	if err != nil {
-		t.Fatalf("resolve returned error: %v", err)
-	}
+	defer release()
 
-	if first != second {
-		t.Errorf("two logins resolved %q and %q: one account became two principals", first, second)
-	}
-	if directory.created != 1 {
-		t.Errorf("the directory created %d principals, want 1", directory.created)
-	}
-}
-
-// TestRemoteLoginSurvivesAConcurrentCreation covers the race two browsers cause:
-// the loser of the unique index reads the winner instead of failing the login.
-func TestRemoteLoginSurvivesAConcurrentCreation(t *testing.T) {
-	seam := &remoteLogin{directory: &racingDirectory{}}
-
-	resolved, err := seam.resolve(t.Context(), testAccount(), testLoginEmail, "Rider")
-	if err != nil {
-		t.Fatalf("resolve returned error: %v", err)
-	}
-	if resolved != testLoginPrincipal {
-		t.Errorf("resolved %q, want the concurrently created principal", resolved)
-	}
-}
-
-// linkRacingDirectory loses the unique-account race: the linkage is refused because
-// another login linked the same Garmin account first.
-type linkRacingDirectory struct {
-	linked bool
-}
-
-func (d *linkRacingDirectory) PrincipalByGarminAccount(
-	_ context.Context, _ store.Secret,
-) (store.Principal, error) {
-	if !d.linked {
-		return store.Principal{}, store.ErrPrincipalNotFound
-	}
-	return store.Principal{ID: testLoginPrincipal}, nil
-}
-
-func (d *linkRacingDirectory) PrincipalByEmail(
-	_ context.Context, _ string,
-) (store.Principal, error) {
-	return store.Principal{}, store.ErrPrincipalNotFound
-}
-
-func (d *linkRacingDirectory) CreatePrincipal(
-	_ context.Context, _ string,
-) (store.Principal, error) {
-	return store.Principal{ID: "22222222-3333-4444-8555-666666666666"}, nil
-}
-
-func (d *linkRacingDirectory) LinkGarminAccount(
-	_ context.Context, _ string, _ store.GarminIdentity,
-) error {
-	d.linked = true
-	return store.ErrGarminAccountLinked
-}
-
-// TestRemoteLoginUsesTheWinnerOfAConcurrentLinkage is the fail-closed half of the
-// one-account-one-principal rule: the login that loses the unique-account race uses
-// the principal that won it rather than serving a second tenant for one account.
-func TestRemoteLoginUsesTheWinnerOfAConcurrentLinkage(t *testing.T) {
-	seam := &remoteLogin{directory: &linkRacingDirectory{}}
-
-	resolved, err := seam.resolve(t.Context(), testAccount(), testLoginEmail, "Rider")
-	if err != nil {
-		t.Fatalf("resolve returned error: %v", err)
-	}
-	if resolved != testLoginPrincipal {
-		t.Errorf("resolved %q, want the principal that won the linkage", resolved)
+	// A second acquire for the same principal must block until release runs; a
+	// bounded context proves the slot is actually held rather than a no-op.
+	blocked, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := gate.Acquire(blocked, testLoginPrincipal); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("a concurrent acquire on the same principal returned %v, want context.DeadlineExceeded", err)
 	}
 }
 

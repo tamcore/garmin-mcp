@@ -90,12 +90,26 @@ nothing in production anyway, because the https issuer rule still applies.
 
 `trusted-proxy-cidrs` lists the networks whose `X-Forwarded-For` header may be
 read. The empty default trusts nobody. When the immediate peer is inside a listed
-network, the client-most forwarded entry is used; otherwise the peer address is
-used.
+network, the header is walked from the **right**, skipping entries that are
+themselves inside a listed network, and the first entry outside them is used;
+otherwise the peer address is used.
 
-Nothing security-relevant is derived from a forwarded header. The forwarded
-address is a log label. Authorization comes from the bearer token, and the
-deployment's identity comes from `public-url`.
+The direction matters, and this section previously described the opposite. A proxy
+**appends** to `X-Forwarded-For` and preserves whatever the client sent, so reading
+the client-most entry returns a value the caller chose. Walking from the right
+skips what your proxies added and stops at the nearest address this deployment has
+any reason to believe.
+
+The forwarded address is **not** only a log label, which this section also
+previously claimed. It keys the per-address budget of the rate limiter in front of
+the token, revocation and metadata endpoints — the only limit on the
+unauthenticated OAuth surface — so a caller who could choose it could mint a fresh
+budget per request. Authorization still comes from the bearer token, and the
+deployment's identity still comes from `public-url`; neither is ever taken from a
+header.
+
+Only list a network you actually run a proxy in. Listing a range wider than your
+proxies lets anything inside it present a forwarded header you will believe.
 
 Setting `trusted-proxy-cidrs` also satisfies the cleartext bind check, so list
 only the networks a proxy actually terminates on. A wide entry such as
@@ -677,7 +691,7 @@ Stated once, so an operator does not go looking:
 - No horizontal scaling, and no coordination that would allow it.
 - No scheduled cleanup.
 - No `migrate`, `revoke`, `unlink`, or `tools list` command.
-- No key rotation path, despite the underlying support for a staged one.
+- No **online** key rotation: `rotate-key` exists and re-seals both backends, but it is offline and one-shot, and it is not meant to run beside a live `serve`. See Rotation above.
 - No health or readiness endpoint. The MCP transport answers `404` for every path
   it does not own, so a probe must target a path this server serves, or an
   operator must front it with something that provides one.
