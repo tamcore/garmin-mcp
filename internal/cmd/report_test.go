@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -54,10 +53,6 @@ func TestDiagnoseClassifiesTheTokenStore(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.name == "group readable" && runtime.GOOS == osWindows {
-				t.Skip("Unix mode bits do not describe a Windows ACL")
-			}
-
 			cfg := localConfig(t)
 			tc.prepare(t, cfg.StateDir)
 

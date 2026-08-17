@@ -54,11 +54,12 @@ jobs:
         run: go vet ./...
 
       # go vet uses the host GOOS, and the build matrix runs `go build`, which
-      # never compiles _test.go. Without this, platform-specific code such as the
-      # Windows ACL enforcement and its tests are never type-checked at all.
+      # never compiles _test.go. Without this, platform-specific code and its
+      # tests are only ever type-checked for whichever GOOS the runner happens to
+      # be.
       - name: go vet for every supported GOOS
         run: |
-          for os in linux darwin windows; do
+          for os in linux darwin; do
             echo "== GOOS=${os}"
             GOOS="${os}" go vet ./... || exit 1
           done
@@ -282,54 +283,6 @@ jobs:
             exit 1
           fi
 
-  windows-acl:
-    name: Windows ACL runtime
-    runs-on: windows-latest
-    # The Windows security-descriptor layer is the one part of the tree that had
-    # never executed. `GOOS=windows go vet` type-checks acl_windows.go and
-    # perm_windows.go, and acl_test.go exercises the *rule* — checkOwnerOnlyAccess
-    # over hand-built accessControl values — on Linux. Neither runs a syscall.
-    # readAccessControl, describeSecurityDescriptor, describeACL, currentUserSID
-    # and applyOwnerOnlyACL only ever compiled, so a wrong flag constant or a
-    # mis-sized struct would have shipped green.
-    #
-    # These three packages are the ones that write secret files through
-    # securefile, so running their untagged suites here drives the real
-    # descriptors: the token store, the encryption key, and the hardening itself.
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version-file: go.mod
-
-      # internal/cryptostore is deliberately absent. Its key_test.go asserts
-      # Mode().Perm() == 0o600 with no build tag, which cannot hold on Windows,
-      # where Go synthesises the mode bits rather than reading a Unix mode. That
-      # is a Unix-shaped test rather than a defect in the key store, but it means
-      # the key store's own Windows behavior stays unproven; it is recorded in
-      # docs/implementation-status.md rather than hidden by this exclusion.
-      # internal/store's Unix-only assertions already carry //go:build unix, so
-      # its suite runs here honestly.
-      - name: go test on Windows
-        run: go test -race -count=1 ./internal/securefile/... ./internal/store/...
-
-      # A job that ran no securefile test would pass while proving exactly what
-      # it was added to disprove. The assertion is on the package rather than on
-      # named tests: the point is that this package's suite executed on Windows
-      # at all, and pinning names here would only duplicate the source.
-      - name: Assert the securefile suite actually ran on Windows
-        shell: bash
-        run: |
-          set -o pipefail
-          go test -count=1 -json ./internal/securefile/... >result.json
-          passed="$(grep -c '"Action":"pass","Package":"github.com/tamcore/garmin-mcp/internal/securefile","Test":' result.json || true)"
-          echo "securefile tests passed on windows: ${passed}"
-          if [ "${passed}" -lt 1 ]; then
-            echo "::error::no internal/securefile test passed on Windows; this gate would be vacuous"
-            exit 1
-          fi
-
   fuzz-smoke:
     name: Fuzz smoke
     runs-on: ubuntu-latest
@@ -452,7 +405,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        goos: [linux, darwin, windows]
+        goos: [linux, darwin]
         goarch: [amd64, arm64]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

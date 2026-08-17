@@ -22,6 +22,15 @@ Garth, no Python subprocess.
 - Garmin Connect is an unofficial, undocumented private API. Endpoints, schemas,
   and WAF behavior can drift. Never add CAPTCHA bypasses, browser automation, or
   credential harvesting. This rule applies now, not later.
+- **Supported platforms are Linux and macOS, on amd64 and arm64. Windows is not
+  supported, and that is deliberate — do not add it back.** There is no
+  Windows-tagged file, no `windows-latest` job, no Windows release archive, and
+  no `GOOS=windows` in the vet loop or the build matrix. `internal/securefile`
+  therefore only compiles on unix, which is honest: the whole point of that
+  package is refusing to hold a secret under permissions it cannot verify, so a
+  platform it cannot enforce on should fail to build rather than ship a weaker
+  guarantee. Removing the ACL layer while keeping a Windows binary is the one
+  outcome to avoid, because owner-only enforcement would silently stop applying.
 
 ## Current state [NOW]
 
@@ -33,7 +42,7 @@ date.
 |------|---------------|----------|
 | `cmd/garmin-mcp/main.go` | Thin `main`: passes the ldflags-injected `version` and `commit` into `cmd.Execute` and calls `os.Exit` with the returned code | n/a |
 | `cmd/notices/main.go` | Thin `main` for the notices generator: flags, then `notices.Generate`. A maintenance tool, never linked into `garmin-mcp` | n/a |
-| `internal/cmd` | Cobra tree and the composition root. `serve` (stdio and streamable-http), `auth`, `doctor`, `version`, `tools list` and `migrate` all do real work; no command returns a not-implemented sentinel | 80.8% |
+| `internal/cmd` | Cobra tree and the composition root. `serve` (stdio and streamable-http), `auth`, `doctor`, `version`, `tools list` and `migrate` all do real work; no command returns a not-implemented sentinel | 81.3% |
 | `internal/config` | `Config`, deterministic four-layer precedence, `_FILE` secret variants, full lexical validation, redacted output, and the operator OAuth client registry | 90.8% |
 | `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, the login response classifier (JSON and widget HTML), the rejected-OTP outcome, and the widget MFA variable parse. No I/O | 96.6% |
 | `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, explicit widget MFA code delivery, refresh with per-principal collapsing and CAS, the shared `TokenGate`, the request-time host guard, unverified-JWT `exp` parsing | 65.9% untagged, 88.3% with `-tags=fakegarmin` |
@@ -49,7 +58,7 @@ date.
 | `internal/store` | `FileStore` for stdio, plus the migration-backed SQLite backend for remote: principals, encrypted DI token sets with CAS, clients, consents, hashed transactions and codes, token families, audit events | 83.6% |
 | `migrations` | The embedded, checksummed, monotonic SQL migrations `0001_initial.sql` and `0002_oauth_contract.sql` | 100.0% |
 | `internal/cryptostore` | AES-256-GCM envelope encryption with versioned key IDs and principal/record-type AAD, and an owner-only key file | 89.9% |
-| `internal/securefile` | The shared filesystem hardening every store uses: `os.Root` component-by-component path resolution, post-open identity verification, link-based exclusive install, non-blocking regular-file reads, owner-only modes, and Windows ACL evaluation | 84.5% |
+| `internal/securefile` | The shared filesystem hardening every store uses: `os.Root` component-by-component path resolution, post-open identity verification, link-based exclusive install, non-blocking regular-file reads, and owner-only modes | 83.0% |
 | `internal/tokenlink` | `Store`, the adapter that makes a `*store.FileStore` satisfy `auth.TokenStore` by converting between the two packages' `TokenSet` types | 80.0% |
 | `internal/loginweb` | The browser login flow in two profiles: the one-shot loopback profile and the remote profile with the `__Host-` cookie, HSTS, disclosure page, independent CSRF token, and server-held MFA continuation | 82.6% |
 | `internal/mcplog` | Structured `slog` logging with the allowlisted field set, level mapping, and the stderr sink that refuses stdout | 98.5% |
@@ -76,8 +85,8 @@ leave the list.
 `github.com/muktihari/fit`, plus the transitive indirect set. `muktihari/fit`
 decodes Garmin activity files and links no third-party package of its own; ADR
 0007 records why the format is not hand-decoded. `golang.org/x/sys` is direct because
-`internal/securefile` reads Windows security descriptors through
-`golang.org/x/sys/windows`. `modernc.org/libc` moves only together with
+`internal/cmd` reads terminal state through
+`golang.org/x/sys/unix` for the TTY password prompt. `modernc.org/libc` moves only together with
 `modernc.org/sqlite`. See `docs/dependencies.md`.
 
 What `tools list` and `migrate` actually do: `tools list` reads the declared
@@ -500,7 +509,7 @@ interrupted part-way.
 
 | Workflow | Jobs |
 |----------|------|
-| CI (`ci.yaml`) | `verify` (gofmt, `go mod tidy`, `go vet`, then `go vet` again for `GOOS=linux`, `darwin` and `windows` so platform-specific files and their tests are type-checked), `dependency-review` (pull requests only, SHA-pinned, `fail-on-severity: low` and an explicit license allowlist), `lint` (golangci-lint plus `golangci-lint fmt --diff`), `test` (race, coverage profile, and the per-package coverage floor **enforced** against an explicit exception list in both directions), `test-fakegarmin` (race, coverage, and the declared-test assertion), `e2e` (race and the declared-test assertion), `fuzz-smoke` (every `Fuzz*` target for a bounded ten seconds, failing loudly when it discovers none), `reproducible-build` (two builds of `cmd/garmin-mcp`, each with its own `GOCACHE`, compared by hash), `vulncheck`, `build` (3 OS x 2 arch), `goreleaser` (`check` plus snapshot with `--skip=sign,sbom,docker`), `windows-acl` (the untagged `internal/securefile` and `internal/store` suites on `windows-latest`, so the Windows security-descriptor syscalls actually execute rather than only type-check, with an assertion that at least one `securefile` test passed there), `container` (build the image from a prepared context, then the hardening smoke test, then a start-up proof: the image runs nonroot with a read-only root filesystem and a mounted volume at `/data`, `/readyz` is polled until it reports ready rather than merely alive, the database and encryption key are checked to appear under the volume owner-only, and a read-only `/data` must make start-up fail promptly — every reserved docker exit status is rejected and the log must name a read-only filesystem, so a broken image cannot pass by failing for the wrong reason) |
+| CI (`ci.yaml`) | `verify` (gofmt, `go mod tidy`, `go vet`, then `go vet` again for `GOOS=linux` and `darwin` so platform-specific files and their tests are type-checked), `dependency-review` (pull requests only, SHA-pinned, `fail-on-severity: low` and an explicit license allowlist), `lint` (golangci-lint plus `golangci-lint fmt --diff`), `test` (race, coverage profile, and the per-package coverage floor **enforced** against an explicit exception list in both directions), `test-fakegarmin` (race, coverage, and the declared-test assertion), `e2e` (race and the declared-test assertion), `fuzz-smoke` (every `Fuzz*` target for a bounded ten seconds, failing loudly when it discovers none), `reproducible-build` (two builds of `cmd/garmin-mcp`, each with its own `GOCACHE`, compared by hash), `vulncheck`, `build` (2 OS x 2 arch), `goreleaser` (`check` plus snapshot with `--skip=sign,sbom,docker`), `container` (build the image from a prepared context, then the hardening smoke test, then a start-up proof: the image runs nonroot with a read-only root filesystem and a mounted volume at `/data`, `/readyz` is polled until it reports ready rather than merely alive, the database and encryption key are checked to appear under the volume owner-only, and a read-only `/data` must make start-up fail promptly — every reserved docker exit status is rejected and the log must name a read-only filesystem, so a broken image cannot pass by failing for the wrong reason) |
 | Release (`release.yaml`) | `v*` tags only. `gates` re-runs the whole CI workflow against the tagged commit, then `release` runs GoReleaser with the narrowest write permissions plus `id-token: write` for keyless cosign |
 
 Every third-party action is pinned to a full commit SHA with the intended

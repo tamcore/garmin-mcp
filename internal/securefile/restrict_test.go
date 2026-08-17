@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 )
 
@@ -17,10 +16,6 @@ import (
 
 func TestRestrictExistingMakesAForeignFileOwnerOnly(t *testing.T) {
 	t.Parallel()
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX modes are not the owner-only definition on Windows; see acl_test.go")
-	}
-
 	path := filepath.Join(tempDir(t), "database.db")
 	if err := os.WriteFile(path, []byte("db-bytes"), 0o644); err != nil { //nolint:gosec // deliberately permissive
 		t.Fatalf("plant a group-readable file: %v", err)
@@ -60,10 +55,6 @@ func TestRestrictExistingReportsAnAbsentFile(t *testing.T) {
 
 func TestRestrictExistingRefusesASymlink(t *testing.T) {
 	t.Parallel()
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation needs a privilege on Windows")
-	}
-
 	dir := tempDir(t)
 	target := filepath.Join(dir, "target")
 	if err := os.WriteFile(target, []byte("secret"), 0o600); err != nil {

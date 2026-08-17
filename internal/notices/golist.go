@@ -21,22 +21,19 @@ type buildTarget struct {
 // The released operating systems and architectures, named so the matrix below
 // and the test that pins it cannot drift apart on a typo.
 const (
-	osLinux   = "linux"
-	osDarwin  = "darwin"
-	osWindows = "windows"
+	osLinux  = "linux"
+	osDarwin = "darwin"
 
 	archAMD64 = "amd64"
 	archARM64 = "arm64"
 )
 
-// releasedTargets is the six-target matrix the release archives cover.
+// releasedTargets is the four-target matrix the release archives cover.
 var releasedTargets = []buildTarget{
 	{GOOS: osLinux, GOARCH: archAMD64},
 	{GOOS: osLinux, GOARCH: archARM64},
 	{GOOS: osDarwin, GOARCH: archAMD64},
 	{GOOS: osDarwin, GOARCH: archARM64},
-	{GOOS: osWindows, GOARCH: archAMD64},
-	{GOOS: osWindows, GOARCH: archARM64},
 }
 
 // mainPackage is the only package whose linked dependencies the notices cover.
@@ -54,7 +51,7 @@ type module struct {
 }
 
 // linkedModules reports every module the released binary links, sorted by module
-// path, as the union over the six released targets.
+// path, as the union over the four released targets.
 //
 // The union is what makes the set honest. A single `go list` run answers for one
 // platform only, so a Windows-only import — Cobra's use of mousetrap — would be

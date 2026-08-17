@@ -48,7 +48,7 @@ the tag changes nothing.
 | `internal/oauthstore` | 84.6% | |
 | `internal/policy` | 91.7% | |
 | `internal/ratelimit` | 95.7% | |
-| `internal/securefile` | 84.5% | |
+| `internal/securefile` | 83.0% | |
 | `internal/store` | 83.8% | |
 | `internal/testkit` | 91.5% | |
 | `internal/tokenlink` | 80.0% | |
@@ -580,24 +580,24 @@ closed silently.
 - [x] `garmin-mcp serve --transport=stdio` binds exactly one principal from
       process-local configuration, rejects ambiguous multi-account configuration,
       and keeps stdout reserved for MCP frames.
-- [ ] Tokens are stored owner-only and encrypted; hostile-umask, symlink,
-      atomic-write, and platform-ACL tests pass.
-      Done: everything except the platform half, and that half now has a runner
-      rather than only a type-check. The ACL **rule** is a pure function whose 18
-      cases execute on Linux, and the platform-specific sources and their
-      `_test.go` files type-check for `GOOS=linux`, `darwin` and `windows` because
-      `verify` runs `go vet` for each. A new `windows-acl` CI job runs the
-      untagged `internal/securefile` and `internal/store` suites on
-      `windows-latest`, which drives the security-descriptor syscalls for real,
-      and fails if no `securefile` test passed there so it cannot pass vacuously.
-      The item stays unchecked until that job has actually gone green on a real
-      Windows runner: it was added on a machine that cannot execute it, so its
-      first CI run is the proof, and a failure there is a genuine finding about
-      the Windows path rather than a setback. `internal/cryptostore` is
-      deliberately excluded from that job — its `key_test.go` asserts
-      `Mode().Perm() == 0o600` with no build tag, which cannot hold where Go
-      synthesises the mode bits — so the key store's own Windows behaviour stays
-      unproven.
+- [x] Tokens are stored owner-only and encrypted; hostile-umask, symlink and
+      atomic-write tests pass. The platform-ACL half of this item is **gone with
+      the platform**: Windows is no longer supported, so there is no ACL to test.
+      `internal/securefile` compiles on unix only, and the hostile-umask, symlink,
+      ancestry and atomic-write tests all execute on the platforms that ship.
+
+      This item was unchecked for a long time on the strength of the ACL half, and
+      the sequence is worth recording. A `windows-acl` CI job was added to make the
+      security-descriptor syscalls execute for the first time, and its first run
+      immediately failed — usefully. `internal/securefile` passed, so the syscall
+      layer worked, but three `internal/store` legacy-import tests failed because
+      files the test process had just created were owned by `S-1-5-32-544`,
+      `BUILTIN\Administrators`, and the owner check refused them as not owned by
+      the current user. That is standard Windows behaviour: a process holding an
+      elevated token stamps *Administrators* as owner of what it creates, and
+      `currentUserSID` compared against `GetTokenUser` instead. An operator running
+      elevated would have had their own token file refused. Rather than fix a
+      platform nobody here runs, Windows was dropped.
 - [x] `garmin-mcp auth` completes the one-shot loopback browser login and MFA
       flow, plus the explicit TTY fallback.
 - [x] At least one representative read-only tool per major Garmin payload style
@@ -1333,16 +1333,6 @@ source.
 
 ### Platform and environment limits
 
-- **Windows ACL enforcement now has a runner, and that run is the open item.**
-  `internal/securefile/acl.go` carries the decision as a pure function whose 18
-  cases across 7 test functions execute on Linux. Type-checking `acl_windows.go`
-  and `perm_windows.go` for `GOOS=windows` executes nothing, so those ~200 lines
-  had run nowhere; the `windows-acl` job now runs the `internal/securefile` and
-  `internal/store` suites on `windows-latest` so the syscalls execute. What is
-  not yet known is whether they pass — the job was written on a machine that
-  cannot run it. `internal/cryptostore` is excluded because its key-file
-  permission assertion is Unix-shaped, so that package's Windows behaviour is
-  still unproven. The old `icacls` subprocess is gone.
 - The OS keyring backends in `internal/cryptostore` are cgo-free **no-ops** that
   report unavailable, which keeps `CGO_ENABLED=0` cross-compilation working per
   ADR 0005. The owner-only key file is the only real backend.

@@ -17,7 +17,7 @@ var preamble string
 // count below it are computed.
 const moduleSetIntro = "The set below is every module that reaches a released binary. It was\n" +
 	"derived with `go list -deps ./cmd/garmin-mcp` under `CGO_ENABLED=0` for\n" +
-	"each released target — `linux`, `darwin` and `windows` crossed with\n" +
+	"each released target — `linux` and `darwin` crossed with\n" +
 	"`amd64` and `arm64`, matching the `builds` matrix in `.goreleaser.yaml` —\n" +
 	"and unioned, so a module that only a single platform links is still\n" +
 	"covered. It is the linked set, not the `go.mod` requirement set:\n" +
@@ -76,27 +76,26 @@ func licenseOnly(spdx string) moduleNotice {
 // bump which *changes* a module's terms needs a human to notice, which is why
 // docs/dependencies.md makes re-reading the licence part of a dependency bump.
 var moduleNotices = map[string]moduleNotice{
-	"github.com/dustin/go-humanize":        licenseOnly(spdxMIT),
-	"github.com/fsnotify/fsnotify":         licenseOnly(spdxBSD3),
-	"github.com/go-viper/mapstructure/v2":  licenseOnly(spdxMIT),
-	"github.com/google/jsonschema-go":      licenseOnly(spdxMIT),
-	"github.com/google/uuid":               licenseOnly(spdxBSD3),
-	"github.com/inconshreveable/mousetrap": licenseOnly(spdxApache2),
-	"github.com/mattn/go-isatty":           licenseOnly(spdxMIT),
-	"github.com/ncruces/go-strftime":       licenseOnly(spdxMIT),
-	"github.com/pelletier/go-toml/v2":      licenseOnly(spdxMIT),
-	"github.com/remyoudompheng/bigfft":     licenseOnly(spdxBSD3),
-	"github.com/sagikazarmark/locafero":    licenseOnly(spdxMIT),
-	"github.com/segmentio/asm":             licenseOnly(spdxMIT),
-	"github.com/segmentio/encoding":        licenseOnly(spdxMIT),
-	"github.com/sourcegraph/conc":          licenseOnly(spdxMIT),
-	"github.com/spf13/cast":                licenseOnly(spdxMIT),
-	"github.com/spf13/pflag":               licenseOnly(spdxBSD3),
-	"github.com/spf13/viper":               licenseOnly(spdxMIT),
-	"github.com/subosito/gotenv":           licenseOnly(spdxMIT),
-	"github.com/yosida95/uritemplate/v3":   licenseOnly(spdxBSD3),
-	"golang.org/x/oauth2":                  licenseOnly(spdxBSD3),
-	"modernc.org/mathutil":                 licenseOnly(spdxBSD3),
+	"github.com/dustin/go-humanize":       licenseOnly(spdxMIT),
+	"github.com/fsnotify/fsnotify":        licenseOnly(spdxBSD3),
+	"github.com/go-viper/mapstructure/v2": licenseOnly(spdxMIT),
+	"github.com/google/jsonschema-go":     licenseOnly(spdxMIT),
+	"github.com/google/uuid":              licenseOnly(spdxBSD3),
+	"github.com/mattn/go-isatty":          licenseOnly(spdxMIT),
+	"github.com/ncruces/go-strftime":      licenseOnly(spdxMIT),
+	"github.com/pelletier/go-toml/v2":     licenseOnly(spdxMIT),
+	"github.com/remyoudompheng/bigfft":    licenseOnly(spdxBSD3),
+	"github.com/sagikazarmark/locafero":   licenseOnly(spdxMIT),
+	"github.com/segmentio/asm":            licenseOnly(spdxMIT),
+	"github.com/segmentio/encoding":       licenseOnly(spdxMIT),
+	"github.com/sourcegraph/conc":         licenseOnly(spdxMIT),
+	"github.com/spf13/cast":               licenseOnly(spdxMIT),
+	"github.com/spf13/pflag":              licenseOnly(spdxBSD3),
+	"github.com/spf13/viper":              licenseOnly(spdxMIT),
+	"github.com/subosito/gotenv":          licenseOnly(spdxMIT),
+	"github.com/yosida95/uritemplate/v3":  licenseOnly(spdxBSD3),
+	"golang.org/x/oauth2":                 licenseOnly(spdxBSD3),
+	"modernc.org/mathutil":                licenseOnly(spdxBSD3),
 
 	"github.com/muktihari/fit": {
 		SPDX: spdxBSD3,

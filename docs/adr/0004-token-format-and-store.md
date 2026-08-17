@@ -46,9 +46,9 @@ to add one.
   yields to a newer stored token set on conflict.
 - The local `garmin_tokens.json` 0.3.x import and export contract: structure-based
   detection, `0700`/`0600` modes, `~user` and symlink rejection across the full
-  ancestry, and atomic writes. The Windows side is the ACL rule in
-  `internal/securefile`, whose decision function is a pure rule executed by the
-  Linux test run, and whose syscall layer only type-checks under `GOOS=windows`.
+  ancestry, and atomic writes. There is no Windows side: the platform is not
+  supported, and `internal/securefile` compiles on unix only rather than shipping
+  a weaker owner-only guarantee where it cannot enforce one.
 - Inline token JSON is refused unless explicitly enabled.
 - The record **schema version moved from 1 to 2** when the wrapper's schema and
   version were bound into the AEAD as additional data. A schema-1 record now

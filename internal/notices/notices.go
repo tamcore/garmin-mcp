@@ -18,7 +18,7 @@
 // hard error naming the module. It never emits a placeholder and never guesses.
 //
 // Second, the dependency set is the linked set, not the go.mod requirement set.
-// It is the union of `go list -deps ./cmd/garmin-mcp` over the six released
+// It is the union of `go list -deps ./cmd/garmin-mcp` over the four released
 // GOOS/GOARCH targets under CGO_ENABLED=0, which is what the existing file's own
 // header claims and what reproduces its 32 modules. Test-only and tool-only
 // requirements reach no artifact and are excluded; a module only one platform

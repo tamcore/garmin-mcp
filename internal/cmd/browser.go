@@ -12,9 +12,8 @@ import (
 
 // The GOOS values the launcher and the platform checks compare against.
 const (
-	osWindows = "windows"
-	osDarwin  = "darwin"
-	osLinux   = "linux"
+	osDarwin = "darwin"
+	osLinux  = "linux"
 )
 
 // xdgOpen is the freedesktop launcher every supported free-Unix desktop provides.
@@ -66,10 +65,6 @@ func browserCommand(goos, endpoint string) (name string, args []string) {
 	switch goos {
 	case osDarwin:
 		return "open", []string{endpoint}
-	case osWindows:
-		// rundll32 takes the URL as one argument, which avoids the quoting rules
-		// of "cmd /c start" entirely.
-		return "rundll32", []string{"url.dll,FileProtocolHandler", endpoint}
 	case osLinux, "freebsd", "netbsd", "openbsd":
 		return xdgOpen, []string{endpoint}
 	default:

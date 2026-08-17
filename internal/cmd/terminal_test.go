@@ -278,10 +278,7 @@ func TestBrowserCommandIsCorrectOnEveryPlatform(t *testing.T) {
 		{goos: osDarwin, name: "open", args: []string{endpoint}},
 		{goos: osLinux, name: xdgOpen, args: []string{endpoint}},
 		{goos: "openbsd", name: xdgOpen, args: []string{endpoint}},
-		{
-			goos: osWindows, name: "rundll32",
-			args: []string{"url.dll,FileProtocolHandler", endpoint},
-		},
+		{goos: "windows"},
 		{goos: "plan9"},
 	}
 

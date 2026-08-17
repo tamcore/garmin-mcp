@@ -15,7 +15,6 @@ builds:
     goos:
       - linux
       - darwin
-      - windows
     goarch:
       - amd64
       - arm64
@@ -31,10 +30,6 @@ archives:
       - garmin-mcp
     formats:
       - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     # Explicit list: without it GoReleaser applies its own default set, which
     # does not carry the notices. Both files are a distribution condition of

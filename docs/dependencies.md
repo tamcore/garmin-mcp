@@ -92,7 +92,7 @@ no more and no fewer.
 | `github.com/spf13/cobra` | `v1.10.2` | Apache-2.0 (`LICENSE.txt`) | 2025-12-03 | `internal/cmd` |
 | `github.com/spf13/pflag` | `v1.0.10` | BSD-3-Clause | 2025-09-02 | `internal/config` |
 | `github.com/spf13/viper` | `v1.21.0` | MIT | 2025-09-08 | `internal/config` |
-| `golang.org/x/sys` | `v0.47.0` | BSD-3-Clause | 2026-06-30 | `internal/securefile` (Windows-tagged files only) |
+| `golang.org/x/sys` | `v0.47.0` | BSD-3-Clause | 2026-06-30 | `internal/cmd` (unix-tagged TTY files only) |
 | `modernc.org/sqlite` | `v1.56.0` | BSD-3-Clause | 2026-08-03 | `internal/store` (multi-user backend) |
 
 All seven are at the latest version published by `proxy.golang.org` on the
@@ -185,17 +185,18 @@ Viper both require it.
 
 **Version.** `v0.47.0`. License BSD-3-Clause.
 
-**Rationale.** `internal/securefile` reads a Windows security descriptor from an
-open handle to decide whether a key file or a token record is owner-only. The
-standard library exposes no ACL API, and the alternative that this replaced was a
-subprocess call to `icacls`, which cannot inspect the object that was actually
-opened and so cannot close the gap between the check and the open. Only the
-`golang.org/x/sys/windows` subpackage is used, and only from Windows-tagged files,
-so no other platform links it.
+**Rationale.** `internal/cmd` reads and restores terminal state around the TTY
+password prompt, so a typed credential is not echoed. The standard library exposes
+no portable termios API. Only the `golang.org/x/sys/unix` subpackage is used, and
+only from unix-tagged files.
+
+This entry used to read `golang.org/x/sys/windows`, for a security-descriptor
+check in `internal/securefile`. Windows support was dropped, so that call site is
+gone; the requirement stays direct for the TTY code above.
 
 **Maintenance.** Published by the Go team, versioned with the toolchain. The pin
-is far above the version Viper selects, because that older version carried a
-Windows advisory.
+is far above the version Viper selects, because that older version carried an
+advisory.
 
 ### `modernc.org/sqlite`
 
@@ -204,7 +205,7 @@ Windows advisory.
 **Rationale.** The multi-user deployment needs a migration-backed relational store,
 and release binaries must stay `CGO_ENABLED=0`. This driver is pure Go, so the
 cross-compiled artifacts keep building: verified for linux/amd64, linux/arm64,
-darwin/arm64 and windows/amd64 with cgo off. The obvious alternative,
+darwin/amd64 and darwin/arm64 with cgo off. The obvious alternative,
 `mattn/go-sqlite3`, is a cgo binding and would break every cross-compiled release.
 
 **Maintenance.** Actively maintained, with a release every two to four weeks.
@@ -313,8 +314,8 @@ resolved by an explicit bump in `go.mod`:
 
 Neither was on a called path even before the bump, so the gate was green either
 way. They were bumped because a stale transitive version becomes a real finding as
-soon as a call site appears, and `internal/securefile` then added exactly such a
-call site for `golang.org/x/sys/windows`. Keep both requirements above Viper's
+soon as a call site appears, and the TTY code is exactly such a call site for
+`golang.org/x/sys/unix`. Keep both requirements above Viper's
 choice until Viper catches up, and re-run `govulncheck -show verbose ./...` after
 any dependency change.
 

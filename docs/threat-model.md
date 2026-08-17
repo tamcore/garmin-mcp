@@ -74,10 +74,6 @@ Six limits on the list above, stated so it cannot be over-read:
   `FileStore.Save` compares the version under a per-process mutex with no file
   locking, so it is safe for a **single active instance** only. The SQLite
   backend has real CAS, and its v1 deployment is single-active-instance too.
-- Windows ACL enforcement is real code that no CI runner executes. The decision
-  rule is a pure function whose tests run on Linux, the one platform CI executes
-  tests on; the platform-specific sources and their test files type-check for
-  every `GOOS`, and the Windows syscall layer runs nowhere.
 - `mcpserver.Revocation` has no resource selector, so revoking one consent closes
   slightly more sessions than that grant covered. The direction is fail-safe.
 - A revocation event dropped under buffer pressure costs the affected session its
@@ -379,7 +375,10 @@ missing, malformed, or overly permissive key material. The key must never be
 logged or printed. Staged key rotation and a tested migration path are required.
 Local token files must use `0700` directories and `0600` files, reject symlinks,
 write atomically, and be tested against a hostile umask in isolated subprocesses
-on Unix and against user-only ACL or key protection on Windows. Inline token JSON
+on Unix. Windows is not a supported platform, so there is no ACL requirement here:
+`internal/securefile` compiles on unix only, which is the honest outcome for a
+package whose purpose is refusing to hold a secret under permissions it cannot
+verify. Inline token JSON
 is an explicitly insecure compatibility override and must be rejected in remote
 production mode. Deleting local tokens is unlinking, not remote revocation, and
 the documentation must state the difference. Encrypted-store tamper and wrong-key
