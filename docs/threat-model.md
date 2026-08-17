@@ -397,8 +397,11 @@ token JSON is refused unless explicitly enabled, and it now has exactly one
 caller.
 
 **Not landed:** no store re-seals existing records, so key rotation is a library
-capability and not an operator procedure, and there is no `docs/operations.md`
-describing it; and there is no backup or restore test.
+capability and not an operator procedure; and there is no backup or restore test.
+`docs/operations.md` does exist, and its "Key management" section states the same
+limitation in an operator's terms — that a staged rotation is supported by
+`internal/cryptostore`, that nothing drives it, and that rotation should therefore
+be treated as unavailable rather than attempted.
 
 ### 11. Malicious tool arguments and accidental destructive actions
 
@@ -476,11 +479,17 @@ for the principal, delete the encrypted Garmin tokens and pending transactions,
 stop background refresh, and evict clients and caches. Partial deletion must fail
 closed and emit only a redacted audit event.
 
-## Operational exposure [TARGET]
+## Operational exposure
 
 Audit events exist: the SQLite store writes them with no credentials and no
-health or location payloads. There are still **no** `/livez` or `/readyz`
-endpoints, **no** metrics, and **no** separate administration listener.
+health or location payloads. `/livez` and `/readyz` exist too
+(`internal/mcpserver/httpprobe.go`): the paths are constants rather than
+operator-renameable options, the bodies are a fixed `ok` / `not ready`, and the
+readiness check is injected and bounded by a two-second timeout, so a wedged
+store answers honestly instead of hanging. A real MCP route published on either
+path still wins, so a probe cannot shadow the server's own surface.
+
+There are still **no** metrics and **no** separate administration listener.
 
 `/livez` and `/readyz` must expose no secret detail. Metrics are optional and
 must use bounded-cardinality labels only; raw user IDs, emails, activity IDs, and

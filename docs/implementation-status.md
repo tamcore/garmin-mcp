@@ -261,6 +261,100 @@ that drops under the floor fails the build unless it is named there.
       carries `resource_metadata` and no error code, a token in a query parameter
       that never authenticates, and a bad header token reported as
       `invalid_token`.
+- [x] `e2e/oauthflow_test.go`, `e2e/loginform_test.go` and
+      `e2e/tenantisolation_test.go` close three of the four rows AGENTS.md's
+      testing table used to mark **[TARGET]** at the e2e layer, over the real
+      binary:
+      - The authorization-code grant against the real `/token` endpoint: PKCE
+        S256 is required (a missing or wrong `code_verifier` is refused as
+        `invalid_grant`, **and** a positive control with the correct verifier
+        and a freshly seeded code — through the production digest helper,
+        `oauthserver.SecretFromString(code).Lookup().Hex()`, not a hand-rolled
+        one — succeeds, so the negative case cannot pass merely because
+        `/token` always answers `invalid_grant`); the redirect URI must match
+        the authorization exactly, with the same positive-control shape; a
+        code redeemed by N concurrent requests mints exactly one token (fired
+        as true concurrent goroutines, which a serial replay cannot
+        distinguish from "marked used after minting" rather than atomically);
+        a `plain` PKCE method is refused at `/authorize` before any login; and
+        a token this endpoint issues authenticates a real MCP `initialize`
+        call.
+      - The remote browser login profile driven with an `http.Client`: the
+        disclosure page and the full `__Host-` cookie attribute set (`Secure`,
+        `HttpOnly`, `Path=/`, no `Domain`, `SameSite=Lax`); the rotating CSRF
+        token — refused when wrong, accepted when right, refused again on
+        replay of the now-rotated value, and refused when one session's token
+        is presented under a different session's cookie; and a credential
+        submission that fails safely. That last case is now a proof rather
+        than an assumption: the deployment is pointed at a recording,
+        always-refusing CONNECT proxy (the same one
+        `e2e/exercisecatalog_test.go` uses for the start-up catalog read), and
+        the test asserts the login attempt reached exactly `sso.garmin.com`
+        and carried no `Authorization` or `Cookie` header — a build that
+        deleted the `authenticator.Login` call outright, which the earlier
+        blackhole-only version could not tell apart from a real attempt, fails
+        this one.
+      - Tenant isolation: two principals each mint their own bearer token
+        through the real `/token` endpoint; revoking one principal's token via
+        the real `/revoke` endpoint is proven to leave the other principal's
+        still-valid token untouched; and a further assertion resolves each
+        token through the store to its principal ID and requires the two to
+        differ, which is the property "tenant isolation" actually names (the
+        revocation check alone cannot tell two distinct principals from one
+        principal a build mis-bound both tokens to, since `codeGrant` mints a
+        fresh token family per exchange regardless). That last assertion is
+        implemented exactly as reviewed; applying the described mutant
+        (binding every issued token to the first principal a process ever saw)
+        makes it fail as intended, and it passes against unmodified code.
+
+        Reaching that state meant fixing the harness, not the server, and the
+        misdiagnosis is worth recording because it looked exactly like a
+        product defect. Seeding used to open the database from the test process
+        **while the server subprocess held it** — two writers on one SQLite
+        file, which violates this project's own single-writer requirement
+        (`docs/operations.md`). The server's own error named the real cause,
+        `disk I/O error (522)`, which is `SQLITE_IOERR_SHORT_READ`. Two
+        symptoms followed from that one cause: rows the server had written were
+        unreadable from the test process, and a token issued while two or more
+        redemptions of one code raced failed its own verification, so `/token`
+        answered 200 with a token the server then refused. Neither was a defect
+        in the store: a single-process reproducer over the real store, real WAL,
+        the production pool size and 8-way concurrency under `-race` stayed
+        clean, which is what cleared the product and pointed at the harness.
+        Every seed, the client row included, now runs before the subprocess
+        starts, and nothing writes while it runs.
+      - `e2e/cli_test.go` now strips every inherited `GARMIN_MCP_*`
+        environment variable before launching a subprocess, rather than only
+        adding the offline proxy on top of the ambient environment: those
+        variables outrank a deployment's config file
+        (`docs/configuration.md`), so an operator's own exported
+        `GARMIN_MCP_DATABASE_PATH` previously redirected every subprocess this
+        suite starts at the operator's real database.
+
+      **What is still not covered, and why.** Completing the browser login —
+      including an MFA continuation — needs a real answer from Garmin. This is
+      not because no seam exists to redirect the compiled binary's own Garmin
+      traffic: `internal/cmd/components.go` builds the login transport with
+      `http.ProxyFromEnvironment` and no custom `RootCAs`, and on Linux
+      `crypto/x509` honours `SSL_CERT_FILE`, so an `HTTPS_PROXY` pointed at a
+      TLS-terminating, per-host-certificate CONNECT proxy in front of a fake
+      Garmin backend, plus `SSL_CERT_FILE` naming that proxy's CA, is a
+      working seam there. It is not used for a full login because it is
+      expensive to build (a CONNECT proxy that mints a certificate per host on
+      the fly) and silently unavailable on macOS, where the root verifier does
+      not consult `SSL_CERT_FILE` — a cost and platform asymmetry, not an
+      impossibility. `e2e/loginform_test.go`'s credential-submission test now
+      uses exactly this seam, pointed at a proxy that only records and refuses
+      rather than terminates TLS, which is enough to prove the attempt reached
+      Garmin's SSO host and nothing else; a full login still needs the
+      TLS-terminating version, which remains future work. The OAuth-flow and
+      tenant-isolation tests route around the same gap the same way: the
+      authorization code a granted consent would have issued is seeded
+      directly into the SQLite database with the exact bindings
+      `BeginAuthorization` and `GrantConsent` produce, and only that one step
+      is not driven over HTTP. Every other step — discovery, `/authorize`'s
+      own validation, PKCE, the token exchange, single-use, revocation and the
+      MCP call — is.
 
 ### Phase 5 detail — compatibility breadth, in progress
 
@@ -488,11 +582,22 @@ closed silently.
       and keeps stdout reserved for MCP frames.
 - [ ] Tokens are stored owner-only and encrypted; hostile-umask, symlink,
       atomic-write, and platform-ACL tests pass.
-      Done: everything except the platform half. The ACL **rule** is a pure
-      function whose 18 cases execute on Linux, and the platform-specific sources
-      and their `_test.go` files type-check for `GOOS=linux`, `darwin` and
-      `windows` because `verify` runs `go vet` for each. **The Windows syscall
-      layer has never executed.** The item stays unchecked for that reason alone.
+      Done: everything except the platform half, and that half now has a runner
+      rather than only a type-check. The ACL **rule** is a pure function whose 18
+      cases execute on Linux, and the platform-specific sources and their
+      `_test.go` files type-check for `GOOS=linux`, `darwin` and `windows` because
+      `verify` runs `go vet` for each. A new `windows-acl` CI job runs the
+      untagged `internal/securefile` and `internal/store` suites on
+      `windows-latest`, which drives the security-descriptor syscalls for real,
+      and fails if no `securefile` test passed there so it cannot pass vacuously.
+      The item stays unchecked until that job has actually gone green on a real
+      Windows runner: it was added on a machine that cannot execute it, so its
+      first CI run is the proof, and a failure there is a genuine finding about
+      the Windows path rather than a setback. `internal/cryptostore` is
+      deliberately excluded from that job — its `key_test.go` asserts
+      `Mode().Perm() == 0o600` with no build tag, which cannot hold where Go
+      synthesises the mode bits — so the key store's own Windows behaviour stays
+      unproven.
 - [x] `garmin-mcp auth` completes the one-shot loopback browser login and MFA
       flow, plus the explicit TTY fallback.
 - [x] At least one representative read-only tool per major Garmin payload style
@@ -1228,13 +1333,16 @@ source.
 
 ### Platform and environment limits
 
-- **Windows ACL enforcement has never executed.** `internal/securefile/acl.go`
-  carries the decision as a pure function whose 18 cases across 7 test functions
-  execute on Linux, the only platform any CI job runs tests on. The
-  platform-specific sources and their test files type-check for every supported
-  `GOOS` because `verify` runs `go vet` for each, and type-checking executes
-  nothing. `acl_windows.go` and `perm_windows.go`, about 200 lines, run on no CI
-  runner. The old `icacls` subprocess is gone.
+- **Windows ACL enforcement now has a runner, and that run is the open item.**
+  `internal/securefile/acl.go` carries the decision as a pure function whose 18
+  cases across 7 test functions execute on Linux. Type-checking `acl_windows.go`
+  and `perm_windows.go` for `GOOS=windows` executes nothing, so those ~200 lines
+  had run nowhere; the `windows-acl` job now runs the `internal/securefile` and
+  `internal/store` suites on `windows-latest` so the syscalls execute. What is
+  not yet known is whether they pass — the job was written on a machine that
+  cannot run it. `internal/cryptostore` is excluded because its key-file
+  permission assertion is Unix-shaped, so that package's Windows behaviour is
+  still unproven. The old `icacls` subprocess is gone.
 - The OS keyring backends in `internal/cryptostore` are cgo-free **no-ops** that
   report unavailable, which keeps `CGO_ENABLED=0` cross-compilation working per
   ADR 0005. The owner-only key file is the only real backend.
@@ -1330,10 +1438,24 @@ source.
   `CompleteMFA` report progress through `Result` states, and the machine is
   stepped only by the MFA transaction registry. Either route the top-level flow
   through it or state plainly that it governs transactions only.
-- The container smoke test proves that a **nonroot, read-only, shell-free** image
-  can execute the binary. It does not prove server start-up and does not prove a
-  writable `/data` volume: the container run exercises the default command and
-  exits.
+- The container job now proves start-up, not only that the binary executes. Beyond
+  the original **nonroot, read-only, shell-free** smoke test it runs the image with
+  a volume at `/data`, polls `/readyz` until the server reports ready rather than
+  merely alive, and checks that the database and the encryption key appear under
+  that volume owner-only. A read-only `/data` must make start-up fail promptly:
+  every reserved docker exit status is rejected and the log must name a read-only
+  filesystem, so an image whose entrypoint cannot execute at all — which would
+  otherwise satisfy "it failed, as expected" — fails the job instead. Verified
+  locally against a real engine: ready on the first poll, both files `600` owned
+  `65532:65532`, and the read-only case exiting `1` with
+  `mkdirat keys: read-only file system`.
+
+  One operational fact this surfaced, and it matters for any test deployment: the
+  authorization server refuses to name a cleartext issuer at **any** origin,
+  loopback included, and `allow-insecure-http` does not cover that refusal
+  (`internal/cmd/remoteendpoints.go`). A remote deployment therefore cannot be
+  smoke-tested over plain HTTP even on `127.0.0.1`; the job generates a
+  throwaway self-signed certificate.
 - The parity extractor scripts are not committed; `docs/parity.md` documents the
   algorithm instead. A Go regenerator that fails CI on manifest drift is still
   deferred, so manifest drift against a new upstream pin cannot be diffed in CI.
