@@ -51,6 +51,12 @@ checksum:
 sboms:
   - id: archive
     artifacts: archive
+  # One SBOM per built binary, alongside the archive SBOMs. Container image
+  # SBOMs are not listed here: GoReleaser's syft integration cannot catalog an
+  # image it pushed itself, so that SBOM is generated as an explicit release.yaml
+  # step instead, after the image is pushed.
+  - id: binary
+    artifacts: binary
 
 signs:
   - id: cosign-checksums
@@ -63,6 +69,19 @@ signs:
       - "--yes"
       - "--output-certificate=${certificate}"
       - "--output-signature=${signature}"
+      - "${artifact}"
+
+# Keyless cosign signing of the pushed OCI image, same identity model as the
+# checksum signing above. Runs in GoReleaser's publish phase, after dockers_v2
+# has pushed the image, and signs by re-resolving the tag to its digest.
+docker_signs:
+  - id: cosign-images
+    cmd: cosign
+    artifacts: all
+    output: true
+    args:
+      - sign
+      - "--yes"
       - "${artifact}"
 
 dockers_v2:
