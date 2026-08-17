@@ -2,6 +2,7 @@ package cmd_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"os"
@@ -117,6 +118,13 @@ func TestRotateKeyRefusesTargetVersionOneOnAMarkerLessDeployment(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "invalid key version 0") {
 		t.Fatalf("err = %q, want it to name the real problem, not the opaque downstream failure", err.Error())
+	}
+	// Requiring the phrase, not just the sentinel: ErrRotationTargetInvalid is
+	// returned for every rejected target, so asserting only the sentinel passes
+	// even if the diagnostic regresses to the opaque downstream one this test
+	// exists to prevent.
+	if !strings.Contains(err.Error(), "nothing to rotate from") {
+		t.Fatalf("err = %q, want it to say there is nothing to rotate from", err.Error())
 	}
 }
 
@@ -451,5 +459,71 @@ func TestRotateKeyResumingReportsCompletionWhenTheRetiringKeyIsAlreadyGoneAndNot
 	if !strings.Contains(stdout, "does not bind cannot be checked") {
 		t.Errorf("stdout = %q, want it to state that an unbound principal's record "+
 			"is not covered by the completion claim", stdout)
+	}
+}
+
+// TestRotateKeySQLiteReportsPartialProgressWhenARowCannotBeRead is the
+// command-level half of the partial-progress property.
+//
+// The store-level test proves ResealToActiveKey RETURNS the counts it managed
+// alongside the error. This proves the command actually PRINTS them: moving the
+// report below the command's error check would satisfy the store test and still
+// leave the operator with nothing — neither what succeeded nor what remains. With
+// one unreadable row the completion scan can never reach done, so those counts are
+// the only thing the operator has to reason from before deciding about the key.
+//
+// garmin_token_sets is re-sealed before principals, so corrupting the principal's
+// sealed identity fails the second table after the first has fully succeeded.
+func TestRotateKeySQLiteReportsPartialProgressWhenARowCannotBeRead(t *testing.T) {
+	clearGarminEnv(t)
+	stateDir := rotateStateDir(t)
+	oldKey := seedFileStoreKeyRing(t, stateDir)
+	dbPath := filepath.Join(stateDir, "state.db")
+	ctx := context.Background()
+
+	seed, err := store.OpenSQLite(ctx, store.SQLiteConfig{Path: dbPath, Key: oldKey})
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
+	principal, err := seed.CreatePrincipal(ctx, "rotate-key-partial@example.com")
+	if err != nil {
+		t.Fatalf("CreatePrincipal: %v", err)
+	}
+	if _, err := seed.Save(ctx, principal.ID,
+		store.NewTokenSet("token", testRefreshTokenValue, "client-id", time.Time{}), 0); err != nil {
+		t.Fatalf("seed Save: %v", err)
+	}
+	if err := seed.LinkGarminAccount(ctx, principal.ID, store.GarminIdentity{
+		AccountID: store.NewSecret("garmin-account-under-test"), DisplayName: "display-name",
+	}); err != nil {
+		t.Fatalf("LinkGarminAccount: %v", err)
+	}
+	if err := seed.Close(); err != nil {
+		t.Fatalf("close seed store: %v", err)
+	}
+
+	// Raw, so the store's own encoding rules cannot repair it: no key opens this.
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open the database directly: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`UPDATE principals SET garmin_identity_sealed = ? WHERE id = ?`,
+		[]byte("not an envelope"), principal.ID); err != nil {
+		t.Fatalf("corrupt the sealed identity: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close the direct connection: %v", err)
+	}
+
+	stdout, err := runCommand(t, cmdRotateKey,
+		"--state-dir="+stateDir, "--database-path="+dbPath, "--target-version=2")
+	if err == nil {
+		t.Fatal("rotate-key with an unreadable row succeeded, want it to report the failure")
+	}
+	if !strings.Contains(stdout, "garmin token sets resealed: 1") {
+		t.Errorf("stdout = %q, want the partial progress the run did make before failing; "+
+			"without it the operator has nothing to reason from and the retiring key can "+
+			"never be retired", stdout)
 	}
 }

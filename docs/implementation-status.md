@@ -1442,8 +1442,20 @@ source.
   smoke-tested over plain HTTP even on `127.0.0.1`; the job generates a
   throwaway self-signed certificate.
 - The parity extractor scripts are not committed; `docs/parity.md` documents the
-  algorithm instead. A Go regenerator that fails CI on manifest drift is still
-  deferred, so manifest drift against a new upstream pin cannot be diffed in CI.
+  algorithm instead. The obligation is **narrowed rather than open**: a full Go
+  re-implementation is rejected (AST extraction over Python source needs either a
+  third-party Go Python parser, which this repository requires an ADR and a
+  notices entry for, or pattern matching that emits wrong contracts the first time
+  upstream reformats), and committing the Python scripts has an unmet
+  prerequisite — a committed generator becomes CI's authority, so it must first
+  reproduce the **reviewed** artifacts byte for byte, and these manifests have
+  been hand-corrected since generation.
+
+  What is enforced instead, offline and in the ordinary `test` job, is the
+  coupling: `TestUpstreamPinsAgreeBetweenTheDocAndBothManifests` fails when
+  `docs/upstream-pins.md` and the commit embedded in either manifest disagree.
+  That is the failure a pin bump actually has, and it was silent before. Content
+  regeneration stays the documented manual procedure in `docs/parity.md`.
 
 ## The write safety delay exists
 
@@ -1518,10 +1530,12 @@ In order:
    as unavailable. Re-sealing must be resumable, must not double-seal, and must
    not lose a concurrent refresh's write — `garmin_token_sets` carries a version
    column for CAS and that is where the interaction lives.
-2. **A Go parity regenerator plus a CI drift check.** `docs/parity.md` documents
-   the extraction algorithm but the scripts are not committed, so a new upstream
-   pin cannot be diffed. Nothing drifts today; the gap is that drift would be
-   invisible.
+2. ~~A Go parity regenerator plus a CI drift check.~~ **Narrowed and closed.** A
+   full Go re-implementation is rejected on dependency and correctness grounds,
+   and committing the Python extractor requires a golden reproduction of
+   hand-corrected manifests that does not exist. The pin/manifest coupling is
+   enforced by a test instead, which catches the failure a pin bump actually has.
+   See `docs/parity.md`.
 3. **The `remoteLogin.bind` half-write.** `resolve` creates a principal and links
    a Garmin account durably before `commit` stores the token set, so any commit
    failure leaves a linked principal with no tokens. It self-heals on retry, which

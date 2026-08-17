@@ -1398,8 +1398,29 @@ python3 gen.py "$SCRATCH/raw.json" . "$SCRATCH/gc_init.py"
 `extract.py` and `gen.py` are development-time throwaways. This phase deliberately commits only the three
 artifacts (`compat/tools.json`, `compat/resources.json`, `docs/parity.md`), so the scripts are not in the
 repository and the algorithm above is the reproducible specification. Upstream sources are not vendored:
-they are fetched into a scratch directory and read there, and no upstream code is executed. Committing a
-Go regenerator, so that drift against a new upstream pin can be diffed in CI, is deferred to a later phase.
+they are fetched into a scratch directory and read there, and no upstream code is executed.
+
+**On a committed regenerator.** This section used to say a **Go** regenerator was deferred to a later
+phase. That over-specified the mechanism, and the obligation is narrowed rather than carried:
+
+- A full Go re-implementation is **rejected**. Extraction is AST-level over Python source, so it needs
+  either a third-party Go Python parser — a nontrivial dependency, and this repository requires a
+  rationale, a licence entry and a notices entry for one — or hand-rolled pattern matching, which would
+  silently emit wrong contracts the first time upstream reformats a decorator. CPython already owns that
+  grammar.
+- Committing the Python scripts has a prerequisite that is not met: a committed generator becomes CI's
+  authority, so it must first reproduce the **reviewed** artifacts byte for byte. These manifests have
+  been corrected by hand since they were generated — implementation status, classifications, deliberate
+  deviations — so a generator that disagreed would invite "fixing" it by regenerating over content the
+  137 contract tests depend on. Establishing that golden reproduction is the real work, and it is not
+  done.
+
+What **is** enforced today, offline and in the ordinary test job, is the coupling:
+`TestUpstreamPinsAgreeBetweenTheDocAndBothManifests` (`internal/tools/manifest_pin_test.go`) fails when
+this file's pin and the commit embedded in either manifest disagree. That is the failure a pin bump
+actually has — the pin moves, the manifests keep describing the old commit, and every contract test
+silently validates the server against a snapshot of something else. Regenerating the manifests stays the
+manual procedure above.
 
 Bump the pinned SHA only through the process in `docs/upstream-pins.md`, and record any deliberate
 compatibility break in an ADR as well as in this matrix.

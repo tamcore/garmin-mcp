@@ -121,7 +121,7 @@ func (s *FileStore) Reseal(ctx context.Context, principal string) (ResealOutcome
 	if err != nil {
 		return ResealNoRecord, err
 	}
-	if current.Version != record.Version || current.Payload != record.Payload {
+	if recordMovedUnderReseal(record, current) {
 		return ResealRaced, nil
 	}
 
@@ -129,4 +129,21 @@ func (s *FileStore) Reseal(ctx context.Context, principal string) (ResealOutcome
 		return ResealNoRecord, err
 	}
 	return ResealRewrote, nil
+}
+
+// recordMovedUnderReseal reports whether the record on disk is no longer the one
+// a reseal plan was computed from, in which case that plan must not be written.
+//
+// It is a function rather than an inline comparison because the branch it guards
+// cannot be reached deterministically from a test: it needs a write to land
+// between Reseal's two reads while Reseal holds the record lock, which only a
+// writer that ignores the lock can do. Extracting the decision makes the decision
+// itself testable without putting a test-only seam on the credential write path.
+//
+// Both fields matter. Version alone would miss a writer that rewrote the payload
+// without advancing the counter, and payload alone would miss a rollback that
+// restored earlier bytes under a new version. Either difference means someone
+// else wrote, and their record is the one a later reseal should pick up.
+func recordMovedUnderReseal(planned, current storedRecord) bool {
+	return current.Version != planned.Version || current.Payload != planned.Payload
 }

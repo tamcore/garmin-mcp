@@ -399,3 +399,59 @@ func TestFileStoreDeleteWaitsForTheCrossProcessRecordLock(t *testing.T) {
 		t.Fatalf("Load after Delete: err = %v, want ErrNoTokens", err)
 	}
 }
+
+// TestRecordMovedUnderResealDetectsEveryKindOfConcurrentWrite covers the decision
+// that guards Reseal's write.
+//
+// The branch itself cannot be reached deterministically from a test — it needs a
+// write to land between Reseal's two reads while Reseal holds the record lock,
+// which only a writer ignoring the lock can do — so the decision is tested
+// directly instead. That is a real limit and worth stating: this proves the rule
+// is right, not that Reseal consults it. The surrounding Reseal tests cover the
+// paths that do not race.
+//
+// The mutant each case kills: comparing only the version misses a writer that
+// rewrote the payload without advancing the counter, and comparing only the
+// payload misses a rollback that restored earlier bytes under a new version.
+// Either one lets a reseal overwrite somebody else's committed record.
+func TestRecordMovedUnderResealDetectsEveryKindOfConcurrentWrite(t *testing.T) {
+	planned := storedRecord{Schema: recordSchema, Version: 7, Payload: "cGF5bG9hZA=="}
+
+	cases := []struct {
+		name    string
+		current storedRecord
+		moved   bool
+	}{
+		{
+			name:    "untouched",
+			current: planned,
+			moved:   false,
+		},
+		{
+			name:    "version advanced by a concurrent refresh",
+			current: storedRecord{Schema: recordSchema, Version: 8, Payload: planned.Payload},
+			moved:   true,
+		},
+		{
+			name:    "payload rewritten without advancing the version",
+			current: storedRecord{Schema: recordSchema, Version: 7, Payload: "b3RoZXI="},
+			moved:   true,
+		},
+		{
+			name:    "earlier payload restored under a newer version",
+			current: storedRecord{Schema: recordSchema, Version: 9, Payload: "b2xkZXI="},
+			moved:   true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := recordMovedUnderReseal(planned, tc.current); got != tc.moved {
+				t.Fatalf("recordMovedUnderReseal = %v, want %v: a reseal would %s",
+					got, tc.moved,
+					map[bool]string{true: "refuse a write it should have made",
+						false: "overwrite a record another writer committed"}[got])
+			}
+		})
+	}
+}
