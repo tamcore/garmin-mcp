@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -149,6 +150,154 @@ func TestReadFileRefusesADeviceFile(t *testing.T) {
 
 	if _, err := ReadFile("/dev/null", 1024); !errors.Is(err, ErrInsecurePath) {
 		t.Fatalf("ReadFile of /dev/null: err = %v, want ErrInsecurePath", err)
+	}
+}
+
+// TestEnsureDirSkipsChmodOnAnAlreadyPrivateDirectory proves EnsureDir skips
+// chmod when the mode already matches: ctime changes on chmod(2) even when
+// the mode is unchanged, so an unchanged ctime is evidence the syscall never
+// ran. Needed for a Kubernetes volume mount root, where chmod is EPERM even
+// when the mode already holds.
+func TestEnsureDirSkipsChmodOnAnAlreadyPrivateDirectory(t *testing.T) {
+	dir := filepath.Join(tempDir(t), "keys")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// Positive control: a real chmod must change ctime here, or the skip
+	// assertion below would pass vacuously on a coarse-timestamp filesystem.
+	controlBeforeSec, controlBeforeNsec, err := statCtime(dir)
+	if err != nil {
+		t.Fatalf("statCtime control before: %v", err)
+	}
+	if err := os.Chmod(dir, 0o750); err != nil {
+		t.Fatalf("chmod control: %v", err)
+	}
+	controlAfterSec, controlAfterNsec, err := statCtime(dir)
+	if err != nil {
+		t.Fatalf("statCtime control after: %v", err)
+	}
+	if controlBeforeSec == controlAfterSec && controlBeforeNsec == controlAfterNsec {
+		t.Skipf("ctime did not change after a real chmod on this filesystem; cannot observe a skip")
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatalf("chmod restore: %v", err)
+	}
+
+	beforeSec, beforeNsec, err := statCtime(dir)
+	if err != nil {
+		t.Fatalf("statCtime before: %v", err)
+	}
+
+	if err := EnsureDir(dir, 0o700); err != nil {
+		t.Fatalf("EnsureDir: %v", err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o700 {
+		t.Fatalf("mode = %04o, want unchanged 0700", perm)
+	}
+
+	afterSec, afterNsec, err := statCtime(dir)
+	if err != nil {
+		t.Fatalf("statCtime after: %v", err)
+	}
+	if beforeSec != afterSec || beforeNsec != afterNsec {
+		t.Fatalf("ctime changed from (%d,%d) to (%d,%d): a chmod ran on an already owner-only directory",
+			beforeSec, beforeNsec, afterSec, afterNsec)
+	}
+}
+
+// TestEnsureDirStillChmodsAPermissiveDirectory is the companion to the test
+// above: a group- or world-accessible directory must still be tightened, never
+// accepted merely because an owner-only one is.
+func TestEnsureDirStillChmodsAPermissiveDirectory(t *testing.T) {
+	for _, perm := range []fs.FileMode{0o750, 0o755} {
+		t.Run(perm.String(), func(t *testing.T) {
+			dir := filepath.Join(tempDir(t), "keys")
+			if err := os.Mkdir(dir, perm); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+
+			if err := EnsureDir(dir, 0o700); err != nil {
+				t.Fatalf("EnsureDir: %v", err)
+			}
+
+			info, err := os.Stat(dir)
+			if err != nil {
+				t.Fatalf("stat: %v", err)
+			}
+			if got := info.Mode().Perm(); got != 0o700 {
+				t.Fatalf("mode = %04o, want 0700 (chmod must still run for a permissive directory)", got)
+			}
+		})
+	}
+}
+
+// TestEnsureDirTightensASupersetMode proves the skip is an exact-mode match, not
+// "current already has every requested bit": an existing 0700 must still be
+// chmodded down to a requested 0500, or the exact-mode contract silently
+// tolerates leftover owner bits the caller asked removed.
+func TestEnsureDirTightensASupersetMode(t *testing.T) {
+	dir := filepath.Join(tempDir(t), "keys")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	if err := EnsureDir(dir, 0o500); err != nil {
+		t.Fatalf("EnsureDir: %v", err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o500 {
+		t.Fatalf("mode = %04o, want 0500 (a superset current mode must still be chmodded down)", got)
+	}
+}
+
+// restrict's own "not a usable directory" branch (dir.go) is defense in depth
+// against a *os.Root descriptor whose Stat(".") stops reporting a directory. No
+// real construction was found to trigger it without root privileges: removing
+// the directory out from under an open os.Root leaves the descriptor's Stat(".")
+// still reporting a directory (the fd keeps the deleted inode alive), which was
+// tried and observed to leave restrict succeeding, not failing. That branch is
+// therefore left untouched and unexercised by a new test here, rather than
+// backed by a test that cannot fail the way it claims to.
+
+func TestWrapChmodDirErrorAddsTheRemedyForPermissionDenied(t *testing.T) {
+	cause := &fs.PathError{Op: "chmodat", Path: ".", Err: fs.ErrPermission}
+
+	err := wrapChmodDirError("/data", cause)
+
+	if !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("wrapChmodDirError: err = %v, want it to wrap fs.ErrPermission", err)
+	}
+	if !strings.Contains(err.Error(), "subdirectory") {
+		t.Fatalf("wrapChmodDirError: err = %q, want it to name the remedy (a subdirectory)", err)
+	}
+	if !strings.Contains(err.Error(), "most commonly") {
+		t.Fatalf("wrapChmodDirError: err = %q, want the cause phrased as typical guidance, not asserted fact", err)
+	}
+}
+
+func TestWrapChmodDirErrorLeavesOtherErrorsWithoutTheRemedy(t *testing.T) {
+	cause := errors.New("disk exploded")
+
+	err := wrapChmodDirError("/data", cause)
+
+	if errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("wrapChmodDirError: err = %v, unexpectedly wraps fs.ErrPermission", err)
+	}
+	if strings.Contains(err.Error(), "subdirectory") {
+		t.Fatalf("wrapChmodDirError: err = %q, a non-permission error must not carry the remedy text", err)
+	}
+	if !errors.Is(err, cause) {
+		t.Fatalf("wrapChmodDirError: err = %v, want it to still wrap the original cause", err)
 	}
 }
 

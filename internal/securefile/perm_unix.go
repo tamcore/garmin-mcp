@@ -3,6 +3,7 @@
 package securefile
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -34,9 +35,25 @@ func restrictFile(file *os.File, path string, mode fs.FileMode) error {
 // already exists, so this is not redundant either.
 func restrictDir(root *os.Root, path string, mode fs.FileMode) error {
 	if err := root.Chmod(".", mode); err != nil {
-		return fmt.Errorf("securefile: secure directory %q: %w", path, err)
+		return wrapChmodDirError(path, err)
 	}
 	return nil
+}
+
+// wrapChmodDirError names the remedy when a directory chmod is refused for
+// permission, because "chmodat: operation not permitted" does not obviously
+// mean "point this setting at a subdirectory instead." fs.ErrPermission matches
+// both EACCES and EPERM, and EPERM can also mean an immutable flag, so the
+// message gives the remedy as typical guidance, not an asserted cause. Any
+// other chmod failure is reported plainly, with no remedy text attached.
+func wrapChmodDirError(path string, err error) error {
+	if errors.Is(err, fs.ErrPermission) {
+		return fmt.Errorf("securefile: secure directory %q: cannot set owner-only permissions, "+
+			"most commonly because this process does not own the directory, which is what a volume "+
+			"mount root typically is: point the setting at a subdirectory of the mount instead and "+
+			"let it be created: %w", path, err)
+	}
+	return fmt.Errorf("securefile: secure directory %q: %w", path, err)
 }
 
 // checkOwnerOnly refuses a file any group or other principal can reach. The mode
