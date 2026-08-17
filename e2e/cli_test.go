@@ -37,22 +37,57 @@ func buildBinary(t *testing.T) string {
 // destination is never proxied, so a deployment under test is unaffected.
 const blackholeProxy = "http://127.0.0.1:1"
 
-// offlineEnv keeps a started binary off the public network. The bypass lists are
-// cleared too: an inherited NO_PROXY of "*" would route around the blackhole.
-func offlineEnv() []string {
+// offlineEnvWithProxy is the offline environment pointed at proxyURL. The bypass
+// lists are cleared too: an inherited NO_PROXY of "*" would route around it.
+func offlineEnvWithProxy(proxyURL string) []string {
 	return []string{
-		"HTTPS_PROXY=" + blackholeProxy,
-		"https_proxy=" + blackholeProxy,
+		"HTTPS_PROXY=" + proxyURL,
+		"https_proxy=" + proxyURL,
 		"NO_PROXY=",
 		"no_proxy=",
 	}
 }
 
+// garminMCPEnvPrefix is what every ambient setting this suite must never
+// inherit is named under.
+const garminMCPEnvPrefix = "GARMIN_MCP_"
+
+// filteredEnviron is the current process environment with every GARMIN_MCP_*
+// entry removed.
+//
+// GARMIN_MCP_ environment variables outrank the configuration file
+// (docs/configuration.md: flags, then GARMIN_MCP_ env, then the file), so an
+// operator who exports one of them ambiently — GARMIN_MCP_DATABASE_PATH,
+// GARMIN_MCP_STATE_DIR, GARMIN_MCP_MASTER_KEY_FILE — and then runs this suite
+// would have every subprocess this file starts silently override its own
+// throwaway config with that ambient setting, and mutate the operator's real
+// state instead of the test's private directory.
+func filteredEnviron() []string {
+	env := os.Environ()
+	filtered := make([]string, 0, len(env))
+	for _, entry := range env {
+		if strings.HasPrefix(entry, garminMCPEnvPrefix) {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return filtered
+}
+
 // offlineCommand builds a command for the binary with the offline environment
 // already applied, so no started process can reach the public service.
 func offlineCommand(bin string, args ...string) *exec.Cmd {
+	return offlineCommandWithProxy(bin, "", args...)
+}
+
+// offlineCommandWithProxy is offlineCommand with the outbound proxy under the
+// caller's control. An empty proxyURL keeps the default blackhole.
+func offlineCommandWithProxy(bin, proxyURL string, args ...string) *exec.Cmd {
+	if proxyURL == "" {
+		proxyURL = blackholeProxy
+	}
 	command := exec.Command(bin, args...)
-	command.Env = append(os.Environ(), offlineEnv()...)
+	command.Env = append(filteredEnviron(), offlineEnvWithProxy(proxyURL)...)
 	return command
 }
 
@@ -156,5 +191,33 @@ func TestUnknownCommandFailsWithoutTouchingStdout(t *testing.T) {
 	}
 	if stdout != "" {
 		t.Errorf("stdout = %q, want empty", stdout)
+	}
+}
+
+// TestRemoteDeploymentIgnoresAnInheritedGarminMCPEnvironmentVariable is the
+// mutant this test catches: a build that appended the offline environment
+// without first stripping GARMIN_MCP_* from the inherited one would let an
+// operator's own exported GARMIN_MCP_DATABASE_PATH — which outranks the
+// deployment's config file under the documented precedence — silently redirect
+// every subprocess this suite starts at the operator's real database instead of
+// the test's private one. That is not merely a test hygiene problem: it is the
+// suite mutating the operator's real state.
+//
+// The ambient variable is set in this test process with t.Setenv, which
+// filteredEnviron must strip before the child ever sees it. Without the strip,
+// GARMIN_MCP_DATABASE_PATH's higher precedence over the config file's
+// database-path setting (docs/configuration.md) makes the remote deployment
+// open and create the ambient path instead, which this test would then observe
+// on disk.
+func TestRemoteDeploymentIgnoresAnInheritedGarminMCPEnvironmentVariable(t *testing.T) {
+	ambientDir := t.TempDir()
+	ambientDB := filepath.Join(ambientDir, "ambient-should-never-be-touched.db")
+	t.Setenv("GARMIN_MCP_DATABASE_PATH", ambientDB)
+
+	startRemoteServer(t)
+
+	if _, err := os.Stat(ambientDB); err == nil {
+		t.Fatalf("the deployment created %s: an inherited GARMIN_MCP_DATABASE_PATH "+
+			"leaked into the subprocess and overrode its own config file", ambientDB)
 	}
 }
