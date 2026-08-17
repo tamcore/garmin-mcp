@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tamcore/garmin-mcp/internal/config"
+	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 	"github.com/tamcore/garmin-mcp/internal/identity"
 )
 
@@ -171,5 +172,97 @@ func TestServeCarriesTheSafetyDelayIntoTheServer(t *testing.T) {
 	if got := deps.serverDeps("").SafetyDelay; got != cfg.SafetyDelay {
 		t.Errorf("the server was built with a %v safety delay, want the configured %v",
 			got, cfg.SafetyDelay)
+	}
+}
+
+// TestGarminLimitsCarriesTheConfiguredResponseBound is the property that makes
+// max-response-bytes a control rather than a decoration.
+//
+// client.New used to be called with no Limits at all, so every bound was the
+// package default. max-response-bytes was loaded, flag-exposed, validated, capped
+// and printed in the redacted config dump, and read by nothing — so an operator
+// who lowered it saw the configured value reported back by doctor and the dump
+// while the running server ignored it. That is worse than the setting not existing.
+//
+// The decompressed bound is checked too, in both directions. Raising the wire bound
+// past the request layer's default decompressed bound would violate its own
+// "decompressed is at least wire" invariant and refuse to start; lowering the wire
+// bound while leaving the decompressed bound alone would let a deployment hardened
+// by that setting still produce the old amount of memory.
+func TestGarminLimitsCarriesTheConfiguredResponseBound(t *testing.T) {
+	defaults := client.DefaultLimits()
+
+	tests := map[string]struct {
+		configured int64
+	}{
+		"lowered well below the default":       {configured: 1 << 20},
+		"raised above the default":             {configured: 32 << 20},
+		"raised past the decompressed default": {configured: 48 << 20},
+		"raised to its documented maximum":     {configured: 64 << 20},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			cfg := localConfig(t)
+			cfg.MaxResponseBytes = tc.configured
+
+			limits := garminLimits(cfg)
+
+			if limits.MaxResponseBytes != tc.configured {
+				t.Errorf("MaxResponseBytes = %d, want the configured %d: the setting does "+
+					"not reach the request layer", limits.MaxResponseBytes, tc.configured)
+			}
+			if limits.MaxDecompressedBytes < limits.MaxResponseBytes {
+				t.Errorf("MaxDecompressedBytes = %d is below MaxResponseBytes = %d, which "+
+					"Limits.Validate refuses", limits.MaxDecompressedBytes, limits.MaxResponseBytes)
+			}
+			want := min(tc.configured*decompressedHeadroom, client.MaxDecompressedBytesCap)
+			if limits.MaxDecompressedBytes != want {
+				t.Errorf("MaxDecompressedBytes = %d, want %d: the ratio the defaults express, "+
+					"clamped to the request layer's own cap", limits.MaxDecompressedBytes, want)
+			}
+			if err := limits.Validate(); err != nil {
+				t.Errorf("the built limits do not validate: %v", err)
+			}
+			// Everything configuration does not expose must stay at the default.
+			if limits.MaxPageSize != defaults.MaxPageSize ||
+				limits.MaxPages != defaults.MaxPages ||
+				limits.MaxDateRangeDays != defaults.MaxDateRangeDays {
+				t.Errorf("a bound configuration does not expose was changed: %+v", limits)
+			}
+		})
+	}
+}
+
+// TestBuiltGarminClientEnforcesTheConfiguredResponseBound proves the WIRING, not
+// just the arithmetic.
+//
+// The sibling test above calls garminLimits directly, so it passes even if the
+// Limits field is dropped from the client.New call — which is exactly the shape of
+// the original defect: a correct value computed and never delivered. This asserts
+// the bound on the client the composition root actually built.
+func TestBuiltGarminClientEnforcesTheConfiguredResponseBound(t *testing.T) {
+	const configured = 3 << 20
+
+	cfg := localConfig(t)
+	cfg.MaxResponseBytes = configured
+
+	deps, err := newDependencies(cfg, &wiring{Version: "v0.0.0-test"})
+	if err != nil {
+		t.Fatalf("newDependencies: %v", err)
+	}
+	if deps.rest == nil {
+		t.Fatal("no request layer was built")
+	}
+
+	limits := deps.rest.Limits()
+	if limits.MaxResponseBytes != configured {
+		t.Fatalf("the built request layer reads up to %d bytes, want the configured %d: "+
+			"max-response-bytes is reported by doctor and the config dump but does not "+
+			"reach the layer that enforces it", limits.MaxResponseBytes, configured)
+	}
+	if limits.MaxDecompressedBytes < limits.MaxResponseBytes {
+		t.Fatalf("MaxDecompressedBytes = %d is below MaxResponseBytes = %d",
+			limits.MaxDecompressedBytes, limits.MaxResponseBytes)
 	}
 }

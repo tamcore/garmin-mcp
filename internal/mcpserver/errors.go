@@ -41,4 +41,9 @@ var (
 	// on every request, so serving them over cleartext on anything but loopback
 	// publishes them; it is refused unless the development override is set.
 	ErrInsecureBind = errors.New("mcpserver: refusing a cleartext public bind")
+
+	// ErrHandlerPanicked reports a panic the receiving chain contained. It names no
+	// panic value and carries no stack: see recoverMiddleware for why neither is
+	// logged or returned.
+	ErrHandlerPanicked = errors.New("mcpserver: recovered from a panic while handling a request")
 )

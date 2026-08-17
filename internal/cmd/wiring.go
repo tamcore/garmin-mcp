@@ -254,7 +254,11 @@ func (d *dependencies) buildGarmin() error {
 	if err != nil {
 		return fmt.Errorf("building the Garmin token refresher: %w", err)
 	}
-	rest, err := client.New(client.Config{Hosts: hosts, Logger: d.events})
+	rest, err := client.New(client.Config{
+		Hosts:  hosts,
+		Limits: garminLimits(d.cfg),
+		Logger: d.events,
+	})
 	if err != nil {
 		return fmt.Errorf("building the Garmin request layer: %w", err)
 	}
@@ -275,4 +279,41 @@ func (d *dependencies) close() {
 		return
 	}
 	d.httpClient.CloseIdleConnections()
+}
+
+// decompressedHeadroom is the ratio the request layer's own defaults hold between
+// the decompressed bound and the wire bound (32 MiB over 8 MiB). Scaling by it
+// keeps the relationship the defaults express when an operator moves the wire
+// bound, in both directions: raising the wire bound past the default decompressed
+// bound would otherwise violate the store's own "decompressed is at least wire"
+// invariant and refuse to start, and lowering it would leave the decompressed
+// bound untouched, so a deployment hardened by lowering the setting still allowed
+// the old amount of memory to be produced.
+const decompressedHeadroom = 4
+
+// garminLimits builds the request layer's bounds from configuration.
+//
+// This existed as a gap rather than a bug for a while: client.New was called with
+// no Limits at all, so every bound was the package default. max-response-bytes was
+// loaded, flag-exposed, validated, capped, and printed in the redacted config dump
+// — and read by nothing. An operator lowering it saw the configured value reported
+// back by doctor and the dump while the running server ignored it, which is worse
+// than the setting not existing.
+//
+// Only the settings configuration actually exposes are overridden; everything else
+// stays at DefaultLimits, which is what the zero value already meant.
+func garminLimits(cfg config.Config) client.Limits {
+	limits := client.DefaultLimits()
+	limits.RequestTimeout = cfg.RequestTimeout
+	limits.MaxResponseBytes = cfg.MaxResponseBytes
+
+	// Scaled, then clamped to the request layer's own cap. Without the clamp a wire
+	// bound near its 64 MiB cap would ask for 256 MiB decompressed, exceed the
+	// 128 MiB cap, and make Limits.Validate refuse — so raising the setting to its
+	// documented maximum would stop the server from starting. The clamp keeps the
+	// invariant that matters (decompressed is never below wire) because the
+	// decompressed cap is above the wire cap.
+	decompressed := min(cfg.MaxResponseBytes*decompressedHeadroom, client.MaxDecompressedBytesCap)
+	limits.MaxDecompressedBytes = decompressed
+	return limits
 }

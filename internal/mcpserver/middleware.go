@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -46,21 +47,27 @@ func recordFromContext(ctx context.Context) *callRecord {
 //
 // The order is:
 //
-//  1. principal — everything below it keys off the principal, so it must be first.
-//     It is also the only place a principal is ever set, which is what makes the
-//     "a tool argument cannot select the principal" rule structural.
-//  2. logging — outside every gate, so a refusal is reported with its latency and
-//     its reason rather than vanishing. It installs the callRecord the gates write.
-//  3. rate limiting — before the policy gate on purpose. A caller probing tools it
-//     is not allowed to use must still be throttled; if policy ran first, a
-//     scanning attacker would cost nothing to refuse and could probe without limit.
-//  4. policy — the tier and scope intersection, plus destructive confirmation.
-//     Last, so it is the final word before the handler runs.
+//	2a. recover — immediately inside logging, so a contained panic is still
+//	   reported. Outside logging it would work, but logging emits after its inner
+//	   handler returns, so a panic unwinding past it would be recovered and then
+//	   never recorded. Everything that can plausibly panic — argument validation,
+//	   the third-party decoders, the handlers — is below this point.
+//	1. principal — everything below it keys off the principal, so it must be first.
+//	   It is also the only place a principal is ever set, which is what makes the
+//	   "a tool argument cannot select the principal" rule structural.
+//	2. logging — outside every gate, so a refusal is reported with its latency and
+//	   its reason rather than vanishing. It installs the callRecord the gates write.
+//	3. rate limiting — before the policy gate on purpose. A caller probing tools it
+//	   is not allowed to use must still be throttled; if policy ran first, a
+//	   scanning attacker would cost nothing to refuse and could probe without limit.
+//	4. policy — the tier and scope intersection, plus destructive confirmation.
+//	   Last, so it is the final word before the handler runs.
 func (s *Server) installMiddleware() {
 	s.mcpServer.AddReceivingMiddleware(
 		argumentsMiddleware(),
 		s.principalMiddleware(),
 		s.loggingMiddleware(),
+		s.recoverMiddleware(),
 		ratelimit.Middleware(s.deps.Limiter, s.classifyTool, rateLimitObserver{}),
 		s.policyMiddleware(),
 	)
@@ -415,4 +422,70 @@ func clientIDOf(req mcp.Request) string {
 		return ""
 	}
 	return info.Name
+}
+
+// recoverMiddleware turns a panicking call into a refusal instead of a dead server.
+//
+// This is not belt-and-braces. The official SDK dispatches every JSON-RPC request —
+// so every tool handler — from Connection.handleAsync, a goroutine spawned off the
+// connection reader rather than the one net/http is serving on. net/http's
+// per-connection recover therefore never sees it, and the SDK itself contains no
+// recover() in non-test code. One panicking tool call takes down the process and
+// with it every other principal's session, on a deployment that is multi-tenant by
+// design.
+//
+// The class is not hypothetical here. argumentsMiddleware exists precisely because
+// jsonschema-go panics writing into a nil map during argument validation, and a
+// caller can reach that with one field. That instance is patched at its known
+// trigger; this catches the ones nobody has found yet, including inside the three
+// third-party decoders that sit downstream of hostile input.
+//
+// It is outermost so that a panic in any middleware below it — not only in a
+// handler — is contained.
+//
+// What it deliberately does NOT do is log the recovered value or a stack trace. A
+// panic value is arbitrary data that may have come from a Garmin response or a
+// caller's arguments, and a Go traceback prints argument words alongside the frames;
+// neither belongs in a log this project keeps free of bodies and payloads. The
+// record carries the tool's own coarse fields plus the panic's dynamic type, which
+// says what went wrong without saying what was in it. Reproducing under a debugger
+// is the intended path, and the process is now alive to be debugged.
+func (s *Server) recoverMiddleware() mcp.Middleware {
+	return func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (
+			result mcp.Result, err error,
+		) {
+			defer func() {
+				recovered := recover()
+				if recovered == nil {
+					return
+				}
+				// Named returns are overwritten, so the partial result a panicking
+				// handler may have already assigned is discarded rather than
+				// returned half-built.
+				result, err = s.recovered(ctx, method, recovered)
+			}()
+			return next(ctx, method, req)
+		}
+	}
+}
+
+// recovered reports a contained panic and produces the caller's refusal.
+//
+// A tool call is answered with an ordinary error result, which is what every other
+// refusal in this chain returns, so a client sees a failed call rather than a
+// transport error. Any other method has no result shape to borrow, so it returns an
+// error and lets the SDK render it.
+func (s *Server) recovered(ctx context.Context, method string, recovered any) (mcp.Result, error) {
+	reason := "the handler panicked (" + fmt.Sprintf("%T", recovered) + ")"
+	if record := recordFromContext(ctx); record != nil {
+		record.outcome = mcplog.OutcomeError
+		record.reason = reason
+		record.status = mcplog.StatusServerError
+	}
+	if method != methodCallTool {
+		return nil, fmt.Errorf("%w: %s", ErrHandlerPanicked, reason)
+	}
+	return errorResult("This tool did not run: the server recovered from an internal " +
+		"failure while handling it. Nothing was sent to Garmin by the failed step."), nil
 }
