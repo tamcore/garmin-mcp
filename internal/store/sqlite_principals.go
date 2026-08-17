@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/tamcore/garmin-mcp/internal/cryptostore"
 )
 
 // garminIdentityRecordType is the record type bound into the AEAD additional data
@@ -82,7 +80,7 @@ func (s *SQLiteStore) CreatePrincipal(ctx context.Context, email string) (Princi
 	if err != nil {
 		return Principal{}, err
 	}
-	version, err := keyVersionOf(s.key)
+	version, err := s.crypt.activeVersion()
 	if err != nil {
 		return Principal{}, err
 	}
@@ -242,7 +240,7 @@ func (s *SQLiteStore) LinkGarminAccount(ctx context.Context, principalID string,
 	if err != nil {
 		return err
 	}
-	version, err := keyVersionOf(s.key)
+	version, err := s.crypt.activeVersion()
 	if err != nil {
 		return err
 	}
@@ -299,7 +297,7 @@ func (s *SQLiteStore) sealGarminIdentity(principalID string, identity GarminIden
 	if err != nil {
 		return nil, fmt.Errorf("store: encode garmin identity: %w", err)
 	}
-	sealed, err := cryptostore.Encrypt(s.key, principalID, garminIdentityRecordType, payload)
+	sealed, err := s.crypt.encrypt(principalID, garminIdentityRecordType, payload)
 	if err != nil {
 		return nil, fmt.Errorf("store: seal garmin identity: %w", err)
 	}
@@ -331,7 +329,7 @@ func (s *SQLiteStore) GarminIdentity(ctx context.Context, principalID string) (G
 
 // openGarminIdentity decrypts and decodes a sealed linkage.
 func (s *SQLiteStore) openGarminIdentity(principalID string, sealed []byte) (GarminIdentity, error) {
-	opened, err := cryptostore.Decrypt(s.key, principalID, garminIdentityRecordType, sealed)
+	opened, _, err := s.crypt.decrypt(principalID, garminIdentityRecordType, sealed)
 	if err != nil {
 		return GarminIdentity{}, fmt.Errorf("store: open garmin identity: %w: %w", ErrCorruptRecord, err)
 	}

@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/tamcore/garmin-mcp/internal/config"
-	"github.com/tamcore/garmin-mcp/internal/cryptostore"
 	"github.com/tamcore/garmin-mcp/internal/identity"
 	"github.com/tamcore/garmin-mcp/internal/loginweb"
 	"github.com/tamcore/garmin-mcp/internal/mcpserver"
@@ -119,14 +118,15 @@ func newRemoteDeployment(
 func openSQLiteStore(
 	ctx context.Context, cfg config.Config, paths statePaths, revocations store.RevocationSink,
 ) (*store.SQLiteStore, error) {
-	key, err := cryptostore.LoadOrCreateKey(paths.keys, keyVersion)
+	active, retired, err := loadKeyRing(paths)
 	if err != nil {
 		return nil, fmt.Errorf("opening the encryption key: %w", err)
 	}
 
 	sqlite, err := store.OpenSQLite(ctx, store.SQLiteConfig{
 		Path:        cfg.DatabasePath,
-		Key:         key,
+		Key:         active,
+		RetiredKeys: retired,
 		Revocations: revocations,
 	})
 	if err != nil {

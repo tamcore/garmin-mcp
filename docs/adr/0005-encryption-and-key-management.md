@@ -2,11 +2,12 @@
 
 ## Status
 
-**Partly implemented.** `internal/cryptostore` exists and both stores use it, so
+**Implemented.** `internal/cryptostore` exists and both stores use it, so
 secrets are written to disk today. The cryptography, the key file, staged
-rotation, and start-up refusal on bad key material have landed. An
-operator-facing rotation driver and store-level re-sealing are still open. See
-the two lists below.
+rotation, start-up refusal on bad key material, the operator-facing rotation
+driver, and store-level re-sealing for both backends have all landed. A
+platform secret manager or KMS adapter is the one item still open. See the two
+lists below.
 
 ## Context
 
@@ -58,17 +59,55 @@ and nothing else.
   `ErrKeyNotFound` and `ErrInsecureKeyPermissions` so an operator gets a named
   cause rather than a generic failure.
 
+### Landed since the previous revision
+
+- **An operator-facing rotation driver.** `garmin-mcp rotate-key` (`internal/cmd`)
+  requires an explicit `--target-version`: one past the active version to start a
+  new rotation, or the active version itself to resume one a previous run already
+  activated and was killed before finishing — a killed run's marker already names
+  the target, so refusing that value as "not active+1" would make resuming
+  impossible. Loading the active-key-version marker distinguishes bootstrap from a
+  completed rotation: the marker is created only when none exists yet, and a
+  present marker whose key file has gone missing fails closed rather than minting
+  a replacement, because any version a marker names is reachable only because a
+  rotation actually activated it. Documented procedure in `docs/operations.md`
+  section 4.
+- **Store-level re-sealing, both backends.** `internal/store` gained a `keySet`
+  (one active key plus zero or more retired keys) used by every read and write in
+  the package. `SQLiteStore.ResealToActiveKey` re-seals the database index root,
+  every principal's Garmin identity linkage, every Garmin token set, and every
+  pending authorization transaction's client state, batched and resumable with no
+  checkpoint table: each record's own key-version column is the resume mechanism,
+  reconciled back in line with the active version when a row's content already
+  matches it but the column still names a retired one (the shape an interrupted
+  pass leaves behind), so the batch scan cannot loop on such a row forever. Reading
+  a record still at a retired version during the window, an unknown key version
+  failing closed, and a killed-and-resumed rotation not double-sealing are all
+  covered by tests run under `-race`.
+  `SQLiteStore.RemainingToReseal` is the completion proof, and it is a
+  point-in-time scan: nothing re-checks the marker afterward, so it says nothing
+  about a `serve` process that starts, or commits a write, immediately after the
+  scan returns.
+- **`FileStore.Reseal` covers the local backend's single bound principal's token
+  record.** A concurrent application write racing the resealer needs more than the
+  in-process `principalLocks` mutex, because `rotate-key` and a live `serve`
+  process are separate processes, each opening its own `*FileStore` over the same
+  directory, sharing that mutex with nothing else. The fix is two things together:
+  an OS-level advisory lock (`flock(2)`, unix-only) held for the entire
+  read-modify-write critical section of both `Save` and `Reseal`, which is what
+  actually makes the section atomic across processes, plus a content-equality
+  re-check of the record immediately before the write, the same defense already
+  used for SQLite rows with no separate version counter. A test rewritten to use
+  two separate `*FileStore` instances over one directory — rather than sharing
+  one, which would only exercise the in-process mutex — failed reliably against
+  the content-equality check alone and passes reliably with the lock added.
+- **The `internal/securefile` hard-link requirement** is now documented for
+  operators in `docs/operations.md` section 4.
+
 ### Still open
 
-- **An operator-facing rotation driver.** Rotation is a library capability with no
-  command, no procedure, and no `docs/operations.md`.
-- **Store-level re-sealing.** `FileStore` holds exactly one key and re-seals
-  nothing, so no existing record is migrated to a new key version.
 - A platform secret manager or a documented KMS adapter behind the same
   interface. None exists.
-- The `internal/securefile` hard-link requirement is undocumented for operators:
-  key material on a filesystem without hard links fails loudly on creation, and
-  there is no rename fallback on purpose.
 
 ## Consequences
 

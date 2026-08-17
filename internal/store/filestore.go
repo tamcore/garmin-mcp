@@ -44,9 +44,16 @@ type Config struct {
 	// and it is created with mode 0700 if absent.
 	Dir string
 
-	// Key encrypts and decrypts records. Obtain it from cryptostore.LoadOrCreateKey,
-	// so that key material stays owner-only.
+	// Key encrypts and decrypts records, and is the active key every write is
+	// sealed under. Obtain it from cryptostore.LoadOrCreateKey, so that key
+	// material stays owner-only.
 	Key cryptostore.Key
+
+	// RetiredKeys are additional key versions kept only to read a record a staged
+	// rotation has not yet re-sealed onto Key. Never used to seal a write. A nil
+	// slice is the pre-rotation shape: every record must already be sealed under
+	// Key.
+	RetiredKeys []cryptostore.Key
 
 	// AllowInsecureInlineTokens enables the inline token JSON compatibility
 	// override. It is unsafe and must stay false in remote mode; see inline.go.
@@ -66,7 +73,7 @@ type Config struct {
 type FileStore struct {
 	root        string
 	records     string
-	key         cryptostore.Key
+	crypt       keySet
 	allowInline bool
 	locks       *principalLocks
 }
@@ -77,7 +84,8 @@ func NewFileStore(cfg Config) (*FileStore, error) {
 	if strings.TrimSpace(cfg.Dir) == "" {
 		return nil, fmt.Errorf("store: no directory configured: %w", ErrInvalidConfig)
 	}
-	if err := checkKeyUsable(cfg.Key); err != nil {
+	crypt, err := newKeySet(cfg.Key, cfg.RetiredKeys)
+	if err != nil {
 		return nil, err
 	}
 
@@ -99,7 +107,7 @@ func NewFileStore(cfg Config) (*FileStore, error) {
 	return &FileStore{
 		root:        root,
 		records:     records,
-		key:         cfg.Key,
+		crypt:       crypt,
 		allowInline: cfg.AllowInsecureInlineTokens,
 		locks:       newPrincipalLocks(),
 	}, nil
@@ -169,6 +177,18 @@ func (s *FileStore) Save(ctx context.Context, principal string, set TokenSet, ex
 	unlock := s.locks.lock(principal)
 	defer unlock()
 
+	// The in-process mutex above covers concurrent goroutines inside this
+	// *FileStore only. This cross-process lock is what makes Save's own
+	// read-then-write critical section run exclusively of a concurrent
+	// Reseal from a SEPARATE *FileStore in a rotate-key process — see
+	// filestore_reseal.go and filelock_unix.go for why the in-process mutex
+	// alone is not enough there.
+	crossLock, err := lockRecord(s.lockPath(principal))
+	if err != nil {
+		return 0, fmt.Errorf("store: lock record for save: %w", err)
+	}
+	defer func() { _ = crossLock.release() }()
+
 	current, err := s.currentVersion(principal)
 	if err != nil {
 		return 0, err
@@ -194,7 +214,7 @@ func recordAAD(schema int, version int64) string {
 
 // commit seals set and writes it atomically as the given version.
 func (s *FileStore) commit(principal string, set TokenSet, version int64) (int64, error) {
-	payload, err := cryptostore.Encrypt(s.key, principal,
+	payload, err := s.crypt.encrypt(principal,
 		recordAAD(recordSchema, version), encodeRecordPayload(set))
 	if err != nil {
 		return 0, fmt.Errorf("store: seal record: %w", err)
@@ -230,6 +250,17 @@ func (s *FileStore) Delete(ctx context.Context, principal string) error {
 	unlock := s.locks.lock(principal)
 	defer unlock()
 
+	// Held for the same reason Save holds it: the in-process mutex above covers
+	// goroutines inside this *FileStore only. Without the cross-process lock, a
+	// Save in another process can read the current version, have this Delete
+	// remove the record underneath it, and then write — resurrecting a record an
+	// operator deliberately unlinked. Deleting under the lock orders the two.
+	crossLock, err := lockRecord(s.lockPath(principal))
+	if err != nil {
+		return fmt.Errorf("store: lock record for delete: %w", err)
+	}
+	defer func() { _ = crossLock.release() }()
+
 	return removeFile(s.recordPath(principal))
 }
 
@@ -239,6 +270,13 @@ func (s *FileStore) Delete(ctx context.Context, principal string) error {
 func (s *FileStore) recordPath(principal string) string {
 	digest := sha256.Sum256([]byte(principal))
 	return filepath.Join(s.records, hex.EncodeToString(digest[:])+".json")
+}
+
+// lockPath is the OS-level advisory lock file (filelock_unix.go) that
+// serializes one principal's record across separate processes. It is a
+// sibling of the record file, never the record file itself.
+func (s *FileStore) lockPath(principal string) string {
+	return s.recordPath(principal) + ".lock"
 }
 
 // storedRecord is the on-disk wrapper. It carries no principal and no key version:
@@ -276,7 +314,7 @@ func (s *FileStore) openRecord(principal string, record storedRecord) (TokenSet,
 	if err != nil {
 		return TokenSet{}, fmt.Errorf("store: record payload is not base64: %w", ErrCorruptRecord)
 	}
-	plaintext, err := cryptostore.Decrypt(s.key, principal,
+	plaintext, _, err := s.crypt.decrypt(principal,
 		recordAAD(record.Schema, record.Version), sealed)
 	if err != nil {
 		// The cause is wrapped for operator diagnosis: it reports versions and

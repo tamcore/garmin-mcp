@@ -222,6 +222,61 @@ func (d *dir) confirmRegular(name string, expected fs.FileInfo, file *os.File) e
 	return nil
 }
 
+// openForLocking opens name relative to d for use as an advisory (flock(2))
+// lock file, creating it with mode if it is not already there, and returns it
+// open: unlike every other operation here, the caller needs the live
+// descriptor for as long as it holds the lock, so this one does not close it.
+//
+// A fresh name is created with O_EXCL, which POSIX guarantees fails against an
+// existing symlink of that name regardless of what it points to, so a planted
+// symlink cannot be raced into place between two calls. A name that is already
+// there is opened only after the same Lstat-then-confirm discipline readFile
+// uses: a symlink is refused before the open, and the post-open identity check
+// refuses a swap between the two observations. Either path enforces an
+// owner-only mode before returning the descriptor.
+func (d *dir) openForLocking(name string, mode fs.FileMode) (*os.File, error) {
+	created, err := d.root.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, mode)
+	switch {
+	case err == nil:
+		if restrictErr := restrictFile(created, filepath.Join(d.path, name), mode); restrictErr != nil {
+			_ = created.Close()
+			return nil, restrictErr
+		}
+		return created, nil
+	case errors.Is(err, fs.ErrExist):
+		return d.openExistingLockFile(name)
+	default:
+		return nil, d.pathError("create lock file", name, err)
+	}
+}
+
+// openExistingLockFile opens a lock file name is expected to already name,
+// refusing anything that is not the plain regular file it claimed to be.
+func (d *dir) openExistingLockFile(name string) (*os.File, error) {
+	expected, err := d.root.Lstat(name)
+	if err != nil {
+		return nil, d.pathError("inspect lock file", name, err)
+	}
+	if !expected.Mode().IsRegular() {
+		return nil, fmt.Errorf("securefile: %q is not a regular file (type %v): %w",
+			filepath.Join(d.path, name), expected.Mode().Type(), ErrInsecurePath)
+	}
+
+	file, err := d.root.OpenFile(name, os.O_RDWR|nonBlockingFlag, 0)
+	if err != nil {
+		return nil, d.pathError("open lock file", name, err)
+	}
+	if err := d.confirmRegular(name, expected, file); err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	if err := checkOwnerOnly(file, filepath.Join(d.path, name)); err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	return file, nil
+}
+
 // writeFile replaces name atomically. An existing name that is not a regular file
 // is refused, so a planted symlink stops the write instead of absorbing it.
 func (d *dir) writeFile(name string, content []byte, mode fs.FileMode) error {

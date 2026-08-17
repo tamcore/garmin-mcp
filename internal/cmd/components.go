@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/tamcore/garmin-mcp/internal/config"
-	"github.com/tamcore/garmin-mcp/internal/cryptostore"
 	"github.com/tamcore/garmin-mcp/internal/identity"
 	"github.com/tamcore/garmin-mcp/internal/mcplog"
 	"github.com/tamcore/garmin-mcp/internal/store"
@@ -124,14 +123,15 @@ func openTokenStore(cfg config.Config, paths statePaths) (*store.FileStore, *tok
 			"supply the key through master-key-file", ErrUnsupportedKeyMaterial)
 	}
 
-	key, err := cryptostore.LoadOrCreateKey(paths.keys, keyVersion)
+	active, retired, err := loadKeyRing(paths)
 	if err != nil {
 		return nil, nil, fmt.Errorf("opening the encryption key: %w", err)
 	}
 
 	files, err := store.NewFileStore(store.Config{
 		Dir:                       paths.tokens,
-		Key:                       key,
+		Key:                       active,
+		RetiredKeys:               retired,
 		AllowInsecureInlineTokens: cfg.GarminTokens.IsSet(),
 	})
 	if err != nil {

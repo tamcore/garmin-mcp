@@ -106,8 +106,8 @@ func TestConfiguredMasterKeyFileSelectsTheKeyDirectory(t *testing.T) {
 	if want := filepath.Join(cfg.StateDir, "secrets"); paths.keys != want {
 		t.Errorf("keys = %q, want %q", paths.keys, want)
 	}
-	if !strings.HasSuffix(paths.keyFile(), "key-v1.json") {
-		t.Errorf("keyFile = %q, want the versioned key file", paths.keyFile())
+	if !strings.HasSuffix(paths.keyFile(1), "key-v1.json") {
+		t.Errorf("keyFile = %q, want the versioned key file", paths.keyFile(1))
 	}
 	if paths.tokens != filepath.Join(cfg.StateDir, tokensDirName) {
 		t.Errorf("tokens = %q, want it under the state directory", paths.tokens)

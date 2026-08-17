@@ -70,10 +70,17 @@ is still a requirement.
 
 Six limits on the list above, stated so it cannot be over-read:
 
-- Cross-process compare-and-set does not exist for the file store.
-  `FileStore.Save` compares the version under a per-process mutex with no file
-  locking, so it is safe for a **single active instance** only. The SQLite
-  backend has real CAS, and its v1 deployment is single-active-instance too.
+- The file store's read-modify-write is now serialized across processes.
+  `FileStore.Save`, `Delete` and `Reseal` hold an `flock(2)` advisory lock on a
+  sibling `.lock` file for the whole critical section, on top of the per-principal
+  in-process mutex, which covers goroutines inside one `*FileStore` only. This
+  changed with key rotation: `rotate-key` is a separate process from `serve` by
+  necessity, and a Go-level re-read-then-write is two operations, so a
+  content-equality check narrows that window without closing it the way a SQL
+  `UPDATE ... WHERE` does at the engine. The lock is advisory and host-local, so
+  the store must not sit on a network filesystem — which `docs/operations.md`
+  already requires. Both deployments remain single-active-instance by design;
+  what changed is that a second process can no longer silently destroy a write.
 - `mcpserver.Revocation` has no resource selector, so revoking one consent closes
   slightly more sessions than that grant covered. The direction is fail-safe.
 - A revocation event dropped under buffer pressure costs the affected session its

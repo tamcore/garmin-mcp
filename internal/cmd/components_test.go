@@ -91,8 +91,8 @@ func TestTheKeyDirectoryFollowsTheConfiguredKeyFile(t *testing.T) {
 	if paths.keys != filepath.Dir(keyFile) {
 		t.Errorf("keys = %q, want the configured key file's directory", paths.keys)
 	}
-	if paths.keyFile() != filepath.Join(filepath.Dir(keyFile), "key-v1.json") {
-		t.Errorf("keyFile = %q, want the versioned name cryptostore owns", paths.keyFile())
+	if paths.keyFile(1) != filepath.Join(filepath.Dir(keyFile), "key-v1.json") {
+		t.Errorf("keyFile = %q, want the versioned name cryptostore owns", paths.keyFile(1))
 	}
 	if paths.tokens != filepath.Join(root, tokensDirName) {
 		t.Errorf("tokens = %q, want it under the state directory", paths.tokens)

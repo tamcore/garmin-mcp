@@ -66,7 +66,7 @@ func (s *recordingSink) String() string {
 func seedExpiredTransaction(t *testing.T, cfg config.Config) {
 	t.Helper()
 
-	key, err := cryptostore.LoadOrCreateKey(filepath.Join(cfg.StateDir, "keys"), keyVersion)
+	key, err := cryptostore.LoadOrCreateKey(filepath.Join(cfg.StateDir, "keys"), defaultActiveKeyVersion)
 	if err != nil {
 		t.Fatalf("LoadOrCreateKey: %v", err)
 	}

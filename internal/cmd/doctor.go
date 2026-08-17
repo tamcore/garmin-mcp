@@ -158,7 +158,6 @@ func diagnose(ctx context.Context, cfg config.Config) (diagnosis, error) {
 		PrincipalID:        cfg.PrincipalID,
 		PrincipalBound:     principalIsBound(cfg),
 		StateDir:           paths.root,
-		KeyFile:            paths.keyFile(),
 		TokenDir:           paths.tokens,
 		Remote:             cfg.Transport == config.TransportStreamableHTTP,
 		WriteEnabled:       cfg.EnableWriteTools,
@@ -166,13 +165,13 @@ func diagnose(ctx context.Context, cfg config.Config) (diagnosis, error) {
 		ConfigLine:         cfg.String(),
 	}
 
-	key, keyUsable := report.checkKey(cfg, paths)
+	key, retired, keyUsable := report.checkKey(cfg, paths)
 	report.checkStore(paths)
 	if report.Remote {
 		report.checkRemote(cfg)
 		return report, nil
 	}
-	report.checkTokens(ctx, cfg, paths, key, keyUsable)
+	report.checkTokens(ctx, cfg, paths, key, retired, keyUsable)
 	return report, nil
 }
 
@@ -183,21 +182,33 @@ func principalIsBound(cfg config.Config) bool {
 	return err == nil
 }
 
-// checkKey reads the key material and classifies the outcome, returning the key
-// when it is usable so the token check can open the store with it.
-func (d *diagnosis) checkKey(cfg config.Config, paths statePaths) (cryptostore.Key, bool) {
+// checkKey reads the key material and classifies the outcome, returning the
+// active key and every retired key still present when the active key is usable,
+// so the token check can open the store exactly as a real deployment would
+// during a rotation window.
+func (d *diagnosis) checkKey(cfg config.Config, paths statePaths) (cryptostore.Key, []cryptostore.Key, bool) {
 	if cfg.MasterKey.IsSet() {
 		d.KeyState = stateUnsafe
 		d.KeyDetail = "inline master key material is not supported; " +
 			"supply the key through master-key-file"
-		return cryptostore.Key{}, false
+		d.KeyFile = paths.keyFile(defaultActiveKeyVersion)
+		return cryptostore.Key{}, nil, false
 	}
 
-	key, err := cryptostore.LoadKey(paths.keys, keyVersion)
+	version, _, err := resolveActiveKeyVersion(paths)
+	if err != nil {
+		d.KeyState = stateUnsafe
+		d.KeyDetail = "the active key version marker is unusable: " + sanitizedCause(err)
+		d.KeyFile = paths.keyFile(defaultActiveKeyVersion)
+		return cryptostore.Key{}, nil, false
+	}
+	d.KeyFile = paths.keyFile(version)
+
+	key, err := cryptostore.LoadKey(paths.keys, version)
 	switch {
 	case err == nil:
 		d.KeyState, d.KeyDetail = stateOK, detailOwnerOnly
-		return key, true
+		return key, retiredKeysBestEffort(paths, version), true
 	case errors.Is(err, cryptostore.ErrKeyNotFound):
 		d.KeyState = stateAbsent
 		d.KeyDetail = "absent; it is created on the first serve or auth run"
@@ -208,7 +219,21 @@ func (d *diagnosis) checkKey(cfg config.Config, paths statePaths) (cryptostore.K
 		d.KeyState = stateUnsafe
 		d.KeyDetail = "present but unusable: " + sanitizedCause(err)
 	}
-	return cryptostore.Key{}, false
+	return cryptostore.Key{}, nil, false
+}
+
+// retiredKeysBestEffort loads every key version below active that is still
+// present on disk, skipping one that is not rather than failing the whole
+// diagnostic: an unreadable retired key is reported, if it matters, by the token
+// check that actually needs it, never by this helper.
+func retiredKeysBestEffort(paths statePaths, active int) []cryptostore.Key {
+	var retired []cryptostore.Key
+	for older := 1; older < active; older++ {
+		if key, err := cryptostore.LoadKey(paths.keys, older); err == nil {
+			retired = append(retired, key)
+		}
+	}
+	return retired
 }
 
 // checkStore classifies the token store directory from its mode alone, without
@@ -237,7 +262,8 @@ func (d *diagnosis) checkStore(paths statePaths) {
 // only when the key is usable and the store already exists, so the check cannot
 // create either.
 func (d *diagnosis) checkTokens(
-	ctx context.Context, cfg config.Config, paths statePaths, key cryptostore.Key, keyUsable bool,
+	ctx context.Context, cfg config.Config, paths statePaths,
+	key cryptostore.Key, retired []cryptostore.Key, keyUsable bool,
 ) {
 	if !keyUsable || d.StoreState != stateOK || !d.PrincipalBound {
 		d.TokensState = stateAbsent
@@ -245,7 +271,7 @@ func (d *diagnosis) checkTokens(
 		return
 	}
 
-	files, err := store.NewFileStore(store.Config{Dir: paths.tokens, Key: key})
+	files, err := store.NewFileStore(store.Config{Dir: paths.tokens, Key: key, RetiredKeys: retired})
 	if err != nil {
 		d.TokensState = stateUnsafe
 		d.TokensDetail = "the token store cannot be opened: " + sanitizedCause(err)

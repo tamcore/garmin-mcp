@@ -97,6 +97,22 @@ func Decrypt(key Key, principal, recordType string, sealed []byte) ([]byte, erro
 	return plaintext, nil
 }
 
+// SealedKeyVersion reports the key version an envelope declares in its header,
+// without needing any key and without authenticating anything.
+//
+// The header is covered by the additional data, so a caller that goes on to
+// Decrypt still gets an authenticated answer; this function alone only reports
+// what the bytes claim. That makes it safe for inventory and completion
+// bookkeeping — "is this record still under a retired key version" — but never
+// for an authorization decision: a tampered header is only caught by Decrypt.
+func SealedKeyVersion(sealed []byte) (int, error) {
+	env, err := parseEnvelope(sealed)
+	if err != nil {
+		return 0, err
+	}
+	return int(env.keyVersion), nil
+}
+
 // envelope is a parsed envelope. It is secret-bearing, so the nonce and the
 // ciphertext sit behind an unexported pointer and every rendering reports only
 // versions and lengths.

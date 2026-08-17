@@ -1329,10 +1329,15 @@ source.
   because `/var` is a symlink to `/private/var`. Four test suites work around it
   with `filepath.EvalSymlinks(t.TempDir())`. Decide whether that is the final
   contract and document it, or normalize before checking.
-- `FileStore` provides no cross-process compare-and-set: it compares the version
-  under a per-principal in-process mutex with no file locking, so it is safe for
-  a **single active instance** only. The SQLite backend is the answer for
-  anything else, and the v1 SQLite deployment is single-active-instance too.
+- `FileStore` now serializes one principal's record across processes with an
+  `flock(2)` advisory lock held for the whole read-modify-write, alongside the
+  per-principal in-process mutex. Key rotation forced this: `rotate-key` is a
+  separate process from `serve`, and the prescribed content-equality re-check
+  narrows the window without closing it, because a Go-level read-then-write is
+  two operations rather than one atomic engine statement. The lock is advisory
+  and host-local, so the store must not sit on a network filesystem. Both
+  deployments stay single-active-instance by design; the change is that a second
+  process can no longer silently overwrite a newer record with an older one.
 - `modernc.org/sqlite` is a direct dependency, and `modernc.org/libc` must move
   only with it. Both are on the manual-review list in `.github/renovate.json` and
   neither may be automerged.

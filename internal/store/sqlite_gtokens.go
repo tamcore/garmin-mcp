@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-
-	"github.com/tamcore/garmin-mcp/internal/cryptostore"
 )
 
 // The Garmin DI token set, per principal, in SQLite.
@@ -56,7 +54,7 @@ func (s *SQLiteStore) openTokenRecord(principal string, schema int, version int6
 		return TokenSet{}, fmt.Errorf("store: token record has schema %d, want %d: %w",
 			schema, recordSchema, ErrCorruptRecord)
 	}
-	plaintext, err := cryptostore.Decrypt(s.key, principal, recordAAD(schema, version), sealed)
+	plaintext, _, err := s.crypt.decrypt(principal, recordAAD(schema, version), sealed)
 	if err != nil {
 		// The cause reports versions and sizes only, never material.
 		return TokenSet{}, fmt.Errorf("store: open token record: %w: %w", ErrCorruptRecord, err)
@@ -112,11 +110,11 @@ func (s *SQLiteStore) commitTokenRecord(ctx context.Context, tx *sql.Tx, princip
 			current, expected, ErrVersionConflict)
 	}
 
-	keyVersion, err := keyVersionOf(s.key)
+	keyVersion, err := s.crypt.activeVersion()
 	if err != nil {
 		return err
 	}
-	sealed, err := cryptostore.Encrypt(s.key, principal,
+	sealed, err := s.crypt.encrypt(principal,
 		recordAAD(recordSchema, next), encodeRecordPayload(set))
 	if err != nil {
 		return fmt.Errorf("store: seal token record: %w", err)

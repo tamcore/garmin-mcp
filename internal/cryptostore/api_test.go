@@ -15,7 +15,7 @@ import (
 // package is the only place that touches key material, so an accidentally
 // exported helper is a security regression, not a style nit.
 func TestExportedFunctionSurfaceIsNarrow(t *testing.T) {
-	want := []string{"Decrypt", "Encrypt", "GenerateKey", "LoadKey", "LoadOrCreateKey"}
+	want := []string{"Decrypt", "Encrypt", "GenerateKey", "LoadKey", "LoadOrCreateKey", "SealedKeyVersion"}
 
 	// Every non-test .go file in this directory is parsed, including the
 	// build-tagged platform files, so a symbol exported only on one GOOS is caught

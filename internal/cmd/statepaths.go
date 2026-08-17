@@ -21,13 +21,6 @@ const (
 	tokensDirName = "tokens"
 )
 
-// keyVersion is the encryption key version this build reads and writes.
-//
-// It is fixed at 1 deliberately: internal/cryptostore supports staged rotation,
-// but nothing here re-seals existing records, so raising this constant alone
-// would make every stored record unreadable instead of migrating it.
-const keyVersion = 1
-
 // statePaths are the resolved filesystem locations one invocation works with. The
 // value is immutable: every field is set once, by [resolveStatePaths].
 type statePaths struct {
@@ -39,11 +32,12 @@ type statePaths struct {
 	tokens string
 }
 
-// keyFile reports the file the current key version is stored in. The name is
-// chosen by internal/cryptostore, which owns the versioned layout, so this is a
-// report rather than a setting.
-func (p statePaths) keyFile() string {
-	return filepath.Join(p.keys, "key-v"+strconv.Itoa(keyVersion)+".json")
+// keyFile reports the file a given key version is stored in. The name is chosen
+// by internal/cryptostore, which owns the versioned layout, so this is a report
+// rather than a setting. version is normally the active key version from
+// resolveActiveKeyVersion.
+func (p statePaths) keyFile(version int) string {
+	return filepath.Join(p.keys, "key-v"+strconv.Itoa(version)+".json")
 }
 
 // resolveStatePaths decides where state lives for cfg.

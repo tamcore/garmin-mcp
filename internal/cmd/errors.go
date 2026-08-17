@@ -61,4 +61,18 @@ var (
 	// read. The report names each finding; this sentinel is what makes the
 	// command exit non-zero so a script notices.
 	ErrUnsafeDeployment = errors.New("the deployment has a check that must be fixed before serving")
+
+	// ErrRotationTargetInvalid reports a --target-version that is not exactly one
+	// past the active key version. Rotation moves one version at a time on
+	// purpose: skipping a version would leave nothing that ever held the
+	// intermediate key, which is unrecoverable if any record turns out to still
+	// need it.
+	ErrRotationTargetInvalid = errors.New("rotate-key: target version must be exactly the active version plus one")
+
+	// ErrRotationIncomplete reports that a reseal pass ended with a sealed
+	// record still left at a retired key version. It is not a crash: the active
+	// key version was already recorded, so running rotate-key again resumes and
+	// finishes the remaining records. The retiring key must stay in place until a
+	// run reports none of this.
+	ErrRotationIncomplete = errors.New("rotate-key: some records still need a retired key; run rotate-key again")
 )

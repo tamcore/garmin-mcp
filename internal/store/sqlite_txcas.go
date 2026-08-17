@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-
-	"github.com/tamcore/garmin-mcp/internal/cryptostore"
 )
 
 // Advancing and consuming an authorization transaction.
@@ -33,11 +31,11 @@ func (s *SQLiteStore) sealClientState(handleHash string, state Secret,
 	if state.IsZero() {
 		return nil, sql.NullInt64{}, nil
 	}
-	version, err := keyVersionOf(s.key)
+	version, err := s.crypt.activeVersion()
 	if err != nil {
 		return nil, sql.NullInt64{}, err
 	}
-	sealed, err := cryptostore.Encrypt(s.key, handleHash, clientStateRecordType,
+	sealed, err := s.crypt.encrypt(handleHash, clientStateRecordType,
 		[]byte(state.Reveal()))
 	if err != nil {
 		return nil, sql.NullInt64{}, fmt.Errorf("store: seal client state: %w", err)
@@ -51,7 +49,7 @@ func (s *SQLiteStore) openClientState(handleHash string, sealed []byte) (Secret,
 	if len(sealed) == 0 {
 		return Secret{}, nil
 	}
-	opened, err := cryptostore.Decrypt(s.key, handleHash, clientStateRecordType, sealed)
+	opened, _, err := s.crypt.decrypt(handleHash, clientStateRecordType, sealed)
 	if err != nil {
 		// The cause names versions and sizes only, never material.
 		return Secret{}, fmt.Errorf("store: open client state: %w: %w", ErrCorruptRecord, err)

@@ -170,6 +170,7 @@ func NewRootCommand(opts Options) *cobra.Command {
 		NewDoctorCommand(opts),
 		NewToolsCommand(opts),
 		NewMigrateCommand(opts),
+		NewRotateKeyCommand(opts),
 		NewVersionCommand(opts),
 	)
 	return root

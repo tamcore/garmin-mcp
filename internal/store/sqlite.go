@@ -64,7 +64,7 @@ import (
 // package-level state.
 type SQLiteStore struct {
 	db     *sql.DB
-	key    cryptostore.Key
+	crypt  keySet
 	keys   indexKeys
 	now    func() time.Time
 	schema int
@@ -82,8 +82,15 @@ type SQLiteConfig struct {
 	// symlinked ancestor are refused.
 	Path string
 
-	// Key encrypts every sealed column. Obtain it from cryptostore.LoadOrCreateKey.
+	// Key encrypts every sealed column, and is the active key every write is
+	// sealed under. Obtain it from cryptostore.LoadOrCreateKey.
 	Key cryptostore.Key
+
+	// RetiredKeys are additional key versions kept only to read a sealed column a
+	// staged rotation has not yet re-sealed onto Key. Never used to seal a write.
+	// A nil slice is the pre-rotation shape: every sealed column must already be
+	// sealed under Key.
+	RetiredKeys []cryptostore.Key
 
 	// Database tunes the connection pool and the pragmas. The zero value selects
 	// the documented defaults.
@@ -110,7 +117,8 @@ type SQLiteConfig struct {
 // by a newer build (ErrSchemaTooNew) and an altered applied migration
 // (ErrMigrationChanged) all refuse to open rather than degrade.
 func OpenSQLite(ctx context.Context, cfg SQLiteConfig) (*SQLiteStore, error) {
-	if err := checkKeyUsable(cfg.Key); err != nil {
+	crypt, err := newKeySet(cfg.Key, cfg.RetiredKeys)
+	if err != nil {
 		return nil, err
 	}
 	set := cfg.Migrations
@@ -126,7 +134,7 @@ func OpenSQLite(ctx context.Context, cfg SQLiteConfig) (*SQLiteStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	opened, err := buildStore(ctx, db, cfg.Key, clock, set)
+	opened, err := buildStore(ctx, db, crypt, clock, set)
 	if err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
@@ -136,18 +144,18 @@ func OpenSQLite(ctx context.Context, cfg SQLiteConfig) (*SQLiteStore, error) {
 
 // buildStore migrates the database and loads the database-wide state. It is split
 // out so OpenSQLite can close the connection on any failure along the way.
-func buildStore(ctx context.Context, db *sql.DB, key cryptostore.Key,
+func buildStore(ctx context.Context, db *sql.DB, crypt keySet,
 	clock func() time.Time, set fs.FS,
 ) (*SQLiteStore, error) {
 	result, err := Migrate(ctx, db, set)
 	if err != nil {
 		return nil, err
 	}
-	keys, err := loadIndexKeys(ctx, db, key, clock)
+	keys, err := loadIndexKeys(ctx, db, crypt, clock)
 	if err != nil {
 		return nil, err
 	}
-	return &SQLiteStore{db: db, key: key, keys: keys, now: clock, schema: result.ToVersion}, nil
+	return &SQLiteStore{db: db, crypt: crypt, keys: keys, now: clock, schema: result.ToVersion}, nil
 }
 
 // Close releases the connection pool.
@@ -201,14 +209,14 @@ func (s *SQLiteStore) Pragmas(ctx context.Context) (PragmaState, error) {
 // insert is a no-op and the following read returns the winner's row. Whoever loses
 // discards its generated material, which is why the material is re-read rather than
 // reused after the insert.
-func loadIndexKeys(ctx context.Context, db *sql.DB, key cryptostore.Key,
+func loadIndexKeys(ctx context.Context, db *sql.DB, crypt keySet,
 	clock func() time.Time,
 ) (indexKeys, error) {
-	sealed, err := sealFreshIndexRoot(key)
+	sealed, err := sealFreshIndexRoot(crypt)
 	if err != nil {
 		return indexKeys{}, err
 	}
-	version, err := keyVersionOf(key)
+	version, err := crypt.activeVersion()
 	if err != nil {
 		return indexKeys{}, err
 	}
@@ -226,11 +234,11 @@ func loadIndexKeys(ctx context.Context, db *sql.DB, key cryptostore.Key,
 	if err != nil {
 		return indexKeys{}, fmt.Errorf("store: read index root: %w", err)
 	}
-	opened, err := cryptostore.Decrypt(key, indexRootPrincipal, indexRootRecordType, stored)
+	opened, _, err := crypt.decrypt(indexRootPrincipal, indexRootRecordType, stored)
 	if err != nil {
 		// The cause names versions and sizes only, never material. A failure here
-		// almost always means the wrong encryption key was supplied for this
-		// database, which must refuse to open rather than create a second root.
+		// almost always means none of the configured keys open this database,
+		// which must refuse to open rather than create a second root.
 		return indexKeys{}, fmt.Errorf("store: open index root: %w: %w", ErrCorruptRecord, err)
 	}
 	return newIndexKeys(opened)
@@ -263,13 +271,13 @@ func keyVersionOf(key cryptostore.Key) (int, error) {
 	return rendered.Version, nil
 }
 
-// sealFreshIndexRoot generates and seals a candidate root.
-func sealFreshIndexRoot(key cryptostore.Key) ([]byte, error) {
+// sealFreshIndexRoot generates and seals a candidate root under the active key.
+func sealFreshIndexRoot(crypt keySet) ([]byte, error) {
 	material, err := newIndexRootMaterial()
 	if err != nil {
 		return nil, err
 	}
-	sealed, err := cryptostore.Encrypt(key, indexRootPrincipal, indexRootRecordType, material)
+	sealed, err := crypt.encrypt(indexRootPrincipal, indexRootRecordType, material)
 	if err != nil {
 		return nil, fmt.Errorf("store: seal index root: %w", err)
 	}

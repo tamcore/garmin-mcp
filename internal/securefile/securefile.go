@@ -119,6 +119,22 @@ func InstallNewFile(path string, content []byte, mode fs.FileMode) error {
 	return parent.installNewFile(name, content, mode)
 }
 
+// OpenForLocking opens path for use as an advisory lock file, creating it with
+// mode if absent, and returns it open. The caller owns the descriptor: closing
+// it, and releasing whatever lock it took on it (flock(2), say), is the
+// caller's job, not this package's — this function's part is only refusing to
+// open through anything other than a plain regular file it or a previous call
+// created, with the same no-follow, post-open identity and owner-only-mode
+// discipline every other function here uses.
+func OpenForLocking(path string, mode fs.FileMode) (*os.File, error) {
+	parent, name, err := openParent(path)
+	if err != nil {
+		return nil, err
+	}
+	defer parent.close()
+	return parent.openForLocking(name, mode)
+}
+
 // RestrictExisting enforces mode on a file this package did not create.
 //
 // It exists for files a third-party library opens for itself — the SQLite

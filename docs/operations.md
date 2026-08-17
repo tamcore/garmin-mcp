@@ -340,10 +340,26 @@ Encryption key material lives in `<master-key-file directory>/key-v<N>.json`.
 Note that the `master-key-file` setting selects the **directory**; the file name
 is owned by `internal/cryptostore`. The file is a small JSON document holding a
 version and a base64 32-byte key, and it is created on the first `serve` or
-`auth` run if it is absent. This build reads and writes version 1.
+`auth` run if it is absent.
 
 The file is created `0600` inside a `0700` directory, and both modes are applied
 by an explicit `chmod` after creation, so the process umask cannot widen them.
+That directory must sit on a filesystem that supports hard links: creating a key
+file installs it by hard link so two processes racing to create the same version
+agree on one winner, and there is deliberately no rename fallback. A filesystem
+without hard link support (some network filesystems, some container overlay
+configurations) makes key creation fail loudly rather than silently falling back
+to a less safe install. If `serve`, `auth`, or `rotate-key` refuses with an
+installation error naming the key directory, move the directory to a filesystem
+that supports hard links; do not work around it by disabling the check.
+
+Which key version is **active** — the one every new write is sealed under — is
+recorded in a small marker file next to the key files,
+`<master-key-file directory>/active-key-version.json`. This is key *selection*
+metadata only, never a record of rotation progress: it answers "which key file
+does a write use today" and nothing else depends on it. A deployment that has
+never rotated has no marker at all and resolves to version 1, which is what
+every deployment before this file existed already used.
 
 ### What refuses to start
 
@@ -368,24 +384,89 @@ nothing.
 
 ### Rotation
 
-`internal/cryptostore` supports a **staged** rotation, and only a staged one:
+Rotation is a **staged, offline** procedure driven by `garmin-mcp rotate-key`.
+Offline means exactly that: it is a one-shot command, not a background service,
+and it is not meant to run alongside a live `serve` process. There is no
+zero-downtime online rotation, no distributed locking, and no automatic or
+scheduled rotation — running the command is always a deliberate operator action.
 
-1. create the new version alongside the old one, keeping `key-v<N>.json` in
-   place;
-2. for each stored record, decrypt under the old key and re-encrypt under the new
-   one, persisting the result transactionally. Every sealed record carries its
-   key version in its envelope header, and decrypting with the wrong version
-   reports a version mismatch rather than corruption, so a partially migrated
-   store stays readable throughout;
-3. only when every record is re-sealed, delete the retired key file.
+```sh
+garmin-mcp rotate-key --state-dir=/var/lib/garmin-mcp --database-path=/var/lib/garmin-mcp/state.db \
+    --target-version=2
+```
 
-**No code drives this today.** There is no rotation function, no re-sealing
-routine, and no CLI command. The key version this build uses is fixed at 1 in
-source, with an explicit comment that raising it alone would make every stored
-record unreadable rather than migrating it. Treat key rotation as unavailable
-until a re-seal path ships. The honest operational answer to a suspected key
-compromise today is to stand up a new deployment with a new key and have every
-user link their account again.
+`--target-version` is required and is never inferred: it must be exactly the
+active version plus one to start a new rotation, **or the active version
+itself to resume one a previous run already started and activated** — see
+"Interrupting and resuming" below. Omit `--database-path` for a local stdio
+deployment, where the command re-seals the single bound principal's
+`FileStore` record instead of a database.
+
+What one run does, in order:
+
+1. **Reads the active version** from the marker described above (defaulting to 1
+   if it has never rotated). A fresh rotation refuses unless `--target-version`
+   is exactly one higher; resuming one already in progress accepts the target
+   equal to the active version instead of refusing it as a skipped version.
+2. **Resolves the backend and, for a local `FileStore` deployment, the bound
+   principal**, before anything below is durable — a deployment that binds no
+   principal is refused here, not partway through.
+3. **Loads the retiring key** (the version one below the target — it must
+   already exist) **and creates the target key** if it is not already present.
+4. **Activates the target version** by writing the marker, unless this run is a
+   resume, in which case the marker already names the target and is left
+   alone. This is the moment the mixed-version window opens: from here on every
+   new write from THIS process is sealed under the target key, and reading a
+   record still at the retiring version depends on that retiring key staying in
+   place. **A `serve` process already running when this happens does not pick
+   this up.** It read the key ring once at its own start-up and keeps sealing
+   under whatever key was active then for its entire lifetime — rotation is
+   offline precisely because nothing here reaches into a running process and
+   makes it reload.
+5. **Re-seals every sealed record** onto the target key: the database index root,
+   every principal's Garmin identity linkage, every Garmin token set, and every
+   pending authorization transaction's client state (SQLite); or the one bound
+   principal's token record (local `FileStore`). Each is re-encrypted with the
+   same plaintext and the same binding. SQLite additionally checks the row's own
+   compare-and-set counter in the same `UPDATE` statement that rewrites it, which
+   is atomic at the database engine; the local `FileStore` backend has no such
+   engine to lean on, so it closes the same gap with an OS-level advisory lock
+   held for the entire read-modify-write section, plus a content-equality
+   re-check immediately before the write. Either way, a concurrent write from a
+   live server process can never be silently clobbered by the reseal, or vice
+   versa.
+6. **Reports what it rewrote**, then — for SQLite — reads back a completion scan
+   and reports whether every sealed record is now at the target version. That
+   scan is a snapshot of the instant it ran: it does not re-check the marker or
+   detect a server that starts serving, or commits a write, immediately
+   afterward. A clean report means **no record needed the retiring key as of
+   this scan** — confirm no server was running throughout the run before
+   treating that as a green light to retire the key, and re-run the command
+   afterward to be sure. The local `FileStore` backend has no completion scan at
+   all: it re-seals exactly the one record this configuration binds and reports
+   that, but it cannot enumerate — let alone reseal — a record for any other
+   principal, because the record file name is a one-way SHA-256 digest of the
+   principal id. A record for a principal this configuration does not bind is
+   simply not covered by any `rotate-key` run and needs its own configuration to
+   reach it.
+
+**The retiring key must stay on disk until the command reports every record
+resealed.** Deleting it earlier makes any record it still holds unrecoverable.
+Retiring it — removing `key-v<N>.json` for the old version — is a separate,
+manual step this command never takes for you.
+
+**Interrupting and resuming.** There is no progress checkpoint by design: each
+record's own key-version column (SQLite) or the record itself (`FileStore`) is
+the resume mechanism. A killed run is simply invoked again with the same
+`--target-version`; it re-scans for what is still at the retiring version and
+does not re-seal — does not double-encrypt — anything already moved. If a run
+reports it did not finish (some records still needed the retiring key), run the
+same command again; it resumes correctly.
+
+The honest fallback if this all sounds like too much for a suspected key
+compromise remains available: stand up a new deployment with a new key and have
+every user link their account again. `rotate-key` is for the ordinary case —
+routine rotation, not an incident response shortcut.
 
 ### What a key beside the database actually protects
 

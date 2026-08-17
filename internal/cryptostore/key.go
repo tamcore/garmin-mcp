@@ -70,6 +70,14 @@ import (
 // keyLen is the master key size in bytes. 32 bytes selects AES-256-GCM.
 const keyLen = 32
 
+// MaxKeyVersion is the highest key version this package can ever seal an
+// envelope under: envelope.go encodes the key version as a big-endian uint32
+// header field, so a version above this cannot round-trip through an envelope
+// at all. A caller resolving a version from outside this package — a rotation
+// marker above all — must reject anything higher before it ever reaches
+// GenerateKey or LoadKey.
+const MaxKeyVersion = 1<<32 - 1
+
 // maxKeyFileBytes bounds a key document read. A key file is a few hundred bytes;
 // anything larger is a mistake or an attempt to exhaust memory.
 const maxKeyFileBytes = 4 << 10
