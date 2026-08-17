@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/tamcore/garmin-mcp/internal/cryptostore"
@@ -263,11 +264,27 @@ func TestLoadKeyRingReportsAnUnreadableRetiredKey(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(paths.keys, "key-v1.json"), []byte(`not a key document`), 0o600); err != nil {
 		t.Fatalf("write malformed key file: %v", err)
 	}
+	// The active key (version 2) must actually be loadable, or loadKeyRing
+	// fails at that earlier step and never reaches loadRetiredKeys at all —
+	// which is exactly how this test used to pass for the wrong reason: it
+	// asserted only "err == nil -> fail", so a mutant that silently `continue`s
+	// past an unreadable retired key (instead of reporting it) still passed,
+	// because the active-key load already failed first with ErrKeyNotFound.
+	if _, err := cryptostore.LoadOrCreateKey(paths.keys, 2); err != nil {
+		t.Fatalf("seed a valid active key version 2: %v", err)
+	}
 	if err := writeActiveKeyVersion(paths, 2); err != nil {
 		t.Fatalf("writeActiveKeyVersion: %v", err)
 	}
 
-	if _, _, err := loadKeyRing(paths); err == nil {
+	_, _, err := loadKeyRing(paths)
+	if err == nil {
 		t.Fatal("loadKeyRing with an unreadable retired key succeeded, want an error")
+	}
+	if !errors.Is(err, cryptostore.ErrMalformedKey) {
+		t.Fatalf("loadKeyRing with an unreadable retired key: err = %v, want it to wrap cryptostore.ErrMalformedKey", err)
+	}
+	if !strings.Contains(err.Error(), "retired encryption key version 1") {
+		t.Fatalf("loadKeyRing with an unreadable retired key: err = %q, want it to name retired key version 1", err.Error())
 	}
 }

@@ -63,11 +63,13 @@ type Config struct {
 // FileStore is a local token store: one AEAD-encrypted file per principal.
 //
 // Concurrency: a per-principal mutex serializes the read-modify-write of one
-// record, and the compare-and-set version makes a lost update detectable instead
-// of silent. That covers concurrent goroutines in one process, which is the
-// single-active-instance deployment this store is built for. Two processes sharing
-// a directory could still both pass their version check before either renames;
-// that case belongs to the shared-storage implementation, not here.
+// record within this process, and the compare-and-set version makes a lost
+// update detectable instead of silent. Two SEPARATE processes sharing a
+// directory — a live serve process and a rotate-key run — additionally take an
+// OS-level advisory lock (flock(2), filelock_unix.go) around the same
+// read-modify-write section, so the cross-process window this comment used to
+// describe as open is closed: Save, Delete and Reseal cannot interleave their
+// reads and writes across processes either.
 //
 // A FileStore is safe for concurrent use and holds no package-level state.
 type FileStore struct {
@@ -177,13 +179,25 @@ func (s *FileStore) Save(ctx context.Context, principal string, set TokenSet, ex
 	unlock := s.locks.lock(principal)
 	defer unlock()
 
+	// A removed records directory is deliberately NOT self-healed here, and the
+	// honest ENOENT from lockRecord's create is the intended outcome.
+	//
+	// Recreating it would be the friendlier behaviour and it is what commit's own
+	// ensureOwnerOnlyDir used to provide, but it cannot coexist with an
+	// inode-based lock: while one process holds the lock on the old directory's
+	// lock file, a second process that recreates the directory gets a NEW inode,
+	// so both hold "the lock" on different files and both write. That defeats the
+	// exclusion this lock exists for, which is worse than refusing. If the
+	// records directory is gone the records are gone with it, so continuing
+	// silently was never much of a recovery in the first place.
+
 	// The in-process mutex above covers concurrent goroutines inside this
 	// *FileStore only. This cross-process lock is what makes Save's own
 	// read-then-write critical section run exclusively of a concurrent
 	// Reseal from a SEPARATE *FileStore in a rotate-key process — see
 	// filestore_reseal.go and filelock_unix.go for why the in-process mutex
 	// alone is not enough there.
-	crossLock, err := lockRecord(s.lockPath(principal))
+	crossLock, err := lockRecord(ctx, s.lockPath(principal))
 	if err != nil {
 		return 0, fmt.Errorf("store: lock record for save: %w", err)
 	}
@@ -255,7 +269,7 @@ func (s *FileStore) Delete(ctx context.Context, principal string) error {
 	// Save in another process can read the current version, have this Delete
 	// remove the record underneath it, and then write — resurrecting a record an
 	// operator deliberately unlinked. Deleting under the lock orders the two.
-	crossLock, err := lockRecord(s.lockPath(principal))
+	crossLock, err := lockRecord(ctx, s.lockPath(principal))
 	if err != nil {
 		return fmt.Errorf("store: lock record for delete: %w", err)
 	}

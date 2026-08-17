@@ -26,37 +26,52 @@ func runRotateKeySQLite(
 	}
 	defer func() { _ = sqlite.Close() }()
 
+	// report is printed unconditionally, BEFORE either error below is checked:
+	// one unreadable row (or a cancelled context) aborts ResealToActiveKey
+	// partway through, and an operator seeing neither what succeeded nor what
+	// remains has no way to tell the rotation apart from one that touched
+	// nothing at all — with one corrupt row, the retiring key could then never
+	// be retired, because there is nothing to confirm against. The counts
+	// above are themselves point-in-time: a mid-table hard failure can leave
+	// counts assigned per table but zero anywhere later than the failure, so
+	// this is a floor on progress, never a ceiling.
 	report, err := sqlite.ResealToActiveKey(ctx)
+	writeSQLiteResealCounts(out, cfg.DatabasePath, report)
 	if err != nil {
 		return fmt.Errorf("resealing stored records: %w", err)
 	}
+
 	remaining, err := sqlite.RemainingToReseal(ctx)
 	if err != nil {
 		return fmt.Errorf("verifying the reseal completed: %w", err)
 	}
-
-	writeSQLiteRotateReport(out, cfg.DatabasePath, report, remaining)
+	writeSQLiteRemainingSummary(out, remaining)
 	if !remaining.Done() {
 		return ErrRotationIncomplete
 	}
 	return nil
 }
 
-// writeSQLiteRotateReport states what the run rewrote and what, if anything, is
-// still left, in the order an operator reads it.
+// writeSQLiteResealCounts states what one ResealToActiveKey call rewrote,
+// regardless of whether it ran to completion or stopped partway through on an
+// error.
+func writeSQLiteResealCounts(out io.Writer, path string, report store.ResealReport) {
+	_, _ = fmt.Fprintf(out, "database: %s\n", path)
+	_, _ = fmt.Fprintf(out, "garmin token sets resealed: %d\n", report.GarminTokenSets)
+	_, _ = fmt.Fprintf(out, "principal identities resealed: %d\n", report.PrincipalIdentities)
+	_, _ = fmt.Fprintf(out, "authorization transaction states resealed: %d\n", report.AuthTransactionStates)
+	_, _ = fmt.Fprintf(out, "index root resealed: %t\n", report.IndexRoot)
+}
+
+// writeSQLiteRemainingSummary states what, if anything, is still left, in the
+// order an operator reads it after writeSQLiteResealCounts.
 //
 // The scan behind remaining is point-in-time: nothing here re-checks the
 // marker or excludes a server that started serving after the scan ran, so a
 // clean report is evidence for this instant, not a guarantee that stays true
 // forever. See runRotateKeyFileStore's report for why the same caveat applies
 // to the local backend.
-func writeSQLiteRotateReport(out io.Writer, path string, report store.ResealReport, remaining store.ResealCounts) {
-	_, _ = fmt.Fprintf(out, "database: %s\n", path)
-	_, _ = fmt.Fprintf(out, "garmin token sets resealed: %d\n", report.GarminTokenSets)
-	_, _ = fmt.Fprintf(out, "principal identities resealed: %d\n", report.PrincipalIdentities)
-	_, _ = fmt.Fprintf(out, "authorization transaction states resealed: %d\n", report.AuthTransactionStates)
-	_, _ = fmt.Fprintf(out, "index root resealed: %t\n", report.IndexRoot)
-
+func writeSQLiteRemainingSummary(out io.Writer, remaining store.ResealCounts) {
 	if remaining.Done() {
 		_, _ = fmt.Fprintln(out, "no record needed the retiring key as of this scan; "+
 			"confirm no server was running throughout this run, then re-run before retiring the key")
@@ -86,16 +101,40 @@ func runRotateKeyFileStore(
 		return fmt.Errorf("opening the token store to reseal: %w", err)
 	}
 
-	changed, err := files.Reseal(ctx, principal.ID())
+	outcome, err := files.Reseal(ctx, principal.ID())
 	if err != nil {
 		return fmt.Errorf("resealing the stored token record: %w", err)
 	}
+	return reportFileStoreReseal(out, outcome)
+}
 
-	if changed {
+// reportFileStoreReseal writes the operator-facing report for a FileStore
+// reseal outcome and reports ErrRotationIncomplete when the outcome does not
+// let the affirmative "at the active key version" line be printed honestly.
+//
+// Pulled out of runRotateKeyFileStore so the printed-message-per-outcome
+// mapping is testable without a real store, a lock, or any concurrency: the
+// defect this guards used to collapse store.ResealRaced into the same silent
+// "already matched" case as store.ResealAlreadyCurrent, which let an operator
+// read the affirmative line and retire a key that still protected a live
+// record.
+func reportFileStoreReseal(out io.Writer, outcome store.ResealOutcome) error {
+	switch outcome {
+	case store.ResealRewrote:
 		_, _ = fmt.Fprintln(out, "the stored token record was resealed onto the target key")
-	} else {
-		_, _ = fmt.Fprintln(out, "the stored token record already matched the target key, "+
-			"or there is none stored yet")
+	case store.ResealNoRecord:
+		_, _ = fmt.Fprintln(out, "there is no stored token record for the bound principal")
+	case store.ResealRaced:
+		// Another writer moved the record between this attempt's read and its
+		// write. Its key version as of now is unknown, so the affirmative line
+		// below must not be printed: doing so is exactly the false all-clear
+		// this outcome exists to prevent.
+		_, _ = fmt.Fprintln(out, "the stored token record changed under a concurrent writer "+
+			"during this attempt; its key version is NOT confirmed and the retiring key must "+
+			"stay in place; run rotate-key again to confirm")
+		return ErrRotationIncomplete
+	case store.ResealAlreadyCurrent:
+		_, _ = fmt.Fprintln(out, "the stored token record already matched the target key")
 	}
 	// This backend has no completion scan: a FileStore holds exactly one
 	// record, the bound principal's, so re-sealing it (or finding nothing to

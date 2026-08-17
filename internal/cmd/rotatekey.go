@@ -2,14 +2,17 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
 	"github.com/tamcore/garmin-mcp/internal/config"
 	"github.com/tamcore/garmin-mcp/internal/cryptostore"
 	"github.com/tamcore/garmin-mcp/internal/identity"
+	"github.com/tamcore/garmin-mcp/internal/store"
 )
 
 // flagTargetVersion is the only flag rotate-key accepts. There is no default: a
@@ -97,6 +100,28 @@ func runRotateKey(ctx context.Context, cfg config.Config, target int, out io.Wri
 		}
 	}
 
+	// A resume whose retiring key is already gone is only safe when nothing is
+	// left sealed under it: the documented sequence is rotate, confirm every
+	// record resealed, THEN retire the key, and an operator who follows it and
+	// re-runs rotate-key to double-check must see completion, not a refusal
+	// that reads like data loss. loadRotationKeys itself cannot make that
+	// distinction — it loads the retiring key unconditionally — so it is
+	// checked here first, before that unconditional load ever runs.
+	if resuming {
+		retiringVersion := target - 1
+		if _, err := cryptostore.LoadKey(paths.keys, retiringVersion); err != nil {
+			if !errors.Is(err, cryptostore.ErrKeyNotFound) {
+				return fmt.Errorf("opening the active key to rotate from: %w", err)
+			}
+			if rotationAlreadyComplete(ctx, cfg, paths, target, principal) {
+				_, _ = fmt.Fprintln(out, completeWithoutRetiringKeyReport(
+					cfg.DatabasePath != "", retiringVersion, target))
+				return nil
+			}
+			return fmt.Errorf("opening the active key to rotate from: %w", err)
+		}
+	}
+
 	targetKey, retired, err := loadRotationKeys(paths, target, resuming)
 	if err != nil {
 		return err
@@ -138,11 +163,26 @@ func checkRotationTarget(paths statePaths, target int) (resuming bool, err error
 			ErrRotationTargetInvalid, target, cryptostore.MaxKeyVersion)
 	}
 
-	active, _, err := resolveActiveKeyVersion(paths)
+	active, present, err := resolveActiveKeyVersion(paths)
 	if err != nil {
 		return false, err
 	}
 	resuming = target == active
+	if resuming && !present {
+		// target == active only means "resume" when a marker actually recorded
+		// that a rotation activated that version. Without one, active is only
+		// the bootstrap default (defaultActiveKeyVersion) — a deployment that
+		// has never rotated — so target == active here is a target equal to
+		// where every record already is, which is nothing to rotate from, not a
+		// rotation to resume. Without this check, loadRotationKeys would go on
+		// to compute retiringVersion = target-1 = 0 and fail deep inside with
+		// an opaque "invalid key version 0" instead of naming the real problem.
+		return false, fmt.Errorf(
+			"%w: there is nothing to rotate from: this deployment has never rotated "+
+				"(no active-key-version marker), so target %d names the version everything "+
+				"is already at; use target %d to start a new rotation",
+			ErrRotationTargetInvalid, target, active+1)
+	}
 	if !resuming && target != active+1 {
 		return false, fmt.Errorf(
 			"%w: active version is %d, so the target must be %d to start a new rotation "+
@@ -175,6 +215,63 @@ func openRotationTargetKey(paths statePaths, target int, resuming bool) (cryptos
 		return cryptostore.Key{}, fmt.Errorf("opening the target encryption key: %w", err)
 	}
 	return key, nil
+}
+
+// rotationAlreadyComplete reports whether target alone (no retired keys) is
+// enough to read and confirm every stored record is already sealed under it,
+// for the one case that matters here: the retiring key is gone. Any failure —
+// the target key itself missing, the backend failing to open, a record or row
+// still needing a key this call refuses to load — is reported as NOT
+// complete, so this fails closed exactly like the ordinary missing-key
+// refusal it stands in for.
+func rotationAlreadyComplete(
+	ctx context.Context, cfg config.Config, paths statePaths, target int, principal identity.Principal,
+) bool {
+	targetKey, err := cryptostore.LoadKey(paths.keys, target)
+	if err != nil {
+		return false
+	}
+
+	if cfg.DatabasePath != "" {
+		sqlite, err := store.OpenSQLite(ctx, store.SQLiteConfig{Path: cfg.DatabasePath, Key: targetKey})
+		if err != nil {
+			return false
+		}
+		defer func() { _ = sqlite.Close() }()
+		remaining, err := sqlite.RemainingToReseal(ctx)
+		return err == nil && remaining.Done()
+	}
+
+	files, err := store.NewFileStore(store.Config{Dir: paths.tokens, Key: targetKey})
+	if err != nil {
+		return false
+	}
+	outcome, err := files.Reseal(ctx, principal.ID())
+	if err != nil {
+		return false
+	}
+	return outcome == store.ResealNoRecord || outcome == store.ResealAlreadyCurrent
+}
+
+// completeWithoutRetiringKeyReport words the "retiring key already gone, nothing
+// left to reseal" outcome for the backend that was actually scanned.
+//
+// The two backends can support very different claims, and saying more than was
+// checked is how an operator ends up deleting a key a record still needs. The
+// SQLite scan reads every sealed row, so it can speak for the store. A FileStore
+// scan reads the ONE record this configuration's principal binds: record file
+// names are one-way digests of the principal id, so a record belonging to a
+// principal this configuration does not bind cannot be enumerated, let alone
+// checked. That limit is stated rather than glossed.
+func completeWithoutRetiringKeyReport(sqlite bool, retiringVersion, target int) string {
+	gone := "the retiring key (version " + strconv.Itoa(retiringVersion) + ") is gone"
+	if sqlite {
+		return gone + ", and no sealed row still needs it: rotation to version " +
+			strconv.Itoa(target) + " is already complete"
+	}
+	return gone + ", and the bound principal's record does not need it: rotation to version " +
+		strconv.Itoa(target) + " is complete for that record. A record for a principal this " +
+		"configuration does not bind cannot be checked and is not covered by this statement"
 }
 
 // loadRotationKeys opens the retiring key that must still be able to read

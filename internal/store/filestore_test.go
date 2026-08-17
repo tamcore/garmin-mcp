@@ -352,3 +352,32 @@ func TestSaveLeavesNoTemporaryFileBehind(t *testing.T) {
 		}
 	}
 }
+
+// TestSaveRefusesWhenTheRecordsDirectoryWasRemoved pins the deliberate choice
+// NOT to self-heal a removed records directory.
+//
+// Recreating it is friendlier, and commit's own ensureOwnerOnlyDir used to do
+// exactly that. It cannot coexist with an inode-based lock: while one process
+// holds the lock on the old directory's lock file, a second process that
+// recreates the directory opens a NEW inode, so both believe they hold the lock
+// and both write — which defeats the exclusion the lock exists for. Refusing is
+// the safer trade, and it is honest: if the records directory is gone then the
+// records are gone with it, so continuing was never a real recovery.
+func TestSaveRefusesWhenTheRecordsDirectoryWasRemoved(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	if err := os.RemoveAll(store.records); err != nil {
+		t.Fatalf("remove records directory: %v", err)
+	}
+
+	if _, err := store.Save(context.Background(), testPrincipal, newTestTokens(), 0); err == nil {
+		t.Fatal("Save succeeded after the records directory was removed: it recreated the " +
+			"directory, which splits the cross-process lock domain between the old inode " +
+			"and the new one and lets two processes write concurrently")
+	}
+
+	// And it must not have quietly recreated the directory on the way out.
+	if _, err := os.Stat(store.records); err == nil {
+		t.Fatal("the records directory exists again after a refused Save")
+	}
+}

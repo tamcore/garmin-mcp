@@ -34,47 +34,70 @@ import (
 // then write" is two separate operations and stays racy on its own, unlike a
 // single SQL UPDATE...WHERE, which is atomic at the database engine.
 
+// ResealOutcome distinguishes why Reseal did or did not rewrite a record. A
+// plain bool cannot: "nothing needed resealing" and "another writer moved the
+// record out from under this attempt" are different situations for a caller
+// deciding whether it is safe to say the record is at the active key, and
+// collapsing them into one false was exactly the defect this type closes —
+// see the MEDIUM item on the lost-race report in AGENTS.md's fix list.
+type ResealOutcome int
+
+const (
+	// ResealNoRecord means the principal has no stored record at all.
+	ResealNoRecord ResealOutcome = iota
+	// ResealAlreadyCurrent means the record was already sealed under the
+	// active key; nothing was written.
+	ResealAlreadyCurrent
+	// ResealRewrote means the record was re-sealed onto the active key.
+	ResealRewrote
+	// ResealRaced means the record needed resealing, but another writer
+	// changed it between this attempt's read and its write, so nothing was
+	// written here. The record's key version as of THIS call is unknown: a
+	// caller must not report it as being at the active key.
+	ResealRaced
+)
+
 // Reseal re-encrypts principal's record onto the active key when it is not
-// already there, and reports whether a rewrite happened.
+// already there, and reports which of ResealOutcome's cases happened.
 //
 // ErrNoTokens is not surfaced as a failure: a principal with no stored record has
 // nothing to reseal, which is the state every principal starts in. Calling this
-// again after it already reported changed=false is a no-op, which is what makes a
-// killed rotation resumable: the next run re-reads the same record, sees it is
-// already sealed under the active key, and changes nothing.
-func (s *FileStore) Reseal(ctx context.Context, principal string) (bool, error) {
+// again after it already reported ResealAlreadyCurrent is a no-op, which is what
+// makes a killed rotation resumable: the next run re-reads the same record, sees
+// it is already sealed under the active key, and changes nothing.
+func (s *FileStore) Reseal(ctx context.Context, principal string) (ResealOutcome, error) {
 	if err := checkRequest(ctx, principal); err != nil {
-		return false, err
+		return ResealNoRecord, err
 	}
 
 	unlock := s.locks.lock(principal)
 	defer unlock()
 
-	crossLock, err := lockRecord(s.lockPath(principal))
+	crossLock, err := lockRecord(ctx, s.lockPath(principal))
 	if err != nil {
-		return false, fmt.Errorf("store: lock record for reseal: %w", err)
+		return ResealNoRecord, fmt.Errorf("store: lock record for reseal: %w", err)
 	}
 	defer func() { _ = crossLock.release() }()
 
 	record, err := s.readRecord(principal)
 	switch {
 	case errors.Is(err, ErrNoTokens):
-		return false, nil
+		return ResealNoRecord, nil
 	case err != nil:
-		return false, err
+		return ResealNoRecord, err
 	}
 
 	sealed, err := base64.StdEncoding.DecodeString(record.Payload)
 	if err != nil {
-		return false, fmt.Errorf("store: record payload is not base64: %w", ErrCorruptRecord)
+		return ResealNoRecord, fmt.Errorf("store: record payload is not base64: %w", ErrCorruptRecord)
 	}
 
 	plan, err := s.crypt.planReseal(principal, recordAAD(record.Schema, record.Version), sealed)
 	if err != nil {
-		return false, fmt.Errorf("store: reseal record: %w: %w", ErrCorruptRecord, err)
+		return ResealNoRecord, fmt.Errorf("store: reseal record: %w: %w", ErrCorruptRecord, err)
 	}
 	if !plan.changed {
-		return false, nil
+		return ResealAlreadyCurrent, nil
 	}
 
 	content, err := json.Marshal(storedRecord{
@@ -83,7 +106,7 @@ func (s *FileStore) Reseal(ctx context.Context, principal string) (bool, error) 
 		Payload: base64.StdEncoding.EncodeToString(plan.sealed),
 	})
 	if err != nil {
-		return false, fmt.Errorf("store: encode resealed record: %w", err)
+		return ResealNoRecord, fmt.Errorf("store: encode resealed record: %w", err)
 	}
 
 	// Re-read immediately before writing: the per-process mutex above only
@@ -96,14 +119,14 @@ func (s *FileStore) Reseal(ctx context.Context, principal string) (bool, error) 
 	// later reseal instead.
 	current, err := s.readRecord(principal)
 	if err != nil {
-		return false, err
+		return ResealNoRecord, err
 	}
 	if current.Version != record.Version || current.Payload != record.Payload {
-		return false, nil
+		return ResealRaced, nil
 	}
 
 	if err := writeFileAtomically(s.recordPath(principal), content); err != nil {
-		return false, err
+		return ResealNoRecord, err
 	}
-	return true, nil
+	return ResealRewrote, nil
 }

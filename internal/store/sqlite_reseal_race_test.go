@@ -109,7 +109,7 @@ func TestResealCoversPrincipalIdentitiesAndAuthTransactionStates(t *testing.T) {
 		RedirectURI:   testRedirectURI,
 		Scopes:        []string{testScope},
 		ClientState:   store.NewSecret("opaque-client-state"),
-		CodeChallenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+		CodeChallenge: testChallenge,
 		Lifetime:      10 * time.Minute,
 	}); err != nil {
 		t.Fatalf("PutAuthTransaction: %v", err)

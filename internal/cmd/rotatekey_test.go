@@ -99,6 +99,27 @@ func TestRotateKeyRefusesWhenNoActiveKeyExistsYet(t *testing.T) {
 	}
 }
 
+// TestRotateKeyRefusesTargetVersionOneOnAMarkerLessDeployment is item 8(a) of
+// the fix list: a marker-less deployment resolves active=1 with present=false
+// (see resolveActiveKeyVersion). --target-version=1 there used to be
+// misclassified as a resume (target == active), which then failed deep inside
+// loadRotationKeys with the opaque "invalid key version 0" (retiringVersion =
+// target-1 = 0), instead of naming the real problem: there is nothing to
+// rotate from at version 1 on a deployment that has never rotated.
+func TestRotateKeyRefusesTargetVersionOneOnAMarkerLessDeployment(t *testing.T) {
+	clearGarminEnv(t)
+	stateDir := rotateStateDir(t)
+	seedFileStoreKeyRing(t, stateDir)
+
+	_, err := runCommand(t, cmdRotateKey, "--state-dir="+stateDir, "--target-version=1")
+	if !errors.Is(err, cmd.ErrRotationTargetInvalid) {
+		t.Fatalf("rotate-key --target-version=1 with no marker: err = %v, want ErrRotationTargetInvalid", err)
+	}
+	if strings.Contains(err.Error(), "invalid key version 0") {
+		t.Fatalf("err = %q, want it to name the real problem, not the opaque downstream failure", err.Error())
+	}
+}
+
 // seedFileStoreKeyRing creates the version-1 key material a local deployment
 // would have created on its first serve or auth run.
 func seedFileStoreKeyRing(t *testing.T, stateDir string) cryptostore.Key {
@@ -369,5 +390,66 @@ func TestRotateKeyResumingRefusesWhenTheTargetKeyIsMissing(t *testing.T) {
 	}
 	if loaded.RefreshToken() != testRefreshTokenValue {
 		t.Errorf("loaded refresh token = %q, want %q", loaded.RefreshToken(), testRefreshTokenValue)
+	}
+}
+
+// TestRotateKeyResumingReportsCompletionWhenTheRetiringKeyIsAlreadyGoneAndNothingRemains
+// is item 7 of the fix list. docs/operations.md documents this exact sequence:
+// rotate, confirm every record resealed, retire the OLD key, then re-run
+// rotate-key with the SAME --target-version to double-check. Before this fix
+// that re-run failed with "opening the active key to rotate from: ... key not
+// found", which reads like data loss on the documented happy path. It must
+// instead report completion, because nothing is left that needs the retiring
+// key at all.
+func TestRotateKeyResumingReportsCompletionWhenTheRetiringKeyIsAlreadyGoneAndNothingRemains(t *testing.T) {
+	clearGarminEnv(t)
+	stateDir := rotateStateDir(t)
+	seedFileStoreKeyRing(t, stateDir)
+
+	// A completed rotation, driven through the command exactly as an operator
+	// would: seed a record under v1, rotate to v2, confirm it resealed.
+	oldKey, err := cryptostore.LoadKey(filepath.Join(stateDir, "keys"), 1)
+	if err != nil {
+		t.Fatalf("LoadKey version 1: %v", err)
+	}
+	files, err := store.NewFileStore(store.Config{Dir: filepath.Join(stateDir, "tokens"), Key: oldKey})
+	if err != nil {
+		t.Fatalf("NewFileStore: %v", err)
+	}
+	set := store.NewTokenSet("token", testRefreshTokenValue, "client-id", time.Time{})
+	if _, err := files.Save(context.Background(), config.DefaultPrincipalID, set, 0); err != nil {
+		t.Fatalf("seed Save: %v", err)
+	}
+
+	stdout, err := runCommand(t, cmdRotateKey, "--state-dir="+stateDir, "--target-version=2")
+	if err != nil {
+		t.Fatalf("rotate-key to version 2 = %v, want success", err)
+	}
+	if !strings.Contains(stdout, "resealed") {
+		t.Fatalf("stdout = %q, want it to report the reseal", stdout)
+	}
+
+	// The operator's next documented step: retire the old key by deleting it.
+	if err := os.Remove(filepath.Join(stateDir, "keys", "key-v1.json")); err != nil {
+		t.Fatalf("retire (remove) key version 1: %v", err)
+	}
+
+	// Re-running with the SAME target to double-check, per docs/operations.md,
+	// must succeed and report completion rather than a missing-key refusal.
+	stdout, err = runCommand(t, cmdRotateKey, "--state-dir="+stateDir, "--target-version=2")
+	if err != nil {
+		t.Fatalf("re-running rotate-key after the retiring key was already removed = %v, want success", err)
+	}
+	if !strings.Contains(stdout, "is complete for that record") {
+		t.Errorf("stdout = %q, want it to report the rotation complete for the bound record", stdout)
+	}
+	// The claim must stay scoped to what a FileStore scan can actually check.
+	// Record file names are one-way digests of the principal id, so a record for
+	// a principal this configuration does not bind cannot be enumerated — and an
+	// unqualified "rotation is already complete" here is what leads an operator
+	// to delete a key such a record still needs.
+	if !strings.Contains(stdout, "does not bind cannot be checked") {
+		t.Errorf("stdout = %q, want it to state that an unbound principal's record "+
+			"is not covered by the completion claim", stdout)
 	}
 }

@@ -103,30 +103,39 @@ func (s *SQLiteStore) ResealToActiveKey(ctx context.Context) (ResealReport, erro
 		return ResealReport{}, err
 	}
 
+	// Every count below is assigned from its scan's result BEFORE that scan's
+	// error is checked: each reseal function reports how far it got even when
+	// it stops partway through (an unreadable row, a cancelled context), and a
+	// caller aborting the whole rotation on the first error must still see
+	// that partial progress rather than a report showing nothing happened.
+	// Without this, one corrupt row anywhere would silently discard every
+	// count already accumulated in this call, including tables that had
+	// already finished cleanly, and the retiring key could never be retired
+	// because the operator has no way to tell what still needs it.
 	var report ResealReport
 	tokens, err := s.resealAllGarminTokenSets(ctx)
+	report.GarminTokenSets = tokens
 	if err != nil {
 		return report, err
 	}
-	report.GarminTokenSets = tokens
 
 	identities, err := s.resealAllPrincipalIdentities(ctx)
+	report.PrincipalIdentities = identities
 	if err != nil {
 		return report, err
 	}
-	report.PrincipalIdentities = identities
 
 	states, err := s.resealAllAuthTransactionStates(ctx)
+	report.AuthTransactionStates = states
 	if err != nil {
 		return report, err
 	}
-	report.AuthTransactionStates = states
 
 	rootChanged, err := s.resealIndexRoot(ctx)
+	report.IndexRoot = rootChanged
 	if err != nil {
 		return report, err
 	}
-	report.IndexRoot = rootChanged
 
 	return report, nil
 }

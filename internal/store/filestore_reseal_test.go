@@ -82,22 +82,22 @@ func TestFileStoreResealResumesWithoutDoubleSealing(t *testing.T) {
 	targetKey := mustGenerateKey(t, 2)
 	rotating := newFileStoreWithKeys(t, dir, targetKey, []cryptostore.Key{oldKey})
 
-	changed, err := rotating.Reseal(ctx, testPrincipal)
+	outcome, err := rotating.Reseal(ctx, testPrincipal)
 	if err != nil {
 		t.Fatalf("first Reseal: %v", err)
 	}
-	if !changed {
-		t.Fatal("first Reseal reported changed=false, want true")
+	if outcome != ResealRewrote {
+		t.Fatalf("first Reseal outcome = %v, want ResealRewrote", outcome)
 	}
 	afterFirst := readRawRecordFile(t, rotating, testPrincipal)
 
 	// Simulate a resumed run after the process was killed.
-	changed, err = rotating.Reseal(ctx, testPrincipal)
+	outcome, err = rotating.Reseal(ctx, testPrincipal)
 	if err != nil {
 		t.Fatalf("second (resumed) Reseal: %v", err)
 	}
-	if changed {
-		t.Fatal("resumed Reseal reported changed=true for a record already on the active key")
+	if outcome != ResealAlreadyCurrent {
+		t.Fatalf("resumed Reseal outcome = %v, want ResealAlreadyCurrent", outcome)
 	}
 	afterSecond := readRawRecordFile(t, rotating, testPrincipal)
 	if string(afterFirst) != string(afterSecond) {
@@ -120,12 +120,12 @@ func TestFileStoreResealOfAnAbsentRecordIsANoOp(t *testing.T) {
 	dir := tempDir(t)
 	rotating := newFileStoreWithKeys(t, dir, mustGenerateKey(t, 2), []cryptostore.Key{mustGenerateKey(t, 1)})
 
-	changed, err := rotating.Reseal(context.Background(), testPrincipal)
+	outcome, err := rotating.Reseal(context.Background(), testPrincipal)
 	if err != nil {
 		t.Fatalf("Reseal of an absent record: %v", err)
 	}
-	if changed {
-		t.Fatal("Reseal of an absent record reported changed=true")
+	if outcome != ResealNoRecord {
+		t.Fatalf("Reseal of an absent record outcome = %v, want ResealNoRecord", outcome)
 	}
 }
 
@@ -173,7 +173,7 @@ func TestFileStoreSaveWaitsForTheCrossProcessRecordLock(t *testing.T) {
 	}
 
 	// Stand in for the other process: hold the record's lock directly.
-	held, err := lockRecord(seeded.lockPath(testPrincipal))
+	held, err := lockRecord(context.Background(), seeded.lockPath(testPrincipal))
 	if err != nil {
 		t.Fatalf("take the record lock: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestFileStoreResealWaitsForTheCrossProcessRecordLock(t *testing.T) {
 	rotating := newFileStoreWithKeys(t, dir, targetKey, []cryptostore.Key{oldKey})
 
 	// Stand in for the other process: hold the record's lock directly.
-	held, err := lockRecord(rotating.lockPath(testPrincipal))
+	held, err := lockRecord(context.Background(), rotating.lockPath(testPrincipal))
 	if err != nil {
 		t.Fatalf("take the record lock: %v", err)
 	}
@@ -365,7 +365,7 @@ func TestFileStoreDeleteWaitsForTheCrossProcessRecordLock(t *testing.T) {
 	}
 
 	// Stand in for the other process: hold the record's lock directly.
-	held, err := lockRecord(seeded.lockPath(testPrincipal))
+	held, err := lockRecord(context.Background(), seeded.lockPath(testPrincipal))
 	if err != nil {
 		t.Fatalf("take the record lock: %v", err)
 	}

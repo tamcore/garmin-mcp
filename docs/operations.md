@@ -455,6 +455,14 @@ resealed.** Deleting it earlier makes any record it still holds unrecoverable.
 Retiring it — removing `key-v<N>.json` for the old version — is a separate,
 manual step this command never takes for you.
 
+Running `rotate-key` again with the same `--target-version` **after** the
+retiring key has already been removed is safe: if every record was genuinely
+resealed, the command verifies that against the target key alone and reports
+the rotation already complete, rather than treating the missing retiring key
+as an error. It still refuses, naming the missing key, if anything is actually
+left sealed under it — that combination means the key was deleted too early,
+and whatever it still held is unrecoverable.
+
 **Interrupting and resuming.** There is no progress checkpoint by design: each
 record's own key-version column (SQLite) or the record itself (`FileStore`) is
 the resume mechanism. A killed run is simply invoked again with the same
