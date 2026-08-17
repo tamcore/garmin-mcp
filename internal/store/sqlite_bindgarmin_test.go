@@ -254,3 +254,60 @@ func TestBindGarminAccountRefusesAZeroAccount(t *testing.T) {
 		t.Fatalf("BindGarminAccount with a zero account: err = %v, want ErrInvalidArgument", err)
 	}
 }
+
+// TestBindGarminAccountRefusesToRebindAPrincipalToAnotherAccount pins the mirror of
+// the one-principal-one-account rule.
+//
+// The linkage check used to run in one direction only: it refused an account already
+// owned by a different principal, then rebound the principal unconditionally. A
+// principal is reached by its EMAIL whenever the normalized handle is already
+// registered, and Garmin frees an email when an account is deleted and lets an
+// account change its address. So a second Garmin account presenting a handle that
+// normalizes to the same string took over an existing principal — keeping that
+// principal's MCP token families and consents attached, so unchanged client tokens
+// began reading and writing a different person's Garmin account, and a client
+// completing a fresh flow inherited the previous owner's consent row.
+//
+// The mutant this kills: dropping the current-linkage check, or the UPDATE's
+// "garmin_account_hash IS NULL OR = ?" predicate.
+func TestBindGarminAccountRefusesToRebindAPrincipalToAnotherAccount(t *testing.T) {
+	t.Parallel()
+	opened, _ := newTestStore(t)
+	ctx := context.Background()
+
+	const sharedEmail = "shared@example.test"
+	first, err := opened.BindGarminAccount(ctx, store.GarminBindInput{
+		Account:     store.NewSecret("garmin-account-one"),
+		Email:       sharedEmail,
+		DisplayName: "one",
+		Tokens:      newSQLTestTokens(),
+	})
+	if err != nil {
+		t.Fatalf("binding the first account: %v", err)
+	}
+
+	// A different Garmin account arriving under the same login handle.
+	_, err = opened.BindGarminAccount(ctx, store.GarminBindInput{
+		Account:     store.NewSecret("garmin-account-two"),
+		Email:       sharedEmail,
+		DisplayName: "two",
+		Tokens:      newSQLTestTokens(),
+	})
+	if !errors.Is(err, store.ErrPrincipalLinkedElsewhere) {
+		t.Fatalf("rebinding an existing principal to another garmin account: err = %v, "+
+			"want ErrPrincipalLinkedElsewhere: the principal's token families and consents "+
+			"would otherwise start serving a different person's Garmin account", err)
+	}
+
+	// The first account must still own the principal, unchanged.
+	owner, err := opened.PrincipalByGarminAccount(ctx, store.NewSecret("garmin-account-one"))
+	if err != nil {
+		t.Fatalf("the first account lost its principal: %v", err)
+	}
+	if owner.ID != first.ID {
+		t.Fatalf("the principal moved from %q to %q", first.ID, owner.ID)
+	}
+	if _, err := opened.PrincipalByGarminAccount(ctx, store.NewSecret("garmin-account-two")); err == nil {
+		t.Fatal("the refused account was linked anyway")
+	}
+}

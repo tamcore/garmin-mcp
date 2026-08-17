@@ -185,6 +185,16 @@ func databaseDSN(resolved string, opts DatabaseOptions) string {
 	query.Add("_pragma", "foreign_keys(1)")
 	query.Add("_pragma", "busy_timeout("+strconv.FormatInt(opts.BusyTimeout.Milliseconds(), 10)+")")
 	query.Add("_pragma", "synchronous(NORMAL)")
+	// Temp b-trees and sorters stay in memory instead of spilling to TMPDIR.
+	//
+	// This is a deployment requirement, not a tuning choice. The container runs with
+	// a read-only root filesystem, so a query that needed a disk temp store would
+	// fail with SQLITE_CANTOPEN at request time — after the readiness probe had
+	// already reported the process healthy, which is the worst moment to discover a
+	// filesystem dependency. Removing the dependency is better than requiring the
+	// operator to mount a writable /tmp and remember why. The working set here is
+	// small: this store's queries sort and group over one principal's rows.
+	query.Add("_pragma", "temp_store(MEMORY)")
 	query.Set("_txlock", "immediate")
 
 	uri := url.URL{Scheme: "file", Opaque: (&url.URL{Path: filepath.ToSlash(resolved)}).EscapedPath()}

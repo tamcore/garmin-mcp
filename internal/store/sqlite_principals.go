@@ -265,11 +265,36 @@ func (s *SQLiteStore) applyGarminLink(ctx context.Context, tx *sql.Tx,
 			owner, ErrGarminAccountLinked)
 	}
 
+	// The mirror check, and it is not symmetric with the one above. That one refuses
+	// an account already owned by someone else; this one refuses moving a principal
+	// that already owns a DIFFERENT account. Without it the UPDATE below is an
+	// unconditional rebind: a principal reached by its email — which principalFor
+	// does whenever the normalized handle is already registered — would have its
+	// garmin_account_hash overwritten while keeping the MCP token families and
+	// consents attached to it, so tokens issued for one person's Garmin account
+	// would start reading another's. Garmin frees an email when an account is
+	// deleted and lets an account change its address, so the precondition is not
+	// exotic; it just is not attacker-triggerable at will.
+	var current sql.NullString
+	err = tx.QueryRowContext(ctx,
+		`SELECT garmin_account_hash FROM principals WHERE id = ?`, principalID).Scan(&current)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("store: principal %s does not exist: %w",
+			principalID, ErrPrincipalNotFound)
+	case err != nil:
+		return fmt.Errorf("store: read the principal's garmin linkage: %w", err)
+	case current.Valid && current.String != hash:
+		return fmt.Errorf("store: principal %s is already linked to another garmin account: %w",
+			principalID, ErrPrincipalLinkedElsewhere)
+	}
+
 	result, err := tx.ExecContext(ctx,
 		`UPDATE principals
 		    SET garmin_account_hash = ?, garmin_identity_sealed = ?, key_version = ?, updated_at = ?
-		  WHERE id = ?`,
-		hash, sealed, version, formatTime(s.now()), principalID)
+		  WHERE id = ?
+		    AND (garmin_account_hash IS NULL OR garmin_account_hash = ?)`,
+		hash, sealed, version, formatTime(s.now()), principalID, hash)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return fmt.Errorf("store: garmin account was linked concurrently: %w", ErrGarminAccountLinked)

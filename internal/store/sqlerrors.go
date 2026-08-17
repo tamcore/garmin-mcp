@@ -48,6 +48,13 @@ var (
 	// principals.
 	ErrGarminAccountLinked = errors.New("store: garmin account is linked to another principal")
 
+	// ErrPrincipalLinkedElsewhere reports the mirror of ErrGarminAccountLinked: the
+	// principal is already linked to a DIFFERENT Garmin account. One principal is
+	// one Garmin account, in both directions, and rebinding an existing principal
+	// would move its MCP token families and consents onto another person's Garmin
+	// data without anyone asking for it.
+	ErrPrincipalLinkedElsewhere = errors.New("store: principal is linked to another garmin account")
+
 	// ErrClientNotFound means no OAuth client has that id, or the client is
 	// disabled.
 	ErrClientNotFound = errors.New("store: oauth client not found")
