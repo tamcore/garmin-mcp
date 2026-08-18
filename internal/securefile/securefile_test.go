@@ -9,6 +9,11 @@ import (
 	"testing"
 )
 
+// testMaterial is the placeholder file content this package's tests write and
+// read back; shared so golangci-lint's goconst does not flag the repeated
+// literal across this file and perm_unix_test.go.
+const testMaterial = "material"
+
 // tempDir returns a temporary directory with every symlink resolved. t.TempDir
 // alone is not enough: on macOS it sits under /var, which is a symlink to
 // /private/var, and the full-ancestry check correctly refuses that.
@@ -190,15 +195,15 @@ func TestWriteFileRefusesASymlinkedAncestor(t *testing.T) {
 func TestInstallNewFileCreatesTheFile(t *testing.T) {
 	path := filepath.Join(tempDir(t), "key.json")
 
-	if err := InstallNewFile(path, []byte("material"), 0o600); err != nil {
+	if err := InstallNewFile(path, []byte(testMaterial), 0o600); err != nil {
 		t.Fatalf("InstallNewFile: %v", err)
 	}
 	raw, err := ReadFile(path, 1024)
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
-	if string(raw) != "material" {
-		t.Fatalf("ReadFile = %q, want %q", raw, "material")
+	if string(raw) != testMaterial {
+		t.Fatalf("ReadFile = %q, want %q", raw, testMaterial)
 	}
 }
 

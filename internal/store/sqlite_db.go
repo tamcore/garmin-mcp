@@ -44,6 +44,15 @@ const (
 	databaseFileMode = 0o600
 )
 
+// databaseFileSuffixes returns the main database file and its WAL and
+// shared-memory sidecars, in the order restrictDatabaseFiles walks them. A
+// function, not a package-level var: this repository holds no mutable package
+// state, and a literal that never changes belongs behind a function rather
+// than in a var that merely happens not to be reassigned.
+func databaseFileSuffixes() [3]string {
+	return [3]string{"", "-wal", "-shm"}
+}
+
 // DatabaseOptions tunes the connection pool and the per-connection pragmas. The
 // zero value selects the documented defaults, so a caller that does not care
 // passes DatabaseOptions{}.
@@ -117,6 +126,18 @@ func OpenDatabase(path string, opts DatabaseOptions) (*sql.DB, error) {
 		return nil, err
 	}
 
+	// A pre-existing database file (and its sidecars) is validated before
+	// sql.Open's driver ever touches its bytes: sql.Open itself is lazy and
+	// establishes no connection, but the Ping below does, and a connection reads
+	// the SQLite header, and can replay a WAL, before anything downstream of
+	// this function has had a chance to refuse an insecure file. Checked here,
+	// an absent file (the fresh-create case) reports securefile.ErrNotFound,
+	// which restrictDatabaseFiles already tolerates, so a database this process
+	// is creating for the first time is unaffected.
+	if err := restrictDatabaseFiles(resolved); err != nil {
+		return nil, err
+	}
+
 	db, err := sql.Open(driverName, databaseDSN(resolved, settings))
 	if err != nil {
 		return nil, fmt.Errorf("store: open database %q: %w", resolved, err)
@@ -144,7 +165,7 @@ func prepareDatabaseFiles(db *sql.DB, resolved string) error {
 // sidecar that does not exist yet is not an error: SQLite creates the shared-memory
 // file only once a second connection needs it.
 func restrictDatabaseFiles(resolved string) error {
-	for _, suffix := range []string{"", "-wal", "-shm"} {
+	for _, suffix := range databaseFileSuffixes() {
 		err := securefile.RestrictExisting(resolved+suffix, databaseFileMode)
 		if err != nil && !errors.Is(err, securefile.ErrNotFound) {
 			return translate("restrict", resolved+suffix, err, ErrInsecurePath)

@@ -72,6 +72,85 @@ func TestLoadOrCreateKeyIsIdempotent(t *testing.T) {
 	}
 }
 
+// TestLoadOrCreateKeyTightensAWidenedDirectoryOnTheExistingKeyPath is gap 4: the
+// existing-key fast path used to return the loaded key without re-checking the
+// directory's permissions, so a key directory widened externally (a
+// misconfigured deployment step, say) stayed widened until the next key
+// installation. EnsureDir's chmod is skipped only when the mode already
+// matches exactly, so re-running it on every load is cheap and cannot fail on
+// a directory that was already correct.
+func TestLoadOrCreateKeyTightensAWidenedDirectoryOnTheExistingKeyPath(t *testing.T) {
+	dir := filepath.Join(tempDir(t), "config", "keys")
+
+	if _, err := LoadOrCreateKey(dir, 3); err != nil {
+		t.Fatalf("first LoadOrCreateKey: %v", err)
+	}
+	if err := os.Chmod(dir, 0o777); err != nil { //nolint:gosec // deliberately widened, this is the case under test
+		t.Fatalf("widen the key directory: %v", err)
+	}
+
+	key, err := LoadOrCreateKey(dir, 3)
+	if err != nil {
+		t.Fatalf("LoadOrCreateKey on the existing-key path with a widened directory: %v", err)
+	}
+	if key.version != 3 {
+		t.Fatalf("key version = %d, want 3", key.version)
+	}
+
+	dirInfo, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat key dir: %v", err)
+	}
+	if perm := dirInfo.Mode().Perm(); perm != 0o700 {
+		t.Fatalf("key dir mode = %04o after reload, want 0700 (the existing-key path must still tighten it)", perm)
+	}
+}
+
+// TestLoadKeyTightensAWidenedDirectoryOnItsOwnDirectPath is the gap the review
+// found: TestLoadOrCreateKeyTightensAWidenedDirectoryOnTheExistingKeyPath only
+// proved the fast path inside LoadOrCreateKey re-verified the directory. A
+// rotated deployment's retired keys, and any diagnostic, load material through
+// LoadKey directly rather than through LoadOrCreateKey — internal/cmd's
+// loadRetiredKeys and doctor's checkKey both do — so LoadKey itself, not just
+// its caller, must catch a directory an operator or a misconfigured mount
+// widened after installation.
+func TestLoadKeyTightensAWidenedDirectoryOnItsOwnDirectPath(t *testing.T) {
+	dir := filepath.Join(tempDir(t), "config", "keys")
+	if _, err := LoadOrCreateKey(dir, 1); err != nil {
+		t.Fatalf("LoadOrCreateKey: %v", err)
+	}
+	if err := os.Chmod(dir, 0o777); err != nil { //nolint:gosec // deliberately widened, this is the case under test
+		t.Fatalf("widen the key directory: %v", err)
+	}
+
+	if _, err := LoadKey(dir, 1); err != nil {
+		t.Fatalf("LoadKey on a widened directory this process owns: %v", err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat key dir: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o700 {
+		t.Fatalf("key dir mode = %04o after LoadKey, want 0700 (LoadKey itself must tighten it)", perm)
+	}
+}
+
+// TestLoadKeyRefusesAMissingKeyDirectoryWithoutCreatingIt proves the
+// directory verification LoadKey now performs never provisions what it did
+// not find: a doctor-style caller that must never create the very thing it is
+// diagnosing depends on this.
+func TestLoadKeyRefusesAMissingKeyDirectoryWithoutCreatingIt(t *testing.T) {
+	dir := filepath.Join(tempDir(t), "never-created", "keys")
+
+	if _, err := LoadKey(dir, 1); !errors.Is(err, ErrKeyNotFound) {
+		t.Fatalf("LoadKey on an absent directory: err = %v, want ErrKeyNotFound", err)
+	}
+	if _, statErr := os.Stat(dir); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Fatalf("LoadKey created the key directory it was only asked to read: stat err = %v", statErr)
+	}
+}
+
 func TestLoadKeyRefusesMissingKey(t *testing.T) {
 	_, err := LoadKey(tempDir(t), 1)
 	if !errors.Is(err, ErrKeyNotFound) {

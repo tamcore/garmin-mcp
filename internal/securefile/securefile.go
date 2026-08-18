@@ -188,6 +188,27 @@ func EnsureDir(dir string, mode fs.FileMode) error {
 	return handle.restrict(mode)
 }
 
+// RestrictExistingDir enforces mode on dir without creating it or any missing
+// parent: an absent dir (or an absent ancestor) reports ErrNotFound rather than
+// being provisioned. It exists for a caller that must verify and, where it
+// already owns the directory, tighten it back to mode, without ever bringing a
+// directory into existence as a side effect of what is meant to be a read — a
+// key read that must not silently create the key directory it did not find, a
+// diagnostic that must report absence rather than provision it, above all.
+//
+// Tightening happens through the same descriptor-based chmod EnsureDir uses:
+// skipped when the mode already matches, applied otherwise, and reported rather
+// than silently accepted when this process does not own the directory and the
+// chmod itself is refused.
+func RestrictExistingDir(dir string, mode fs.FileMode) error {
+	handle, err := openDirTree(dir, 0)
+	if err != nil {
+		return err
+	}
+	defer handle.close()
+	return handle.restrict(mode)
+}
+
 // CheckAncestry reports whether path and every existing ancestor of it is free of
 // symlinks.
 //

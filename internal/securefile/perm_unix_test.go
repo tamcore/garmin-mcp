@@ -8,7 +8,9 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -104,6 +106,31 @@ func TestReadFileRefusesGroupOrWorldAccess(t *testing.T) {
 				t.Fatalf("ReadFile with mode %04o: err = %v, want ErrInsecurePermissions", perm, err)
 			}
 		})
+	}
+}
+
+// TestReadFileNamesTheLikelyCauseOfAWidenedMode is the file-mode counterpart of
+// TestWrapChmodDirErrorAddsTheRemedyForPermissionDenied: a key or token file
+// widened from 0600 to 0660 is most commonly a Kubernetes fsGroup mount
+// recursion applying group permissions on every mount rather than only when
+// ownership changed (see docs/operations.md), and the refusal should say so
+// the same way the directory chmod error already names its own likely cause.
+func TestReadFileNamesTheLikelyCauseOfAWidenedMode(t *testing.T) {
+	path := filepath.Join(tempDir(t), "record.json")
+	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := os.Chmod(path, 0o660); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+
+	_, err := ReadFile(path, 1024)
+
+	if !errors.Is(err, ErrInsecurePermissions) {
+		t.Fatalf("ReadFile with a widened mode: err = %v, want ErrInsecurePermissions", err)
+	}
+	if !strings.Contains(err.Error(), "fsGroup") {
+		t.Fatalf("err = %q, want it to name the likely cause (fsGroup)", err)
 	}
 }
 
@@ -298,6 +325,140 @@ func TestWrapChmodDirErrorLeavesOtherErrorsWithoutTheRemedy(t *testing.T) {
 	}
 	if !errors.Is(err, cause) {
 		t.Fatalf("wrapChmodDirError: err = %v, want it to still wrap the original cause", err)
+	}
+}
+
+// TestInstallNewFileThenReadFileRoundTrips is the ordinary case: a file
+// InstallNewFile creates must read back cleanly through ReadFile.
+func TestInstallNewFileThenReadFileRoundTrips(t *testing.T) {
+	path := filepath.Join(tempDir(t), "record.json")
+	if err := InstallNewFile(path, []byte(testMaterial), 0o600); err != nil {
+		t.Fatalf("InstallNewFile: %v", err)
+	}
+
+	content, err := ReadFile(path, 1024)
+	if err != nil {
+		t.Fatalf("ReadFile after InstallNewFile: %v", err)
+	}
+	if string(content) != testMaterial {
+		t.Fatalf("content = %q, want %q", content, testMaterial)
+	}
+}
+
+// TestCheckStatOwnerRefusesAForeignOwner drives the owner comparison directly
+// against a synthesized syscall.Stat_t: constructing a file this process does
+// not own needs privilege (chown) an unprivileged test does not have, so the
+// seam is the pure comparison function rather than a real file.
+func TestCheckStatOwnerRefusesAForeignOwner(t *testing.T) {
+	stat := &syscall.Stat_t{Uid: 65534}
+
+	err := checkStatOwner("/secret/path", stat, 1000)
+
+	if !errors.Is(err, ErrInsecurePermissions) {
+		t.Fatalf("checkStatOwner with foreign uid: err = %v, want ErrInsecurePermissions", err)
+	}
+}
+
+// TestCheckStatOwnerAcceptsMatchingOwner is the positive control: a matching
+// euid must not be refused.
+func TestCheckStatOwnerAcceptsMatchingOwner(t *testing.T) {
+	stat := &syscall.Stat_t{Uid: 1000}
+
+	if err := checkStatOwner("/secret/path", stat, 1000); err != nil {
+		t.Fatalf("checkStatOwner with matching owner: %v", err)
+	}
+}
+
+// TestReadFileAcceptsAHardLinkedFile is the deliberate-scope-narrowing
+// regression test for removing the hard-link check: creating a second link to
+// a file this process owns needs the same uid (or root) that already controls
+// it — Linux's protected_hardlinks (default on) blocks anyone else — so the
+// check bought little and cost the install layer a great deal of complexity
+// (see AGENTS.md). A second link to a file this process owns is therefore
+// accepted, not refused.
+func TestReadFileAcceptsAHardLinkedFile(t *testing.T) {
+	dir := tempDir(t)
+	path := filepath.Join(dir, "record.json")
+	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	second := filepath.Join(dir, "second-link.json")
+	if err := os.Link(path, second); err != nil {
+		t.Skipf("hard links unsupported: %v", err)
+	}
+
+	if _, err := ReadFile(path, 1024); err != nil {
+		t.Fatalf("ReadFile of a hard-linked file: %v, want it accepted", err)
+	}
+}
+
+// TestInstallNewFileConcurrentCreatorsAgreeOnOneWinner drives InstallNewFile
+// from many goroutines racing on the same name at once. Exactly one must
+// succeed, every loser must see ErrExists, the content on disk afterward must
+// belong to whichever creator reported success, and no temporary sibling may
+// survive — the concurrent-install property the exclusive link(2) must
+// preserve.
+func TestInstallNewFileConcurrentCreatorsAgreeOnOneWinner(t *testing.T) {
+	dir := tempDir(t)
+	path := filepath.Join(dir, "key.json")
+	const creators = 16
+
+	start := make(chan struct{})
+	errs := make([]error, creators)
+	contents := make([][]byte, creators)
+	for index := range creators {
+		contents[index] = []byte("creator-" + strconv.Itoa(index))
+	}
+
+	var group sync.WaitGroup
+	for index := range creators {
+		group.Add(1)
+		go func(index int) {
+			defer group.Done()
+			<-start
+			errs[index] = InstallNewFile(path, contents[index], 0o600)
+		}(index)
+	}
+	close(start)
+	group.Wait()
+
+	wins := 0
+	for index, err := range errs {
+		switch {
+		case err == nil:
+			wins++
+		case errors.Is(err, ErrExists):
+			// expected for every loser
+		default:
+			t.Fatalf("creator %d: unexpected error: %v", index, err)
+		}
+	}
+	if wins != 1 {
+		t.Fatalf("winners = %d, want exactly 1", wins)
+	}
+
+	onDisk, err := ReadFile(path, 1024)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	belongsToAWinner := false
+	for index, content := range contents {
+		if string(content) == string(onDisk) && errs[index] == nil {
+			belongsToAWinner = true
+		}
+	}
+	if !belongsToAWinner {
+		t.Fatalf("content on disk (%q) does not belong to a creator that reported success", onDisk)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), ".tmp-") {
+			t.Fatalf("temporary file %q survived %d concurrent creators", entry.Name(), creators)
+		}
 	}
 }
 

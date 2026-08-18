@@ -136,6 +136,9 @@ func (d *dir) restrict(mode fs.FileMode) error {
 	if err != nil || !info.IsDir() {
 		return fmt.Errorf("securefile: %q is not a usable directory: %w", d.path, ErrInsecurePath)
 	}
+	if err := checkDirOwner(info, d.path); err != nil {
+		return err
+	}
 	// Perm() masks away setgid/setuid/sticky, so a 2700 directory compares equal
 	// to 0700 here and keeps its setgid bit; acceptable since group has no
 	// permission bits.

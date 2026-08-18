@@ -196,6 +196,84 @@ around.
 See [configuration.md](configuration.md) for the `state-dir`,
 `master-key-file`, and `database-path` settings themselves.
 
+#### `fsGroupChangePolicy` and a key file that reappears widened
+
+Setting `fsGroup` is not enough by itself. By default the kubelet walks the
+**whole** volume recursively and applies the group ownership and permission
+change on **every** pod start, not only the first time the volume is attached.
+That recursive walk `chmod`s every file it finds, including a key file this
+process already tightened to `0600` on a previous run, widening it to `0660`.
+The server refuses to start on the next restart with exactly the file-mode
+error above.
+
+Set `fsGroupChangePolicy: OnRootMismatch` on the pod's `securityContext` so the
+kubelet only walks the volume when the root directory's group does not already
+match `fsGroup`, instead of on every mount:
+
+```yaml
+securityContext:
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  fsGroupChangePolicy: OnRootMismatch
+```
+
+This is guidance, not a guarantee: a CSI driver that advertises the
+`VOLUME_MOUNT_GROUP` capability may apply group permissions through the driver
+itself and ignore `fsGroupChangePolicy` entirely, silently reintroducing the
+same recursive widening. Verify the key file's mode survives the pod's first
+restart on the actual cluster and CSI driver in use, rather than assuming the
+policy took effect.
+
+**The refusal on a widened key file is deliberate and does not self-heal.** A
+mode widened from `0600` to `0660` is group-**writable**, not merely
+group-readable, so the file may have been modified, not only read, by
+whatever performed the widening or by anything else that mode now permits.
+Tightening the mode back and loading the file anyway would extend trust to
+content whose integrity is now in question — the one property this server's
+key file exists to hold. Recovering from this state is therefore a deliberate
+operator action (inspect the file, then `chmod 600` it back) and not something
+a restart does automatically.
+
+#### What an upgrade to this ownership check will see
+
+This server now also verifies, on every key read, key-directory read, token-
+directory read and database open, that the object is owned by the process's
+own effective user — not only that its mode is owner-only. This applies to
+both files (the key file; the database file and its `-wal`/`-shm` sidecars)
+and directories (the key directory, the token directory, the database
+directory).
+
+For an existing, correctly configured deployment this changes nothing: **a
+key file, key directory, token directory or database that the running uid
+already owns passes exactly as before**, and an object found merely widened
+(mode only, still owned by this process) is silently tightened back — the
+same self-healing chmod `EnsureDir`/`RestrictExisting` always did, whether
+that object is a file or a directory.
+
+One case now refuses where it previously did not:
+
+- **A file or directory owned by a different local account.** This was never
+  a supported shape — an unprivileged process cannot even open a foreign-owned
+  `0600` file — but it is now refused explicitly, with a message naming the
+  path and the mismatched uids, rather than failing later with an opaque I/O
+  error or a decrypt failure. Remedy: `chown` the object back to the uid the
+  server runs as, or point `state-dir`/`master-key-file`/`database-path` at a
+  location that account actually owns.
+
+This cannot arise from this server's own normal operation — installing a file
+hard-links a completed temporary into place, and it never changes a
+file's owner — so a refusal on upgrade means something else on the host or
+volume put the object in that state, and is worth investigating rather than
+only silencing.
+
+A second hard link on a secret file elsewhere is not checked, and deliberately
+so: creating one against a `0600` file this process owns needs the same uid
+(or root) that already controls it, since Linux's `protected_hardlinks`
+(default on) blocks anyone else, so the check bought little threat coverage
+for real deployments while the recovery machinery it required (see "The
+master key" below) cost this layer real recoverability.
+
 ### Health and readiness probes
 
 The Streamable HTTP transport serves two unauthenticated probe endpoints. Point an

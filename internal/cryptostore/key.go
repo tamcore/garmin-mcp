@@ -2,9 +2,8 @@
 // credential material this server persists: Garmin DI token sets today, and any
 // other secret-bearing record later.
 //
-// The API is deliberately narrow. Exactly five functions are exported:
-// GenerateKey, LoadOrCreateKey and LoadKey obtain a master key, and Encrypt and
-// Decrypt seal and open one record.
+// The API is deliberately narrow. GenerateKey, LoadOrCreateKey and LoadKey
+// obtain a master key, and Encrypt and Decrypt seal and open one record.
 //
 // # Envelope binding
 //
@@ -157,9 +156,22 @@ func GenerateKey(version int) (Key, error) {
 // through a symlink or found as something other than a regular file
 // (ErrInsecureKeyPath), or not a version id plus a base64 32-byte key
 // (ErrMalformedKey). No error text ever contains key material.
+//
+// The directory itself is verified first, before the key file is ever opened:
+// every caller that reads key material — the active version, a retired one
+// during rotation, a diagnostic — goes through this one function, so a
+// directory widened after installation (an fsGroup mount recursion, say) is
+// caught here rather than surviving on whichever entry point happened to skip
+// the check. Verification does not create the directory: an absent one reports
+// ErrKeyNotFound exactly as before, through the same securefile.ErrNotFound
+// translation the file read already uses, so a key that has simply never been
+// created is unaffected.
 func LoadKey(dir string, version int) (Key, error) {
 	if version <= 0 {
 		return Key{}, fmt.Errorf("cryptostore: load key version %d: %w", version, ErrInvalidKeyVersion)
+	}
+	if err := securefile.RestrictExistingDir(dir, keyDirMode); err != nil {
+		return Key{}, keyFileError("verify key directory", dir, err)
 	}
 
 	path := keyFilePath(dir, version)
@@ -184,6 +196,9 @@ func LoadOrCreateKey(dir string, version int) (Key, error) {
 	key, err := LoadKey(dir, version)
 	switch {
 	case err == nil:
+		// LoadKey itself already re-verified and, where this process owns the
+		// directory, re-tightened it before reading, so nothing further is
+		// needed here.
 		return key, nil
 	case !errors.Is(err, ErrKeyNotFound):
 		return Key{}, err

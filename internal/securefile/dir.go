@@ -84,6 +84,9 @@ func (d *dir) restrictExisting(name string, mode fs.FileMode) error {
 	if err := d.confirmRegular(name, expected, file); err != nil {
 		return err
 	}
+	if err := checkOwner(file, filepath.Join(d.path, name)); err != nil {
+		return err
+	}
 	return restrictFile(file, filepath.Join(d.path, name), mode)
 }
 
