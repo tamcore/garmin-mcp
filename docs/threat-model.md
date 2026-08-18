@@ -308,17 +308,43 @@ redirect URI, the resource and the PKCE challenge. The loopback profile is
 separate and separately tested.
 
 Every page's `form-action` is `'self'` only, with one narrow, load-bearing
-exception: the two responses that redirect the browser onward to a client's own
-redirect URI (the consent outcome, allow or deny, and an authorization refusal
-delivered by redirect) add that redirect URI's origin — scheme, host and port,
-never the path or query — to `form-action` for that one response. Chrome applies
-`form-action` to every hop of a form submission's redirect chain, not just the
-initial action, so without this addition the authorization-code flow could not
-complete in Chrome for any client. The added origin is read only from the
-transaction's already-validated, registered redirect URI, never from a
-request-supplied value, so the addition never widens the policy beyond the one
-client the browser is already being sent to. Every other response keeps the
-unmodified `form-action 'self'`.
+exception: the response that **renders the consent form** — `GET
+/login/consent` — adds the client's redirect URI's origin — scheme, host and
+port, never the path or query — to `form-action`. That is the only place the
+addition can have any effect: `form-action` is enforced against the policy of
+the document that *contains* the form, checked before the form's `POST` is sent
+and re-checked on every redirect hop the resulting navigation takes, all
+against that same document's policy. The form's action is same-origin, so
+`'self'` on the GET response permits the `POST`: it is sent, and the server
+processes it and mints the authorization code. Only then does the browser
+check the redirect hop to the client's origin against that same GET-response
+policy, and — without the addition — blocks it there. The `POST
+/login/consent` response's own headers are never consulted for this check at
+all, whatever they say: a header set on a response can never govern that
+response's own redirect. The consequence is user-visible: the code is minted
+and then discarded, so a user who hits this has consumed that authorization
+transaction and must start a fresh one — retrying the blocked navigation
+cannot work. The `/authorize` refusal redirect needs no such addition at all:
+the browser arrives there by the client's own top-level navigation, with no
+form of this server's anywhere in that chain, so `form-action` never governs
+it regardless of what its response headers say.
+
+The added origin is read only from the transaction's already-validated,
+registered redirect URI, never from a request-supplied value, so the addition
+never widens the policy beyond the one client the browser is already being
+sent to. Every other response keeps the unmodified `form-action 'self'`.
+
+A v0.0.6 revision added this origin to the `POST /login/consent` response and
+to the `/authorize` refusal redirect instead of the GET response, on the
+mistaken premise that the redirecting response's own headers govern its own
+redirect. Verified against a released build in Chrome, that arrangement was a
+no-op that still cost a transaction: the `POST` reached the server and the
+authorization code was minted, and only the following redirect hop was
+blocked, discarding it. The fix moved the addition to the GET response above;
+a regression test
+(`TestConsentFormCSPNamesTheRedirectOrigin` and siblings in
+`internal/loginweb/consentcsp_test.go`) reverts the GET-side addition and
+confirms the old POST-side-only arrangement fails it.
 
 **`SameSite=Lax`, not `Strict`, is deliberate**: `Strict` is not sent on the
 cross-site top-level navigation that starts the flow, so the flow would break.

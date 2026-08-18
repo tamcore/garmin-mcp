@@ -78,6 +78,14 @@ func TestValidateAcceptsRemoteRegistries(t *testing.T) {
 			},
 		},
 		{
+			name: "a hostname redirect on a non-default port",
+			mutate: func(c *Config) {
+				client := publicClient()
+				client.RedirectURIs = []string{"https://client.example.test:8443/callback"}
+				c.OAuthClients = []OAuthClient{client}
+			},
+		},
+		{
 			name:   "an origin allowlist",
 			mutate: func(c *Config) { c.AllowedOrigins = []string{testOrigin} },
 		},
@@ -166,6 +174,24 @@ func TestValidateRejectsUnusableRegistries(t *testing.T) {
 				c.OAuthClients = []OAuthClient{client}
 			},
 			sentinel: ErrInsecureSetting,
+		},
+		{
+			name: "an IPv6-literal loopback redirect uri over cleartext",
+			mutate: func(c *Config) {
+				client := publicClient()
+				client.RedirectURIs = []string{"http://[::1]:53682/callback"}
+				c.OAuthClients = []OAuthClient{client}
+			},
+			sentinel: ErrInvalidConfig,
+		},
+		{
+			name: "an IPv6-literal redirect uri over https",
+			mutate: func(c *Config) {
+				client := publicClient()
+				client.RedirectURIs = []string{"https://[2001:db8::1]/cb"}
+				c.OAuthClients = []OAuthClient{client}
+			},
+			sentinel: ErrInvalidConfig,
 		},
 		{
 			name: "a confidential client without a digest",
@@ -271,6 +297,31 @@ func TestValidateRejectsUnusableRegistries(t *testing.T) {
 				t.Error("the error echoes the supplied digest")
 			}
 		})
+	}
+}
+
+// TestIPv6LiteralRedirectErrorNamesTheRemedy proves the rejection is actionable:
+// an operator reading it learns both what failed (an IPv6-literal host) and what
+// to register instead (a hostname, or an IPv4 loopback address).
+func TestIPv6LiteralRedirectErrorNamesTheRemedy(t *testing.T) {
+	client := publicClient()
+	client.RedirectURIs = []string{"http://[::1]:53682/callback"}
+	cfg := remoteConfig()
+	cfg.OAuthClients = []OAuthClient{client}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil, want an error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "IPv6") {
+		t.Errorf("error %q does not name the IPv6-literal host as the problem", msg)
+	}
+	if !strings.Contains(msg, "127.0.0.1") {
+		t.Errorf("error %q does not name the IPv4 loopback remedy", msg)
+	}
+	if !strings.Contains(msg, "hostname") {
+		t.Errorf("error %q does not name the hostname remedy", msg)
 	}
 }
 

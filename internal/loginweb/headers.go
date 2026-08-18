@@ -45,6 +45,17 @@ func redirectOrigin(target string) (string, bool) {
 // a same-origin-only form-action is safe, merely non-functional for that redirect,
 // which is the failure this whole fix is closing, not one to reopen by widening
 // blindly.
+//
+// Call it only on the response that RENDERS the form whose submission eventually
+// redirects to target — today, only handleConsentForm's GET response. form-action
+// is enforced against the policy of the document containing the form, checked
+// before the form's POST is sent and re-checked on every redirect hop the
+// resulting navigation takes; the POST's own response headers are never consulted
+// for that check. The form's own origin permits the POST, so it IS sent and the
+// server DOES process it — the code is minted before the browser blocks the
+// following redirect hop to the client's origin, discarding that already-minted
+// code. A call on any other response is a no-op that merely looks like the fix
+// — that is exactly how this defect shipped once already.
 func setOutboundRedirectCSP(w http.ResponseWriter, target string) {
 	origin, ok := redirectOrigin(target)
 	if !ok {

@@ -109,6 +109,13 @@ func (s *RemoteServer) handleConsentForm(w http.ResponseWriter, r *http.Request)
 		s.notFound(w)
 		return
 	}
+	// form-action is enforced against the policy of THIS document — the one that
+	// contains the Allow/Deny form — evaluated before the form's POST is sent and
+	// re-evaluated on every redirect the resulting navigation takes. The eventual
+	// redirect to the client's origin is one of those hops, so the origin belongs
+	// here, on the GET response, not on the POST response the browser never
+	// consults for this check.
+	setOutboundRedirectCSP(w, disclosure.RedirectURI)
 	s.pages.render(w, http.StatusOK, pageConsent,
 		newRemotePageData(disclosure, session.formToken(), ""))
 }
@@ -150,7 +157,8 @@ func (s *RemoteServer) handleConsentSubmit(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	s.log(r.Context(), "the authorization transaction completed")
-	setOutboundRedirectCSP(w, completion.RedirectTo)
+	// No CSP header is set here: this response's own headers are never consulted
+	// for the form-action check on the redirect it issues. See handleConsentForm.
 	http.Redirect(w, r, completion.RedirectTo, http.StatusSeeOther)
 }
 
@@ -251,7 +259,9 @@ func (s *RemoteServer) refuseAuthorization(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if location := refusal.Location(); location != "" {
-		setOutboundRedirectCSP(w, location)
+		// No form is involved in this navigation at all — the browser arrived here
+		// by the client's own top-level redirect to /authorize, not by submitting
+		// anything this server rendered — so form-action never governs this hop.
 		http.Redirect(w, r, location, http.StatusFound)
 		return
 	}

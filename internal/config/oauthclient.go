@@ -206,6 +206,13 @@ func (c OAuthClient) checkRedirectURI(position int, raw string) error {
 		return c.reject(position, "must register redirect URIs without userinfo", ErrInvalidConfig)
 	case parsed.Fragment != "", strings.Contains(raw, "#"):
 		return c.reject(position, "must register redirect URIs without a fragment", ErrInvalidConfig)
+	case isIPv6Literal(parsed.Hostname()):
+		return c.reject(position,
+			"must not register a redirect URI with an IPv6-literal host: CSP3's host-source "+
+				"grammar has no production for a bracketed IPv6 literal, so a browser enforcing "+
+				"the consent page's Content-Security-Policy blocks the authorization redirect; "+
+				"register a hostname, or an IPv4 loopback address such as 127.0.0.1, instead",
+			ErrInvalidConfig)
 	case parsed.Scheme == schemeHTTPS:
 		return nil
 	case parsed.Scheme != schemeHTTP:
@@ -245,6 +252,17 @@ func isLiteralLoopback(host string) bool {
 	trimmed := strings.Trim(strings.TrimSpace(host), "[]")
 	ip := net.ParseIP(trimmed)
 	return ip != nil && ip.IsLoopback()
+}
+
+// isIPv6Literal reports whether host — already unbracketed by [url.URL.Hostname] —
+// is an IPv6 literal address, including the loopback ::1. CSP3's host-source
+// grammar (`host-char = ALPHA / DIGIT / "-"`) has no production for a bracketed
+// IPv6 literal, so a redirect URI built on one can never appear in a
+// browser-enforced `form-action` allowlist: the consent page cannot grant it a
+// working redirect in any browser that enforces the policy.
+func isIPv6Literal(host string) bool {
+	ip := net.ParseIP(strings.TrimSpace(host))
+	return ip != nil && ip.To4() == nil
 }
 
 // validateGrantSurface requires the scope set and the resource indicators. An

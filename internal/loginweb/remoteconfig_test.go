@@ -84,6 +84,13 @@ func TestNewRemoteRefusesAnIncoherentConfiguration(t *testing.T) {
 // TestARefusedAuthorizationIsDeliveredAsTheServerDecided covers both deliveries: a
 // redirect once the client and the redirect URI are validated, and a local render
 // before that, because the presented redirect URI may be an attacker's.
+//
+// This redirect is a top-level navigation the client's own site sent the browser
+// on, with no form of this server's involved anywhere in the chain, so
+// form-action never governs it: the CSP stays the unmodified constant on every
+// branch here, unlike the consent form's GET response (see
+// TestConsentFormCSPNamesTheRedirectOrigin), which does contain the form whose
+// submission this protection actually has to cover.
 func TestARefusedAuthorizationIsDeliveredAsTheServerDecided(t *testing.T) {
 	tests := map[string]struct {
 		refusal    error
@@ -125,10 +132,7 @@ func TestARefusedAuthorizationIsDeliveredAsTheServerDecided(t *testing.T) {
 				t.Errorf("the refusal page leaks the internal cause:\n%s", body)
 			}
 
-			policy := resp.Header.Get("Content-Security-Policy")
-			if tc.wantHeader != "" {
-				assertFormAction(t, policy, "'self'", testRedirectOrigin)
-			} else if policy != "" {
+			if policy := resp.Header.Get("Content-Security-Policy"); policy != "" {
 				assertFormAction(t, policy, "'self'")
 			}
 		})
