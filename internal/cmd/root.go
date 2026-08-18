@@ -171,6 +171,7 @@ func NewRootCommand(opts Options) *cobra.Command {
 		NewToolsCommand(opts),
 		NewMigrateCommand(opts),
 		NewRotateKeyCommand(opts),
+		NewRepairPermissionsCommand(opts),
 		NewUnlinkCommand(opts),
 		NewRevokeCommand(opts),
 		NewVersionCommand(opts),

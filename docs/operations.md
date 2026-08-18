@@ -274,6 +274,114 @@ so: creating one against a `0600` file this process owns needs the same uid
 for real deployments while the recovery machinery it required (see "The
 master key" below) cost this layer real recoverability.
 
+#### `repair-permissions`: fixing state a platform widened before this check existed
+
+The ownership-and-mode check above is correct and does not self-heal a
+group- or other-accessible file: a widened `0600` file may have been
+*modified*, not merely read, by whatever widened it, so silently tightening
+the mode and loading the file anyway would extend trust to content whose
+integrity is now in question. That refusal, however, creates a real upgrade
+problem of its own: on Kubernetes, `fsGroup` with the default
+`fsGroupChangePolicy: Always` widens every file on **every** pod start, not
+only the first one, so a deployment that ran under an image from before this
+check existed can have its key file, its token records, or its database
+already sitting at `0660` before the new image is ever rolled out — and the
+new image then refuses to start at all, with no supported way to recover
+except scaling to zero and fixing the volume by hand.
+
+`garmin-mcp repair-permissions` is that supported way. Run it once, before
+starting the new image, against the same `state-dir` and `database-path` the
+server itself will use:
+
+```sh
+garmin-mcp repair-permissions --state-dir=/data/gm --database-path=/data/gm/garmin.db
+```
+
+What it does, and does not do:
+
+- It inspects the key directory and every key file in it, the
+  active-key-version marker, the token directory and its records (including
+  the advisory lock files beside them), every distinct confidential OAuth
+  client `secret-hash-file` the configuration names, and, when
+  `database-path` is set, the database and its `-wal`/`-shm` sidecars, and
+  the database's parent directory.
+- It refuses a symlinked `--state-dir` (or `--master-key-file` directory)
+  ancestry outright, before inspecting anything else, the same ancestry
+  `serve` itself refuses at load time.
+- It **tightens** a mode it finds too permissive on an object this process's
+  effective user already owns, to exactly the mode `serve` requires — which
+  can add an owner bit, not only narrow one — and reports exactly what
+  changed. The one exception is a `secret-hash-file`: this command did not
+  create it and owns no single correct value to force it to, so a group- or
+  other-accessible one is reported, never auto-fixed; the remedy is the same
+  manual `chmod` an operator would apply to any file they manage themselves.
+- Inspecting and fixing are two separate passes over the whole deployment:
+  every target is inspected first, and nothing is chmodded until every
+  finding is known and none of them is a problem this command cannot itself
+  fix (a foreign owner, the wrong object type, a directory it still cannot
+  enumerate). A run that would otherwise have found such a problem partway
+  through leaves every other target exactly as it found it, rather than
+  having already changed some of them before discovering the one thing that
+  makes the run unresolved regardless. The key directory and the token
+  records directory are one narrow, documented exception — see the next
+  bullet.
+- A key or token records directory this process owns but cannot currently
+  list (for example, one a widening left with no read bit at all) is
+  tightened once and the listing retried, rather than being silently
+  treated as empty — which would hide every file inside it, both from this
+  command and from its own exit status. A directory still unreadable after
+  that, or one this process does not own, is reported as unresolved
+  instead.
+- It **never touches** an object owned by a different local account: that is
+  reported, not fixed, and leaves the command's exit status non-zero so it is
+  never mistaken for a green light. The remedy is the same manual `chown` the
+  previous section names.
+- It never opens anything for its **content**: discovery is a directory
+  listing (names and types only) plus a `stat` on each candidate, and a fix
+  opens the target read-only only to confirm its identity before a `chmod`
+  on that same open descriptor — never a read of the bytes inside it. In
+  particular it never opens the database as a database: no connection is
+  made, no schema is read, no write-ahead log is replayed. This is what
+  makes it safe to run in an init container before the server starts, and
+  safe to run again beside a server that is already live.
+- Running it on an already-healthy deployment is a clean no-op that exits
+  zero and says so. Running it twice changes nothing the second time.
+- `--dry-run` reports what it would change without changing anything, and
+  exits non-zero whenever it finds something it would have tightened —
+  useful for checking a deployment before acting on it, and for a monitoring
+  job that only wants to know whether one is needed.
+
+An init container is the intended shape for the Kubernetes case above:
+
+```yaml
+initContainers:
+  - name: repair-permissions
+    image: ghcr.io/tamcore/garmin-mcp:TAG
+    args: ["repair-permissions", "--state-dir=/data/gm", "--database-path=/data/gm/garmin.db"]
+    volumeMounts:
+      - {name: data, mountPath: /data}
+    securityContext:
+      runAsUser: 10001
+      runAsGroup: 10001
+```
+
+`fsGroupChangePolicy: OnRootMismatch` (see above) and `repair-permissions`
+address two different layers, and running the one does not establish the
+condition the other checks. The kubelet decides whether to walk `OnRootMismatch`
+by comparing the **mount root**'s own group — `/data` in the example above,
+not `/data/gm` — against `fsGroup`; it never inspects a descendant to make
+that decision. `repair-permissions` never touches `/data` at all: the example
+above names `--state-dir=/data/gm`, a descendant, and the command only
+`chmod`s the objects it inspects — the mode, never the group ownership the
+kubelet's own recursive walk applies. Running `repair-permissions` therefore
+fixes the *mode* of the state a previous, pre-`OnRootMismatch` walk widened,
+but it does not, and cannot, make the mount root's group match `fsGroup` — that
+still depends on the kubelet (or the CSI driver, see above) having applied
+`fsGroup` to the root at least once. Set `OnRootMismatch` to stop a **future**
+recursive walk from widening descendant state again; run `repair-permissions`
+to fix descendant state a **past** walk already widened. Neither substitutes
+for the other.
+
 ### Health and readiness probes
 
 The Streamable HTTP transport serves two unauthenticated probe endpoints. Point an

@@ -75,4 +75,15 @@ var (
 	// finishes the remaining records. The retiring key must stay in place until a
 	// run reports none of this.
 	ErrRotationIncomplete = errors.New("rotate-key: some records still need a retired key; run rotate-key again")
+
+	// ErrPermissionsUnresolved reports that repair-permissions found something
+	// it could not (or, in --dry-run, did not) leave in a safe state: a file or
+	// directory owned by another local account, an object of the wrong type
+	// where a file or directory belongs, an entry it could not inspect, a
+	// tightening attempt that failed, or — in --dry-run only — a mode it would
+	// have tightened. It is what makes the command exit non-zero so a script,
+	// or an init container, notices rather than proceeding on a state that is
+	// still unsafe.
+	ErrPermissionsUnresolved = errors.New(
+		"repair-permissions: the deployment's state directory still has a permission problem")
 )
