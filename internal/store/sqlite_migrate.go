@@ -216,7 +216,7 @@ func Migrate(ctx context.Context, db *sql.DB, fsys fs.FS) (MigrationResult, erro
 		return MigrationResult{}, err
 	}
 	if _, err := db.ExecContext(ctx, createMigrationsTable); err != nil {
-		return MigrationResult{}, fmt.Errorf("store: create schema_migrations: %w", err)
+		return MigrationResult{}, wrapSQLError("create schema_migrations", err)
 	}
 
 	recorded, err := readAppliedChecksums(ctx, db)

@@ -130,4 +130,11 @@ var (
 	// ErrInvalidArgument means a caller-supplied value was empty, too long, or
 	// otherwise unusable. It is the boundary-validation refusal.
 	ErrInvalidArgument = errors.New("store: invalid argument")
+
+	// ErrDatabaseBusy means a write transaction could not acquire the SQLite write
+	// lock within the configured busy timeout. WAL mode serializes writers, so
+	// this is contention, never corruption: another process — most likely a
+	// running server — is holding the lock. The transaction that hit it is rolled
+	// back in full, so nothing partial is ever committed.
+	ErrDatabaseBusy = errors.New("store: database is busy: a running server may be holding the write lock")
 )

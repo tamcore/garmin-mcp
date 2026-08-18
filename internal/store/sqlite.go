@@ -9,9 +9,39 @@ import (
 	"io/fs"
 	"time"
 
+	"modernc.org/sqlite"
+
 	"github.com/tamcore/garmin-mcp/internal/cryptostore"
 	"github.com/tamcore/garmin-mcp/migrations"
 )
+
+// sqliteBusyCode is SQLITE_BUSY: the write lock could not be acquired within the
+// busy timeout. It is the one SQLite result code this package needs to recognize
+// by number, so it is named here with its source rather than inlined: SQLite's
+// own C header, sqlite3.h, defines it as 5.
+const sqliteBusyCode = 5
+
+// isBusyError reports whether err is the driver's own SQLITE_BUSY, unwrapping
+// through any wrapping database/sql or this package has already applied.
+func isBusyError(err error) bool {
+	var sqliteErr *sqlite.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqliteBusyCode
+}
+
+// wrapSQLError translates a database-boundary failure, naming ErrDatabaseBusy
+// when the driver reports SQLITE_BUSY so a caller can tell contention — most
+// likely a running server holding the write lock — apart from every other
+// failure without inspecting driver internals. Every write this package issues
+// outside an explicit transaction (schema install, migration bookkeeping) goes
+// through it too, because SQLITE_BUSY can surface there just as it can inside
+// inTx: OpenSQLite's own schema-metadata install runs on every open, including
+// one against an already-migrated database.
+func wrapSQLError(operation string, err error) error {
+	if isBusyError(err) {
+		return fmt.Errorf("store: %s: %w", operation, ErrDatabaseBusy)
+	}
+	return fmt.Errorf("store: %s: %w", operation, err)
+}
 
 // SQLiteStore is the multi-principal storage backend.
 //
@@ -225,7 +255,7 @@ func loadIndexKeys(ctx context.Context, db *sql.DB, crypt keySet,
 		 VALUES (1, ?, ?, ?)`,
 		version, sealed, formatTime(clock()))
 	if err != nil {
-		return indexKeys{}, fmt.Errorf("store: install schema metadata: %w", err)
+		return indexKeys{}, wrapSQLError("install schema metadata", err)
 	}
 
 	var stored []byte
@@ -293,15 +323,18 @@ func sealFreshIndexRoot(crypt keySet) ([]byte, error) {
 func (s *SQLiteStore) inTx(ctx context.Context, body func(tx *sql.Tx) error) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("store: begin transaction: %w", err)
+		return wrapSQLError("begin transaction", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	if err := body(tx); err != nil {
+		if isBusyError(err) {
+			return wrapSQLError("transaction", err)
+		}
 		return err
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("store: commit transaction: %w", err)
+		return wrapSQLError("commit transaction", err)
 	}
 	return nil
 }

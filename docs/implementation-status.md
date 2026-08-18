@@ -46,7 +46,7 @@ Statement coverage from `go test -count=1 -cover ./...`, measured on 2026-08-18.
 
 | Package | Untagged |
 |---------|----------|
-| `internal/cmd` | 81.9% |
+| `internal/cmd` | 82.1% |
 | `internal/config` | 90.8% |
 | `internal/cryptostore` | 87.5% |
 | `internal/garmin/api` | 90.7% |
@@ -717,6 +717,42 @@ release that knows `2026-07-28` **and** accepts a credential on the server leg.
 ## Known gaps
 
 These are deliberate and tracked, not silently dropped.
+
+### Closed: an operator can now answer a data-deletion request without database access
+
+`garmin-mcp unlink --principal <id>` and `garmin-mcp revoke --principal <id>` are
+implemented in `internal/cmd/unlink.go` and `internal/cmd/revoke.go`, wired into
+`NewRootCommand`. Both need `--database-path` (the multi-user store only; there
+is no `FileStore` counterpart, the same restriction `migrate` already carries —
+`rotate-key` is not the same comparison, since it supports the FileStore
+backend with no `--database-path` at all), both take exactly one `--principal`
+with no default and no "all", and both are idempotent — a second run reports a
+zero result and still succeeds. `unlink` calls `store.UnlinkGarminAccount`, which itself reports
+`ErrPrincipalNotFound` for an unknown principal. `RevokePrincipalTokens`, which
+`revoke` calls, does not — it treats an unknown principal as an already-revoked
+no-op — so `revoke` adds its own `PrincipalByID` existence check first and
+refuses the same way `unlink` does; that difference, and the mutation test that
+would fail without the check, are recorded here rather than only in a commit
+message. Neither command's output carries an email, a Garmin account
+identifier, or a token; see `docs/operations.md` §5 for what each command
+prints and does not print.
+
+Neither command can proactively close a session a live `serve` process already
+holds open — the in-process revocation event bus in `internal/cmd/revocations.go`
+is only reachable from within that process, and an offline command has no
+connection to it. What holds regardless: every **new** client request
+re-verifies against the database (`internal/oauthserver`'s
+`VerifyAccessToken`, reached through `internal/mcpserver/http.go`'s middleware
+chain, which wraps every request, not only the one that opens a session) and
+fails immediately, including the first request on a session opened before the
+command ran. An **already-open** stream is different and is NOT torn down by
+an offline command: it can keep receiving server-initiated traffic until the
+stream or session closes, times out, or the process restarts — regardless of
+whether a further client request arrives on it in the meantime, because the
+teardown path is the in-process bus above (`internal/mcpserver/http.go`'s watch
+loop calling `terminate`) and an offline command's store has no `Revocations`
+sink connected to it. An operator who needs certainty should restart the
+server after a deletion. See `docs/operations.md` §5 for the exact claim.
 
 ### The Phase 6 security review ran, and these findings are still open
 

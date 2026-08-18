@@ -780,13 +780,53 @@ request fails token verification.
   other clients' tokens are answered `200` without disclosure.
 - **The consent page** lets a user deny an authorization before it completes,
   which persists nothing.
-- **There is no `garmin-mcp revoke` and no `garmin-mcp unlink` command.** The
-  store implements consent revocation, principal-wide revocation, and Garmin
-  unlinking, and the authorization server exposes revoke-consent and
-  revoke-principal operations, but nothing in the command tree calls them. An
-  operator who must revoke out of band has only direct database access today,
-  which does not publish a revocation event and therefore does not close live
-  sessions — restart the process after such a change.
+- **`garmin-mcp revoke --principal <id>`** revokes one principal's OAuth
+  authorization: every token family it holds with any client, and every consent
+  it granted, plus pending authorization transactions and codes. It leaves the
+  Garmin account link exactly as it was — no Garmin token record and no Garmin
+  identity are touched — so a principal whose access was revoked can authorize a
+  client again without re-linking Garmin. It revokes nothing at Garmin.
+- **`garmin-mcp unlink --principal <id>`** performs the store's full Garmin
+  unlink cascade: the encrypted Garmin DI token record, the sealed identity and
+  the account hash, plus every token family and pending authorization state
+  that cascades with it. It never revokes anything at Garmin; the account's own
+  refresh token stays valid at Garmin's service until Garmin expires or revokes
+  it.
+- Both commands need `--database-path`; neither has a local `FileStore`
+  counterpart, the same restriction `migrate` already carries. (`rotate-key` is
+  not the same comparison: it supports the local `FileStore` backend with no
+  `--database-path` at all, choosing SQLite only when the flag is set.)
+  Both take exactly one `--principal` — there is no "all" and no default — and
+  both are idempotent: a second run reports a zero result and still succeeds.
+  An unknown principal is refused rather than reported as a no-op, so a typo in
+  the id cannot be mistaken for success.
+- **Both run out of process, so they cannot proactively close a session a
+  running `serve` process already holds open.** The in-process revocation event
+  bus (`internal/cmd/revocations.go`) is what tears down an open Streamable HTTP
+  stream early (`internal/mcpserver/http.go`'s watch loop calls `terminate`,
+  which closes every session an event matches), and only a `serve` process that
+  made the revoking call itself is connected to it: an offline command's store
+  has no `Revocations` sink wired, so it cannot deliver that in-process event to
+  a server it does not share a process with. What these commands DO guarantee,
+  because it does not depend on that bus at all: the revocation is durable in
+  the database the instant the command commits, and every **new** client
+  request re-verifies against the database
+  (`internal/oauthserver`'s `VerifyAccessToken`, reached through
+  `internal/mcpserver/http.go`'s middleware chain, which wraps every request) and
+  fails immediately — including the first request on a session opened before
+  the command ran.
+
+  An **already-open** stream is a separate case, and is NOT torn down by an
+  offline command. A live GET stream (or any open Streamable HTTP session) can
+  keep receiving **server-initiated** traffic — notifications, further tool
+  results already in flight — until the stream or session closes on its own,
+  times out, or the process restarts. It does not matter whether a further
+  client request arrives on that stream in the meantime: nothing about the
+  offline command's revocation reaches that open connection to tear it down,
+  because the teardown path is the in-process bus above and only a `serve`
+  process holding the affected session is wired to it. An operator who needs
+  certainty that a revoked principal's live traffic actually stops should
+  restart the server after running `unlink` or `revoke`.
 
 ### Unlinking a Garmin account
 
@@ -1047,10 +1087,6 @@ release covers.
 Stated once, so an operator does not go looking:
 
 - No horizontal scaling, and no coordination that would allow it.
-- No `revoke` and no `unlink` command. The store implements both, and the
-  authorization server exposes revoke-consent and revoke-principal, but nothing in
-  the command tree calls them; see "What an operator can actually do today" above.
-  `migrate` and `tools list` do exist.
 - No **online** key rotation: `rotate-key` exists and re-seals both backends, but it is offline and one-shot, and it is not meant to run beside a live `serve`. See Rotation above.
 - No dynamic OAuth client registration.
 - No OS keyring integration.
