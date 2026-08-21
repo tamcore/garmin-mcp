@@ -3,6 +3,7 @@ package oauthstore
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/tamcore/garmin-mcp/internal/oauthserver"
 	"github.com/tamcore/garmin-mcp/internal/store"
@@ -74,8 +75,8 @@ func translateTokenError(op string, err error) error {
 // sentinel and the cause.
 func wrap(op string, cause error, sentinels ...error) error {
 	wrapped := cause
-	for index := len(sentinels) - 1; index >= 0; index-- {
-		wrapped = fmt.Errorf("%w: %w", sentinels[index], wrapped)
+	for _, sentinel := range slices.Backward(sentinels) {
+		wrapped = fmt.Errorf("%w: %w", sentinel, wrapped)
 	}
 	return fmt.Errorf("oauthstore: %s: %w", op, wrapped)
 }

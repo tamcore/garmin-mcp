@@ -21,7 +21,7 @@ concurrency:
 
 env:
   # Pinned tool versions. CI must never resolve a floating "latest".
-  GOLANGCI_LINT_VERSION: v2.12.2
+  GOLANGCI_LINT_VERSION: v2.13.1
   GORELEASER_VERSION: v2.17.1
   GOVULNCHECK_VERSION: v1.7.0
 

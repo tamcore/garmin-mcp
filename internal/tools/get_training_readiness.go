@@ -156,14 +156,14 @@ func newReadinessEntry(entry api.Readiness) ReadinessEntry {
 		TrainingLoadFactorPercent: optionalInt(entry.ACWRFactorPercent),
 		TrainingLoadFeedback:      optionalText(entry.ACWRFactorFeed),
 		AcuteLoad:                 optionalInt(entry.AcuteLoad),
-	}
-	out.HRVFactorPercent = optionalInt(entry.HRVFactorPercent)
-	out.HRVFactorFeedback = optionalText(entry.HRVFactorFeed)
-	out.HRVWeeklyAverage = optionalInt(entry.HRVWeeklyAverage)
-	out.StressHistoryFactorPercent = optionalInt(entry.StressHistoryFactorPercent)
-	out.StressHistoryFeedback = optionalText(entry.StressHistoryFactorFeed)
-	out.SleepHistoryFactorPercent = optionalInt(entry.SleepHistoryFactorPercent)
-	out.SleepHistoryFeedback = optionalText(entry.SleepHistoryFactorFeed)
+
+		HRVFactorPercent:           optionalInt(entry.HRVFactorPercent),
+		HRVFactorFeedback:          optionalText(entry.HRVFactorFeed),
+		HRVWeeklyAverage:           optionalInt(entry.HRVWeeklyAverage),
+		StressHistoryFactorPercent: optionalInt(entry.StressHistoryFactorPercent),
+		StressHistoryFeedback:      optionalText(entry.StressHistoryFactorFeed),
+		SleepHistoryFactorPercent:  optionalInt(entry.SleepHistoryFactorPercent),
+		SleepHistoryFeedback:       optionalText(entry.SleepHistoryFactorFeed)}
 	return out
 }
 

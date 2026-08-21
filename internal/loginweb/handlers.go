@@ -280,8 +280,7 @@ func readBoundedForm(w http.ResponseWriter, r *http.Request) error {
 	r.Body = http.MaxBytesReader(w, r.Body, MaxRequestBytes)
 
 	if err := r.ParseForm(); err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			return errBodyTooLarge
 		}
 		return errRefused

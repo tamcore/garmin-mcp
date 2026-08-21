@@ -49,8 +49,7 @@ func networkCategory(err error) (string, bool) {
 		return categoryTimeout, true
 	}
 
-	var opErr *net.OpError
-	if errors.As(err, &opErr) {
+	if _, ok := errors.AsType[*net.OpError](err); ok {
 		return categoryNetFailure, true
 	}
 	return "", false

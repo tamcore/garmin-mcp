@@ -78,8 +78,7 @@ func (s *Server) serveTokenRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	response, err := s.Token(r.Context(), req)
 	if err != nil {
-		var tokenErr *TokenError
-		if errors.As(err, &tokenErr) {
+		if tokenErr, ok := errors.AsType[*TokenError](err); ok {
 			writeTokenFailure(w, tokenErr.Status(), tokenErr.Code(), tokenErr.Description())
 			return
 		}

@@ -34,7 +34,7 @@ func TestCreateCustomFoodDecodesTheCreatedRecord(t *testing.T) {
 	h := newTrendHarness(t, customFoodWriteScript(testkit.JSON(http.StatusOK, body)))
 
 	out, err := h.svc.createCustomFood(h.ctx, createCustomFoodInput{
-		customFoodFactsFields: customFoodFactsFields{FoodName: testFoodNameCookies, Calories: 450},
+		FoodName: testFoodNameCookies, Calories: 450,
 	})
 	if err != nil {
 		t.Fatalf("createCustomFood() = %v", err)
@@ -57,7 +57,7 @@ func TestCreateCustomFoodReportsNoIdentifiersOnAnEmptyResponse(t *testing.T) {
 
 	h := newTrendHarness(t, customFoodWriteScript(testkit.Behavior{Status: http.StatusNoContent}))
 	out, err := h.svc.createCustomFood(h.ctx, createCustomFoodInput{
-		customFoodFactsFields: customFoodFactsFields{FoodName: testFoodNameCookies, Calories: 450},
+		FoodName: testFoodNameCookies, Calories: 450,
 	})
 	if err != nil {
 		t.Fatalf("createCustomFood() = %v", err)
@@ -72,7 +72,7 @@ func TestCreateCustomFoodRefusesAnAnonymousRequest(t *testing.T) {
 
 	h := newTrendHarness(t, customFoodWriteScript(testkit.JSON(http.StatusOK, `{}`)))
 	if _, err := h.svc.createCustomFood(t.Context(), createCustomFoodInput{
-		customFoodFactsFields: customFoodFactsFields{FoodName: testFoodNameCookies, Calories: 450},
+		FoodName: testFoodNameCookies, Calories: 450,
 	}); !errors.Is(err, identity.ErrNoPrincipal) {
 		t.Errorf("an anonymous request = %v, want ErrNoPrincipal", err)
 	}
@@ -87,7 +87,7 @@ func TestUpdateCustomFoodRefusesAnInvalidFoodID(t *testing.T) {
 	h := newTrendHarness(t, customFoodWriteScript(testkit.JSON(http.StatusOK, `{}`)))
 	_, err := h.svc.updateCustomFood(h.ctx, updateCustomFoodInput{
 		FoodID: "not valid", ServingID: customFoodServingHexID,
-		customFoodFactsFields: customFoodFactsFields{FoodName: "Cookies", Calories: 450},
+		FoodName: "Cookies", Calories: 450,
 	})
 	if !errors.Is(err, ErrInvalidArgument) {
 		t.Errorf("an invalid food id = %v, want ErrInvalidArgument", err)
@@ -106,7 +106,7 @@ func TestUpdateCustomFoodReplacesTheRecord(t *testing.T) {
 
 	out, err := h.svc.updateCustomFood(h.ctx, updateCustomFoodInput{
 		FoodID: customFoodHexID, ServingID: customFoodServingHexID,
-		customFoodFactsFields: customFoodFactsFields{FoodName: testFoodNameUpdatedCookies, Calories: 500},
+		FoodName: testFoodNameUpdatedCookies, Calories: 500,
 	})
 	if err != nil {
 		t.Fatalf("updateCustomFood() = %v", err)
@@ -164,7 +164,7 @@ func TestUpdateCustomFoodPreservesAnOmittedNutrient(t *testing.T) {
 
 	_, err := h.svc.updateCustomFood(h.ctx, updateCustomFoodInput{
 		FoodID: customFoodHexID, ServingID: customFoodServingHexID,
-		customFoodFactsFields: customFoodFactsFields{FoodName: testFoodNameUpdatedCookies, Calories: 500},
+		FoodName: testFoodNameUpdatedCookies, Calories: 500,
 	})
 	if err != nil {
 		t.Fatalf("updateCustomFood() = %v", err)
@@ -197,9 +197,7 @@ func TestUpdateCustomFoodOverridesASuppliedNutrientOverTheExisting(t *testing.T)
 	newSugar := 99.0
 	_, err := h.svc.updateCustomFood(h.ctx, updateCustomFoodInput{
 		FoodID: customFoodHexID, ServingID: customFoodServingHexID,
-		customFoodFactsFields: customFoodFactsFields{
-			FoodName: testFoodNameUpdatedCookies, Calories: 500, Sugar: &newSugar,
-		},
+		FoodName: testFoodNameUpdatedCookies, Calories: 500, Sugar: &newSugar,
 	})
 	if err != nil {
 		t.Fatalf("updateCustomFood() = %v", err)
@@ -267,7 +265,7 @@ func TestCustomFoodWriteResultNeverLogsAName(t *testing.T) {
 		`"brandName":"Three Bridges"},"nutritionContents":[{"servingId":"9001"}]}`
 	h := newTrendHarness(t, customFoodWriteScript(testkit.JSON(http.StatusOK, body)))
 	out, err := h.svc.createCustomFood(h.ctx, createCustomFoodInput{
-		customFoodFactsFields: customFoodFactsFields{FoodName: testFoodNameCookies, Calories: 450},
+		FoodName: testFoodNameCookies, Calories: 450,
 	})
 	if err != nil {
 		t.Fatalf("createCustomFood() = %v", err)

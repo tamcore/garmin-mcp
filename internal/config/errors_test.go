@@ -84,8 +84,7 @@ func TestConfigFileErrorExposesOnlySentinels(t *testing.T) {
 	if errors.Is(err, fs.ErrNotExist) {
 		t.Error("the raw filesystem cause is reachable through the error chain")
 	}
-	var pathErr *fs.PathError
-	if errors.As(err, &pathErr) {
+	if _, ok := errors.AsType[*fs.PathError](err); ok {
 		t.Error("errors.As extracts the raw *fs.PathError, whose text is not authored here")
 	}
 	if got := len(chainTexts(err)); got > 8 {

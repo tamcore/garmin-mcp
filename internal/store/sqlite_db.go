@@ -218,8 +218,8 @@ func databaseDSN(resolved string, opts DatabaseOptions) string {
 	query.Add("_pragma", "temp_store(MEMORY)")
 	query.Set("_txlock", "immediate")
 
-	uri := url.URL{Scheme: "file", Opaque: (&url.URL{Path: filepath.ToSlash(resolved)}).EscapedPath()}
-	uri.RawQuery = query.Encode()
+	uri := url.URL{Scheme: "file", Opaque: (&url.URL{Path: filepath.ToSlash(resolved)}).EscapedPath(),
+		RawQuery: query.Encode()}
 	return uri.String()
 }
 

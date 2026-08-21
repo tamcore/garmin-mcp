@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -194,8 +195,8 @@ func (t forwardedTrust) clientIP(r *http.Request) string {
 	}
 
 	entries := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
-	for i := len(entries) - 1; i >= 0; i-- {
-		candidate, err := netip.ParseAddr(strings.TrimSpace(entries[i]))
+	for _, entry := range slices.Backward(entries) {
+		candidate, err := netip.ParseAddr(strings.TrimSpace(entry))
 		if err != nil {
 			// A malformed entry is not evidence, and it is also not a reason to
 			// keep walking left past it into caller-controlled territory.

@@ -155,8 +155,8 @@ func sanitizedNutritionDocument(raw []byte) (any, int, error) {
 // newFoodLogDayResult maps the domain model onto the bounded result.
 func newFoodLogDayResult(date string, day api.FoodLogDay) FoodLogDayResult {
 	entries := day.Entries()
-	out := FoodLogDayResult{Date: date, Truncated: day.EntriesTruncated()}
-	out.Entries = make([]FoodLogEntryResult, 0, len(entries))
+	out := FoodLogDayResult{Date: date, Truncated: day.EntriesTruncated(),
+		Entries: make([]FoodLogEntryResult, 0, len(entries))}
 	for _, entry := range entries {
 		out.Entries = append(out.Entries, FoodLogEntryResult{
 			LogID:    optionalText(entry.LogID),

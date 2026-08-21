@@ -314,8 +314,8 @@ func TestAConfidentialClientAcceptsAnInlineDigest(t *testing.T) {
 func TestAPublicClientCarryingAnInlineDigestIsRefused(t *testing.T) {
 	t.Parallel()
 
-	registration := config.OAuthClient{ID: "public-client", Public: true}
-	registration.SecretHash = config.NewSecret(sha256Hex("whatever"))
+	registration := config.OAuthClient{ID: "public-client", Public: true,
+		SecretHash: config.NewSecret(sha256Hex("whatever"))}
 
 	if _, err := clientDigest(registration); err == nil {
 		t.Error("a public client with an inline digest was accepted")

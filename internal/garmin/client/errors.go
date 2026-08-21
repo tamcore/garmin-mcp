@@ -268,13 +268,11 @@ func redactedCauseAt(err error, depth int) string {
 		return context.DeadlineExceeded.Error()
 	}
 
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[*APIError](err); ok {
 		return apiErr.render(depth - 1)
 	}
 
-	var protoErr *protocol.Error
-	if errors.As(err, &protoErr) {
+	if protoErr, ok := errors.AsType[*protocol.Error](err); ok {
 		// protocol.Error redacts its own message, so its text is safe verbatim.
 		return protoErr.Error()
 	}

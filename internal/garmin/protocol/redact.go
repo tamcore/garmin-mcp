@@ -97,13 +97,11 @@ func redactedCauseAt(err error, depth int) string {
 	// A *Error is the richest shape and is tested first. errors.As matches an
 	// *Error receiver without unwrapping, so a self-referential chain is bounded
 	// by depth rather than looping inside errors.Is.
-	var nested *Error
-	if errors.As(err, &nested) {
+	if nested, ok := errors.AsType[*Error](err); ok {
 		return nested.render(depth - 1)
 	}
 
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
+	if urlErr, ok := errors.AsType[*url.Error](err); ok {
 		return renderURLError(urlErr, depth-1)
 	}
 

@@ -459,8 +459,7 @@ func TestGarminCoachWorkoutsSanitizesAGarminFailure(t *testing.T) {
 		t.Fatal("readTrainingPlanWindow() = nil, want a failure")
 	}
 
-	var toolErr *ToolError
-	if !errors.As(err, &toolErr) {
+	if _, ok := errors.AsType[*ToolError](err); !ok {
 		t.Fatalf("readTrainingPlanWindow() = %T, want a *ToolError", err)
 	}
 	for _, leaked := range []string{"super-secret-di-token", "synthetic", coachPrincipal} {

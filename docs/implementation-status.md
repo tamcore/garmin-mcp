@@ -8,7 +8,7 @@ Every stopping point updates this file in the same commit as the work it
 describes. Never mark an item done on the strength of a placeholder or
 `not implemented` handler.
 
-Last updated: 2026-08-18.
+Last updated: 2026-08-21.
 
 ## Phase status
 
@@ -72,6 +72,18 @@ Statement coverage from `go test -count=1 -cover ./...`, measured on 2026-08-18.
 
 Every package is at or above the 80% floor `AGENTS.md`'s "Testing" section
 states as universal, enforced by `ci.yaml` in both directions.
+
+## 2026-08-21: Go 1.27.0 toolchain baseline
+
+`go.mod` now sets Go 1.27.0 as the project baseline. Every CI and release job
+continues to resolve that exact baseline through `go-version-file: go.mod`; no
+workflow carries a second hard-coded Go version. The golangci-lint pin moved
+from v2.12.2 to v2.13.1, whose published binary is built with Go 1.27.0.
+
+`go fix ./...` applied the Go 1.27 standard-library and composite-literal
+modernizations across the existing source. A second `go fix -diff ./...` emits
+no changes. The linked module set and generated third-party notices are
+unchanged under the new toolchain.
 
 ## 2026-08-18: the secure-file hardening attempt, cut back to what reviewed clean
 

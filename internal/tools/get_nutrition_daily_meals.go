@@ -125,8 +125,8 @@ func newDailyMealsResult(date string, document api.DailyMeals) DailyMealsResult 
 		items = items[:DefaultMaxMeals]
 	}
 
-	out := DailyMealsResult{Date: date, Truncated: truncated}
-	out.Meals = make([]MealResult, 0, len(items))
+	out := DailyMealsResult{Date: date, Truncated: truncated,
+		Meals: make([]MealResult, 0, len(items))}
 	for _, meal := range items {
 		out.Meals = append(out.Meals, MealResult{
 			MealID:    optionalInt64(meal.MealID),

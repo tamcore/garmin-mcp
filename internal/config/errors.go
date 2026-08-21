@@ -149,8 +149,7 @@ func configFileReason(cause error) string {
 	case errors.Is(cause, fs.ErrPermission):
 		return reasonForbidden
 	}
-	var parseErr viper.ConfigParseError
-	if errors.As(cause, &parseErr) {
+	if _, ok := errors.AsType[viper.ConfigParseError](cause); ok {
 		return reasonUnparsable
 	}
 	return reasonUnreadable

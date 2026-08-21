@@ -94,8 +94,7 @@ func TestProfileDisplayNameRefusesAnUnusableName(t *testing.T) {
 			if !errors.Is(err, client.ErrValidation) {
 				t.Errorf("DisplayName() = %v, want a validation error", err)
 			}
-			var apiErr *client.APIError
-			if !errors.As(err, &apiErr) {
+			if _, ok := errors.AsType[*client.APIError](err); !ok {
 				t.Error("the failure is not an *APIError")
 			}
 		})
