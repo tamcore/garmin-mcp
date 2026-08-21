@@ -176,6 +176,49 @@ func TestRefreshReportsAFailedTokenEndpoint(t *testing.T) {
 	}
 }
 
+func TestRefreshClassifiesRejectedCredentialsWithoutCollapsingOtherFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		status     int
+		want       error
+		rejected   bool
+		stillClass error
+	}{
+		{name: "bad request", status: http.StatusBadRequest, rejected: true,
+			stillClass: protocol.ErrUnknownResponse},
+		{name: "unauthorized", status: http.StatusUnauthorized, rejected: true,
+			stillClass: protocol.ErrUnknownResponse},
+		{name: "bot challenge", status: http.StatusForbidden, want: protocol.ErrBotChallenge},
+		{name: "rate limited", status: http.StatusTooManyRequests, want: protocol.ErrRateLimited},
+		{name: "server failure", status: http.StatusInternalServerError, want: protocol.ErrTemporary},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			h := newRefreshHarness(t, func(_ *http.Request, _ int) (*http.Response, error) {
+				return jsonResponse(tc.status, `{"error":"refused"}`), nil
+			})
+			h.store.put(testPrincipalID, storedSet(refreshStart()), 1)
+
+			_, err := h.refresher.Refresh(t.Context(), testPrincipalID)
+			if got := errors.Is(err, auth.ErrRefreshRejected); got != tc.rejected {
+				t.Errorf("errors.Is(err, ErrRefreshRejected) = %t, want %t: %v",
+					got, tc.rejected, err)
+			}
+			if tc.want != nil && !errors.Is(err, tc.want) {
+				t.Errorf("err = %v, want %v", err, tc.want)
+			}
+			if tc.stillClass != nil && !errors.Is(err, tc.stillClass) {
+				t.Errorf("err = %v no longer retains %v", err, tc.stillClass)
+			}
+		})
+	}
+}
+
 // TestConcurrentRefreshCollapsesIntoOneFlight is the singleflight requirement.
 // Run under -race.
 func TestConcurrentRefreshCollapsesIntoOneFlight(t *testing.T) {

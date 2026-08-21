@@ -56,6 +56,7 @@ func resultShapes() map[string][]string {
 // accountShapes are the shapes of the account-scoped and derived-argument answers.
 func accountShapes() map[string][]string {
 	return map[string][]string{
+		tools.ToolGarminAuthStatus: {"authenticated"},
 		// Every field of the two profile models is optional: the account decides
 		// which exist, so requiring one would pin this suite to that account.
 		tools.ToolGetUserProfile:         {},

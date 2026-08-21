@@ -24,6 +24,7 @@ func TestWholeReadOnlyToolSurfaceAgainstOneFakeAccount(t *testing.T) {
 		tool string
 		args map[string]any
 	}{
+		{tools.ToolGarminAuthStatus, nil},
 		{tools.ToolGetUserProfile, nil},
 		{tools.ToolGetFullName, nil},
 		{tools.ToolGetUnitSystem, nil},

@@ -56,13 +56,13 @@ func loadManifest(t *testing.T) map[string]manifestTool {
 // additionsBeyondTheManifest are the tools this slice registers that the pinned
 // manifest does not describe, each with the reason it exists.
 //
-// The manifest is a snapshot of one upstream commit. Three of these come from the two
-// unmerged upstream proposals this project treats as in scope, one is the workout
-// update they depend on, and delete_activity exists because the pinned surface exposes
-// no activity delete at all while python-garminconnect does. Naming them here is what
-// keeps the drift test honest: any other unlisted name is still a failure.
+// The manifest is a snapshot of one upstream commit. Some additions come from
+// unmerged upstream proposals, while others preserve useful behavior from the legacy
+// server or python-garminconnect. Naming them here is what keeps the drift test honest:
+// any other unlisted name is still a failure.
 func additionsBeyondTheManifest() map[string]string {
 	return map[string]string{
+		tools.ToolGarminAuthStatus:               "legacy runtime-auth status; absent from the pinned surface",
 		"update_workout":                         "unmerged upstream proposal: in-place workout update",
 		"get_exercise_types":                     "unmerged upstream proposal: strength catalog read",
 		"set_activity_strength_exercise_sets":    "unmerged upstream proposal: verified set replace",

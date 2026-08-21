@@ -13,7 +13,7 @@ Machine-readable source of truth: [`compat/tools.json`](../compat/tools.json) an
 
 ## Implementation status
 
-Measured against the registry in `internal/tools/register.go` on 2026-08-15.
+Measured against the registry in `internal/tools/register.go` on 2026-08-21.
 The counts below are the same numbers as the `counts.byStatus` block of
 `compat/tools.json`, and `internal/tools/manifest_status_test.go` fails the build
 when the manifest status and the registered surface disagree either way.
@@ -23,17 +23,17 @@ when the manifest status and the registered surface disagree either way.
 | Manifest tools implemented | **137** of 138 |
 | Manifest tools not implemented | 1 (`set_fit_download_dir`) |
 | Manifest resources implemented | **5** of 5 |
-| Tools registered beyond the manifest | 6, one of them the server's own `server_info` |
-| Tools registered in total | 143 |
+| Tools registered beyond the manifest | 7, one of them the server's own `server_info` |
+| Tools registered in total | 144 |
 
-The 143 registered tools are 99 read-only, 35 write and 9 destructive. Read-only
+The 144 registered tools are 100 read-only, 35 write and 9 destructive. Read-only
 tools always register. Write and destructive tools register too, so the policy
 has a tool to refuse and the start-up tier validation covers them, and they are
 gated at call time by explicit operator enablement locally or its intersection
 with a granted scope remotely.
 
 **Registration is not the same as advertisement.** `tools/list` narrows this
-143-tool registry to what `policy.Decide` would actually allow the calling
+144-tool registry to what `policy.Decide` would actually allow the calling
 session: a stdio session sees enabled tiers, while a remote session sees more
 only once the operator has enabled a higher tier *and* the caller's own token
 carries that tier's scope. The filter runs the identical
@@ -493,10 +493,11 @@ See [Deliberate deviations](#deliberate-deviations).
 Every row is registered by `internal/tools/register.go` in tier order. Paths are
 relative to the repository root.
 
-### Read-only tier — 98 tools
+### Read-only tier — 99 tools
 
 | Tool | Go registrar | File |
 | --- | --- | --- |
+| `garmin_auth_status` † | `registerGarminAuthStatus` | `internal/tools/garmin_auth_status.go` |
 | `get_user_profile` | `registerGetUserProfile` | `internal/tools/get_user_profile.go` |
 | `get_full_name` | `registerGetFullName` | `internal/tools/get_full_name.go` |
 | `get_unit_system` | `registerGetUnitSystem` | `internal/tools/get_unit_system.go` |
@@ -658,17 +659,18 @@ relative to the repository root.
 
 ### Tools beyond the pinned manifest
 
-Five registered tools have **no record in `compat/tools.json` and must not get
-one**: they are beyond the pinned upstream commit, so adding them to the manifest
-would misreport the pinned surface. Four come from two open upstream pull
-requests and the fifth from the `python-garminconnect` facade, which carries an
-activity delete the pinned surface never exposes. They are additions, not parity,
-and they are also entered in the ADR 0006 register. A contract snapshot test
-cannot compare them with the manifest, so each is covered by a
+Six tools registered by `internal/tools` have **no record in `compat/tools.json`
+and must not get one**: they are beyond the pinned upstream commit, so adding
+them to the manifest would misreport the pinned surface. Four come from two open
+upstream pull requests, one from the `python-garminconnect` facade, and one from
+the compared legacy MCP surface. They are additions, not parity, and they are
+also entered in the ADR 0006 register. A contract snapshot test cannot compare
+them with the manifest, so each is covered by a
 documented-exclusion entry in `internal/tools/contract_test.go` instead.
 
 | Tool | Tier | Beyond the pinned commit, from | What it does |
 | --- | --- | --- | --- |
+| `garmin_auth_status` | read-only | legacy `garmin_mcp` auth surface; no upstream pull request | Makes a live, per-principal profile request. Reports success, missing credentials, or credential rejection without collapsing operational and security failures into logged-out state. |
 | `update_workout` | write | [Taxuspt/garmin_mcp#214](https://github.com/Taxuspt/garmin_mcp/pull/214) | Updates a workout in place. The body's `workoutId` is forced to the path id, so existing calendar schedules stay valid. |
 | `get_exercise_types` | read-only | [Taxuspt/garmin_mcp#214](https://github.com/Taxuspt/garmin_mcp/pull/214) | Serves the strength exercise catalog Garmin publishes, read once at start-up, and the compiled-in subset when that read fails. The result names which one answered. |
 | `set_activity_strength_exercise_sets` | write | [Taxuspt/garmin_mcp#208](https://github.com/Taxuspt/garmin_mcp/pull/208) | Replaces the exercise sets of a strength activity, then re-reads and compares them position by position. |
@@ -687,6 +689,20 @@ Every entry below is a knowing difference between this server and the pinned
 upstream contract. Each is mirrored in the ADR 0006 register and in
 `docs/implementation-status.md`. A reader who assumes parity from a tool name
 alone would be wrong about all of them.
+
+### `garmin_auth_status` probes stored credentials without hiding failures
+
+The compared legacy tool checks only whether its process-global client exists
+and treats a missing account name as unauthenticated. This server has no global
+client: the tool resolves the MCP caller's principal and makes a live profile
+request through that principal's refresher. A valid profile without a full name
+is authenticated and omits `account`.
+
+Only absent credentials and confirmed credential rejection return
+`authenticated: false`, with `reason` set to `no_credentials` or `rejected`.
+A 403/WAF response, rate limit, server failure, timeout, malformed response,
+foreign-host refusal, or missing principal remains a sanitized tool error. This
+prevents an outage or security control from being reported as a logout.
 
 ### `download_activity_file` writes nothing to a server path
 

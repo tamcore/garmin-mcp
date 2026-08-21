@@ -50,7 +50,7 @@ date.
 | `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the published exercise catalog with its compiled-in fallback, FIT activity decoding through `github.com/muktihari/fit`, the training scores, thresholds and trends, nutrition, challenges and badges, and the device inventory | 90.7% |
 | `internal/mcpserver` | Server, registry, stdio and Streamable HTTP transports, bearer middleware, session binding, origin and forwarded-header guards, elicitation confirmation, `server_info` | 89.3% |
 | `internal/resources` | The five constant MCP documents — four workout templates and the structure reference — with the manifest contract, the render, and the check that this server's own upload path accepts every template | 95.7% |
-| `internal/tools` | 143 registered tools — 99 read-only, 35 write, 9 destructive — the whole pinned manifest bar one documented refusal, with contracts snapshot-tested against `compat/tools.json` | 85.8% |
+| `internal/tools` | 144 registered tools — 100 read-only, 35 write, 9 destructive — the whole pinned manifest bar one documented refusal, with contracts snapshot-tested against `compat/tools.json` | 85.8% |
 | `internal/policy` | Three tiers, explicit name lists validated against the registered set at start-up, local operator authority, the remote enablement-and-scope intersection, confirmation requirement | 91.7% |
 | `internal/identity` | Principal type, request context, and the bearer resolver that takes the principal only from a verified token | 97.7% |
 | `internal/oauthserver` | The authorization server: PKCE S256 only, exact issuer and redirect matching, single-use bound codes, hashed opaque tokens, rotating refresh with family revocation, consent | 92.4% |
@@ -195,7 +195,7 @@ internal/
   garmin/client/         authenticated HTTP, retry, bounds, typed errors      exists
   garmin/api/            domain clients: activity, analysis, profile, workout, gear, downloads  exists (health, nutrition, training, challenges, devices beyond get_devices still to come)
   mcpserver/             server, transports, middleware wiring                 exists
-  tools/                 one file or domain file per MCP tool + register.go    exists (143 tools)
+  tools/                 one file or domain file per MCP tool + register.go    exists (144 tools)
   resources/             the five constant MCP documents and their registrar   exists
   mcplog/                structured MCP logging, level mapping, transport sink  exists
   ratelimit/             limiter + handler middleware, keyed per principal     exists
@@ -244,7 +244,7 @@ File discipline, in force now:
 
 ## Adding a New MCP Tool [NOW]
 
-Every package this procedure names exists, and 143 tools already follow it. Copy
+Every package this procedure names exists, and 144 tools already follow it. Copy
 the closest existing tool in `internal/tools` rather than inventing a shape.
 
 1. Take the contract (name, description, input schema, sensitivity, effect,

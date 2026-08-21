@@ -27,6 +27,8 @@ var (
 	// ErrNoRefreshToken reports a stored set that cannot be refreshed because it
 	// carries no refresh token or no client id.
 	ErrNoRefreshToken = errors.New("garmin auth: no DI refresh token available")
+	// ErrRefreshRejected reports that Garmin refused the stored refresh credentials.
+	ErrRefreshRejected = errors.New("garmin auth: DI refresh credentials rejected")
 	// ErrTokenExchangeFailed reports that no candidate DI client id accepted the
 	// service ticket.
 	ErrTokenExchangeFailed = errors.New("garmin auth: DI token exchange failed for every candidate client id")

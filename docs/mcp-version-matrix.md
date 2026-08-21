@@ -27,7 +27,7 @@ multi-user server, **M3** full Taxuspt parity. Definitions are in
 `docs/phases.md`, checklists in `docs/implementation-status.md`.
 
 Most rows have landed. The SDK is a direct requirement in `go.mod`, both
-transports exist, 143 tools and all five resources are registered, and the policy
+transports exist, 144 tools and all five resources are registered, and the policy
 layer, the rate limiter and the logger all exist.
 `docs/implementation-status.md` is the authoritative gap list.
 

@@ -94,6 +94,7 @@ func accountCalls(now time.Time) []sweepCall {
 	reference := map[string]any{argCalendar: now.Format(time.DateOnly)}
 
 	return []sweepCall{
+		{tools.ToolGarminAuthStatus, nil},
 		{tools.ToolGetUserProfile, nil},
 		{tools.ToolGetFullName, nil},
 		{tools.ToolGetUnitSystem, nil},

@@ -209,7 +209,13 @@ func stdioListedTools(t *testing.T, bin string, flags ...string) map[string]stru
 	if err := stdin.Close(); err != nil {
 		t.Errorf("close stdin: %v", err)
 	}
+	waitStdioSession(t, cmd, stderr)
 
+	return listedTools(t, listResponse)
+}
+
+func waitStdioSession(t *testing.T, cmd *exec.Cmd, stderr *bytes.Buffer) {
+	t.Helper()
 	// SDK may report peer EOF as exit 1 after valid frames; no other nonzero exit is accepted.
 	err := cmd.Wait()
 	if err != nil {
@@ -219,8 +225,6 @@ func stdioListedTools(t *testing.T, bin string, flags ...string) map[string]stru
 			t.Fatalf("stdio session: %v (stderr %q)", err, stderr.String())
 		}
 	}
-
-	return listedTools(t, listResponse)
 }
 
 func startStdioSession(

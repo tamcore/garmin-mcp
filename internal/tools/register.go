@@ -86,6 +86,7 @@ type registration struct {
 // domain. Read-only tools always register: no operator switch and no scope gates them.
 func readOnlyRegistrations() []registration {
 	return []registration{
+		{garminAuthStatusContract, registerGarminAuthStatus},
 		{getUserProfileContract, registerGetUserProfile},
 		{getFullNameContract, registerGetFullName},
 		{getUnitSystemContract, registerGetUnitSystem},

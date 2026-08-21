@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -93,6 +94,9 @@ func (c tokenClient) refresh(ctx context.Context, set TokenSet) (TokenSet, error
 
 	rotated, err := c.postToken(ctx, sess, protocol.OpRefreshToken, set.ClientID(), form)
 	if err != nil {
+		if isRejectedRefresh(err) {
+			return TokenSet{}, fmt.Errorf("garmin auth: %w: %w", ErrRefreshRejected, err)
+		}
 		return TokenSet{}, err
 	}
 	// Carry the previous refresh token forward when Garmin omits a new one, and
@@ -102,6 +106,16 @@ func (c tokenClient) refresh(ctx context.Context, set TokenSet) (TokenSet, error
 		next = next.WithClientID(rotated.ClientID())
 	}
 	return next, nil
+}
+
+func isRejectedRefresh(err error) bool {
+	var protocolErr *protocol.Error
+	if !errors.As(err, &protocolErr) {
+		return false
+	}
+	return protocolErr.Op == protocol.OpRefreshToken &&
+		protocolErr.Endpoint == protocol.EndpointDIToken &&
+		(protocolErr.Status == http.StatusBadRequest || protocolErr.Status == http.StatusUnauthorized)
 }
 
 // postToken performs one DI token endpoint call and decodes its response.

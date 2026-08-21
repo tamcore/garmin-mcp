@@ -19,7 +19,7 @@ Last updated: 2026-08-21.
 | 2 — core auth and storage (M1) | **CLOSED** |
 | 3 — MCP foundation (M1) | **CLOSED** |
 | 4 — remote multi-user (M2) | **CLOSED.** The MCP conformance requirement is **blocked upstream**, with evidence below, not outstanding work |
-| 5 — compatibility breadth (M3) | **DONE** — 137 of the 138 upstream tools are implemented, plus 6 the pinned manifest does not carry, for 143 registered. The one refusal is `set_fit_download_dir` (ADR 0006). All 5 resources are implemented |
+| 5 — compatibility breadth (M3) | **DONE** — 137 of the 138 upstream tools are implemented, plus 7 the pinned manifest does not carry, for 144 registered. The one refusal is `set_fit_download_dir` (ADR 0006). All 5 resources are implemented |
 | 6 — hardening and release | **IN PROGRESS.** The security review ran and its three release blockers plus five more findings are fixed, and `v0.0.1` is published. The findings under "The Phase 6 security review ran" are still open, none blocking |
 
 Phase definitions are in `docs/phases.md`.
@@ -102,6 +102,22 @@ support. Binary E2E drives both enabled and disabled stdio sessions and checks
 the advertised write and destructive tools. ADR 0008 records the security
 decision. This opt-in behavior change belongs in the next minor release,
 `v0.1.0`.
+
+## 2026-08-21: Garmin authentication status is a live, safe probe
+
+`garmin_auth_status` is a read-only tool beyond the pinned manifest. It resolves
+the caller's principal and uses the existing authenticated social-profile path,
+so it tests the stored DI session instead of a process-global client pointer.
+Success reports `authenticated: true` and includes `account` only when Garmin
+returns a full name.
+
+Missing tokens or a missing refresh token report `authenticated: false` with
+`reason: "no_credentials"`. A DI refresh rejected with HTTP 400 or 401, or a
+final profile request rejected with HTTP 401, reports `reason: "rejected"`.
+Operational and security failures remain tool errors: 403/WAF responses, rate
+limits, server failures, timeouts, malformed responses, foreign-host requests,
+and missing request principals are never misreported as logged-out state. The
+refresh classifier keeps the original protocol error in its error chain.
 
 ## 2026-08-18: the secure-file hardening attempt, cut back to what reviewed clean
 
@@ -800,11 +816,13 @@ spilling to a path the read-only container cannot write.
 What it verified as holding is worth as much as what it found, because these are
 the properties an operator is trusting: the MCP access token cannot reach Garmin
 (the outbound request type has no header field at all, so no tool can inject one);
-the Garmin DI token cannot reach an MCP client (`internal/tools` and
-`internal/resources` do not import the auth, store or crypto packages, and the
-response type retains no headers, so a Garmin `Set-Cookie` cannot ride out in a
-tool result); credentials cannot become tool arguments (no login tool exists and
-none of the 143 tools has a credential-shaped field); tenant isolation holds
+the Garmin DI token cannot reach an MCP client (`client.Caller` exposes no token
+accessor, `garmin_auth_status` imports auth only to compare sanitized sentinels,
+tools import neither the store nor crypto packages, tool result types carry no
+token, cookie or header field, and `client.Payload` retains no response headers,
+so a Garmin `Set-Cookie` cannot ride out in a tool result); credentials cannot
+become tool arguments (no login tool exists and
+none of the 144 tools has a credential-shaped field); tenant isolation holds
 structurally, because every outbound path needs a session that cannot be built
 without a principal, and the only construction site reads the principal from the
 request context; write and destructive gating holds, including on stdio where the
@@ -1020,10 +1038,13 @@ them.
   `get_scheduled_workouts`, `get_training_plan_workouts` and `schedule_week` —
   are registered now that the client layer builds the GraphQL request they need.
 
-Five registered tools are **not** in the pinned manifest at all, because they
-come from open upstream pull requests rather than the pinned commit:
+Six tools registered by `internal/tools` are **not** in the pinned manifest at
+all. Five come from open upstream pull requests or `python-garminconnect`:
 `get_exercise_types`, `set_activity_strength_exercise_sets`,
 `create_strength_training_activity`, `update_workout` and `delete_activity`.
+The sixth, `garmin_auth_status`, preserves a useful legacy MCP tool name while
+using the live, per-principal probe and safe failure classification above. The
+built-in `server_info` makes seven registered tools beyond the manifest in total.
 
 ### What actually gates a write tool today
 

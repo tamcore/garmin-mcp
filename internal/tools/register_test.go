@@ -13,6 +13,7 @@ import (
 // wantReadOnlyToolNames is the read-only Garmin surface this slice registers, in the
 // order register.go wires them.
 var wantReadOnlyToolNames = []string{
+	tools.ToolGarminAuthStatus,
 	"get_user_profile",
 	"get_full_name",
 	"get_unit_system",

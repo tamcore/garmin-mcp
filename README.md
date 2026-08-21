@@ -168,8 +168,8 @@ This is honest, not promotional.
 
 **Tool coverage: 137 of the 138 upstream tools are implemented.** The upstream
 surface is the Taxuspt `garmin_mcp` project at a pinned commit, inventoried
-statically into `compat/tools.json`. This build registers 143 tools — 99
-read-only, 35 write, 9 destructive — which is those 137 plus 6 the manifest does
+statically into `compat/tools.json`. This build registers 144 tools — 100
+read-only, 35 write, 9 destructive — which is those 137 plus 7 the manifest does
 not carry, one of them the built-in `server_info`. The single upstream tool this
 build refuses is `set_fit_download_dir`, because it writes to the server
 filesystem at a caller's direction; ADR 0006 and `docs/parity.md` record why. All
@@ -181,8 +181,8 @@ registered tools with their tier and effect, needs no Garmin account, no token a
 no database, and is the only count that cannot go stale:
 
 ```console
-$ garmin-mcp tools list | tail -1
-143 tools: 99 read-only, 35 write, 9 destructive
+$ garmin-mcp tools list | grep ' tools:'
+144 tools: 100 read-only, 35 write, 9 destructive
 ```
 
 **Writes and destructive tools are off by default.** `enable-write-tools` and
