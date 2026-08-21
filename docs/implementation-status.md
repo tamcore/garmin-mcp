@@ -85,6 +85,24 @@ modernizations across the existing source. A second `go fix -diff ./...` emits
 no changes. The linked module set and generated third-party notices are
 unchanged under the new toolchain.
 
+## 2026-08-21: stdio tier flags authorize local writes
+
+Local stdio now treats `enable-write-tools` and `enable-destructive-tools` as
+the authorization for their respective tiers. Stdio has no OAuth caller, so
+requiring an OAuth grant made both flags inert while reporting them enabled.
+Remote Streamable HTTP keeps the stronger intersection: operator enablement plus
+the verified bearer token's matching scope.
+
+The composition root supplies a separate local-operator-authority bit only for
+stdio. Policy construction rejects that bit in remote mode or beside any scope
+source, so a wrong mode alone cannot open an HTTP deployment. Local
+`server_info.grantedScopes` remains empty and truthful; `enabledTiers` and
+`tools/list` reflect local flags, name filters, and destructive elicitation
+support. Binary E2E drives both enabled and disabled stdio sessions and checks
+the advertised write and destructive tools. ADR 0008 records the security
+decision. This opt-in behavior change belongs in the next minor release,
+`v0.1.0`.
+
 ## 2026-08-18: the secure-file hardening attempt, cut back to what reviewed clean
 
 A change to `internal/securefile`, `internal/cryptostore` and `internal/store`
@@ -1009,23 +1027,16 @@ come from open upstream pull requests rather than the pinned commit:
 
 ### What actually gates a write tool today
 
-The write and destructive tiers need the **intersection** of operator enablement
-and a granted scope, and the two halves behave differently per transport:
+The write and destructive tiers have transport-specific authorization:
 
-- **stdio**: `internal/cmd/wiring.go` leaves the scope source nil, which becomes
-  `policy.NoScopes`, so every write and destructive tool is refused however the
-  operator sets `enable-write-tools`.
+- **stdio**: the composition root supplies local operator authority, so explicit
+  tier enablement is sufficient. No OAuth scope is invented or reported.
 - **streamable-http**: `internal/cmd/remotescopes.go` reads the scopes from the
   verified bearer token and nothing else. An operator who registers an OAuth
   client carrying `garmin:write` **and** enables the write tier gets working
   writes. Nothing in the repository blocks that combination, and it is the
   intended M2 behavior. Both halves default off, so the default deployment is
   read-only.
-
-The package comment in `internal/policy/tier.go` still says that no scope is
-issued anywhere in this repository. That was true before the remote path landed
-and is now true only of the default configuration. Correct it in the next commit
-that touches the package.
 
 ### Fail-safe limits that are known and accepted
 

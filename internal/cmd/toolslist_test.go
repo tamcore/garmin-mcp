@@ -138,6 +138,9 @@ func TestToolsListReportsWhetherTheHigherTiersAreEnabled(t *testing.T) {
 	if !strings.Contains(enabled, "enabled") {
 		t.Errorf("stdout = %q, want the enabled write tier reported", enabled)
 	}
+	if !strings.Contains(enabled, "authorized by its operator flag") {
+		t.Errorf("stdout = %q, want stdio authorization semantics reported", enabled)
+	}
 }
 
 // TestToolsListNeedsNoDatabase is the privilege rule: listing the surface must not

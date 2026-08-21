@@ -45,6 +45,33 @@ func TestNewRejectsAnUnknownMode(t *testing.T) {
 	}
 }
 
+func TestNewRejectsLocalOperatorAuthorityOutsideLocalStdio(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		mode   policy.Mode
+		scopes policy.ScopeSource
+	}{
+		{"remote mode", policy.ModeRemote, nil},
+		{"scope source", policy.ModeLocal, grantingScopes{}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := baseConfig()
+			cfg.Mode = tc.mode
+			cfg.LocalOperatorAuthority = true
+			_, err := policy.New(cfg, tc.scopes)
+			if !errors.Is(err, policy.ErrInvalidLocalAuthority) {
+				t.Fatalf("New error = %v, want ErrInvalidLocalAuthority", err)
+			}
+		})
+	}
+}
+
 // A typo in a tier list must fail at start-up, not at the first call.
 func TestValidateRejectsATypoInATierList(t *testing.T) {
 	t.Parallel()

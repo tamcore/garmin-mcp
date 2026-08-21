@@ -131,6 +131,37 @@ func TestSafetyDelayOfZeroNeverWaits(t *testing.T) {
 	}
 }
 
+func TestLocalWriteObservesSafetyDelay(t *testing.T) {
+	t.Parallel()
+
+	sleeper := &recordingSleeper{}
+	enable := localDestructiveEnabled(t)
+	server, probes, _ := tieredServer(t, func(d *mcpserver.Deps) {
+		enable(d)
+		d.SafetyDelay = testSafetyDelay
+		d.Sleep = sleeper.sleep
+	})
+	ctx := context.Background()
+	session := connectClient(t, ctx, server, nil)
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      writeTool,
+		Arguments: map[string]any{textArg: testText},
+	})
+	if err != nil {
+		t.Fatalf("CallTool returned error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("local write was refused: %v", result.Content)
+	}
+	if len(sleeper.waited) != 1 || sleeper.waited[0] != testSafetyDelay {
+		t.Fatalf("local write waited %v, want exactly %v", sleeper.waited, testSafetyDelay)
+	}
+	if calls, _, _ := probes[writeTool].snapshot(); calls != 1 {
+		t.Fatalf("the local write handler ran %d times, want 1", calls)
+	}
+}
+
 // TestCancellingDuringTheDelayStopsTheCall is the point of the whole feature.
 //
 // A pause that cannot be interrupted is latency, not safety. When the wait ends in

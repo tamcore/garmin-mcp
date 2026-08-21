@@ -35,6 +35,31 @@ func TestDestructiveToolFailsClosedWhenTheClientCannotBeAsked(t *testing.T) {
 	}
 }
 
+func TestLocalDestructiveToolFailsClosedWhenTheClientCannotBeAsked(t *testing.T) {
+	t.Parallel()
+
+	server, probes, _ := tieredServer(t, localDestructiveEnabled(t))
+	ctx := context.Background()
+	session := connectClient(t, ctx, server, nil)
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      destructiveTool,
+		Arguments: map[string]any{textArg: testText},
+	})
+	if err != nil {
+		t.Fatalf("the refusal must not be a transport error, got %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("a local destructive tool must be refused when confirmation cannot be obtained")
+	}
+	if calls, _, _ := probes[destructiveTool].snapshot(); calls != 0 {
+		t.Fatalf("the local destructive handler ran %d times without confirmation", calls)
+	}
+	if text := resultText(t, result); !strings.Contains(text, "unsupported") {
+		t.Fatalf("refusal %q does not name the reason", text)
+	}
+}
+
 func TestDestructiveToolIsRefusedWhenTheUserDeclines(t *testing.T) {
 	t.Parallel()
 

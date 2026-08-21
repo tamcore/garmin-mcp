@@ -194,7 +194,7 @@ var settingTable = [...]setting{
 	},
 	{
 		key: keyToolAllowlist, flag: keyToolAllowlist, kind: kindStringSlice, def: []string{},
-		usage: "restrict registration to these tool names; intersected with scopes",
+		usage: "restrict registration to these tool names; only narrows tier authorization",
 	},
 	{
 		key: keyToolDenylist, flag: keyToolDenylist, kind: kindStringSlice, def: []string{},

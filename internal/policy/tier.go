@@ -1,10 +1,8 @@
 // Package policy decides whether one tool call may proceed.
 //
-// The model has three tiers — read-only, write, and destructive — and one rule
-// that matters more than the rest: for the write and destructive tiers the
-// effective gate is the *intersection* of operator enablement and granted OAuth
-// scope. Operator enablement alone is never sufficient, and a granted scope
-// alone is never sufficient either.
+// The model has three tiers — read-only, write, and destructive. The higher-tier
+// authorization differs by transport because stdio has a trusted local operator
+// but Streamable HTTP has independently authorized callers.
 //
 // Where the scope comes from differs by transport, and that difference decides
 // whether a deployment can write at all:
@@ -12,18 +10,15 @@
 //   - Remote (Streamable HTTP) supplies real scopes. internal/cmd builds a
 //     ScopeSource over the access token the protected-resource middleware
 //     verified, so a remote caller holds exactly the scopes its own token carries
-//     and nothing else. A write is therefore possible remotely once the operator
-//     has enabled the tier.
-//   - Stdio leaves the scope source unset. A nil source behaves as [NoScopes],
-//     which grants nothing, so every write and every destructive call is refused
-//     on that transport however the operator configures enablement.
+//     and nothing else. Remote authorization is the intersection of operator
+//     enablement and the matching OAuth scope.
+//   - Stdio has no OAuth caller. Explicit operator enablement authorizes the tier.
+//     The composition root marks that authority separately from the mode and
+//     scope source, and policy construction rejects it outside local stdio.
 //
 // Both higher tiers also default to disabled. A deployment that changed no setting
-// is read-only whichever transport it runs: stdio because no scope can be
-// presented, remote because enablement starts off and the caller would still have
-// to hold the tier's scope. Making a deployment able to write takes two
-// deliberate steps — enabling the tier, and issuing a token that carries the
-// scope — and neither one alone is enough.
+// is read-only whichever transport it runs. Stdio opens a tier with its explicit
+// operator flag. Remote needs both that flag and the caller's matching scope.
 //
 // Allowlists and denylists are intersected with the tiers rather than bypassing
 // them: an allowlist can only narrow what the tiers already permit.

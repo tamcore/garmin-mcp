@@ -58,7 +58,7 @@ func writeOnlyGranted(t *testing.T) func(*mcpserver.Deps) {
 
 	return func(d *mcpserver.Deps) {
 		p, err := policy.New(policy.Config{
-			Mode:              policy.ModeLocal,
+			Mode:              policy.ModeRemote,
 			ReadOnlyTools:     []string{mcpserver.ServerInfoToolName, readTool},
 			WriteTools:        []string{writeTool},
 			DestructiveTools:  []string{destructiveTool},
@@ -80,7 +80,7 @@ func readOnlyTokenGranted(t *testing.T) func(*mcpserver.Deps) {
 
 	return func(d *mcpserver.Deps) {
 		p, err := policy.New(policy.Config{
-			Mode:              policy.ModeLocal,
+			Mode:              policy.ModeRemote,
 			ReadOnlyTools:     []string{mcpserver.ServerInfoToolName, readTool},
 			WriteTools:        []string{writeTool},
 			DestructiveTools:  []string{destructiveTool},
@@ -94,9 +94,8 @@ func readOnlyTokenGranted(t *testing.T) func(*mcpserver.Deps) {
 	}
 }
 
-// TestToolsListOnStdioShowsOnlyReadOnlyTools covers the stdio deployment shape:
-// the scope source is empty by construction, so every write and destructive
-// tool must be absent from tools/list, whatever the operator's tier lists say.
+// TestToolsListOnStdioShowsOnlyReadOnlyTools covers default stdio: both higher
+// tiers are disabled, so neither can appear in tools/list.
 func TestToolsListOnStdioShowsOnlyReadOnlyTools(t *testing.T) {
 	t.Parallel()
 
@@ -110,6 +109,44 @@ func TestToolsListOnStdioShowsOnlyReadOnlyTools(t *testing.T) {
 	}
 
 	want := []string{mcpserver.ServerInfoToolName, readTool}
+	slices.Sort(want)
+	if got := namesOf(result.Tools); !slices.Equal(got, want) {
+		t.Fatalf("tools/list = %v, want exactly %v", got, want)
+	}
+}
+
+func TestToolsListOnEnabledStdioShowsWriteAndConfirmableDestructiveTools(t *testing.T) {
+	t.Parallel()
+
+	server, _, _ := tieredServer(t, localDestructiveEnabled(t))
+	ctx := context.Background()
+	session := connectClient(t, ctx, server, elicitationCapableOptions())
+
+	result, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListTools returned error: %v", err)
+	}
+
+	want := []string{mcpserver.ServerInfoToolName, readTool, writeTool, destructiveTool}
+	slices.Sort(want)
+	if got := namesOf(result.Tools); !slices.Equal(got, want) {
+		t.Fatalf("tools/list = %v, want exactly %v", got, want)
+	}
+}
+
+func TestToolsListOnEnabledStdioHidesDestructiveWithoutElicitation(t *testing.T) {
+	t.Parallel()
+
+	server, _, _ := tieredServer(t, localDestructiveEnabled(t))
+	ctx := context.Background()
+	session := connectClient(t, ctx, server, nil)
+
+	result, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListTools returned error: %v", err)
+	}
+
+	want := []string{mcpserver.ServerInfoToolName, readTool, writeTool}
 	slices.Sort(want)
 	if got := namesOf(result.Tools); !slices.Equal(got, want) {
 		t.Fatalf("tools/list = %v, want exactly %v", got, want)

@@ -10,6 +10,10 @@ var (
 	// means anything if the deployment says which one it is.
 	ErrInvalidMode = errors.New("policy: invalid deployment mode")
 
+	// ErrInvalidLocalAuthority reports local operator authority combined with a
+	// remote mode or an OAuth scope source.
+	ErrInvalidLocalAuthority = errors.New("policy: invalid local operator authority")
+
 	// ErrInvalidToolName reports an empty or whitespace-only entry in a tier
 	// list, an allowlist, or a denylist.
 	ErrInvalidToolName = errors.New("policy: invalid tool name")
@@ -49,8 +53,8 @@ var (
 	ErrTierNotEnabled = errors.New("policy: tool tier is not enabled by the operator")
 
 	// ErrScopeNotGranted reports that the caller holds no OAuth scope for the
-	// tool's tier. Only the remote transport can present one, so on stdio this
-	// refuses every write and destructive tool regardless of enablement.
+	// tool's tier. Remote callers must present one; local stdio authorization is
+	// the operator's explicit tier enablement instead.
 	ErrScopeNotGranted = errors.New("policy: required OAuth scope is not granted")
 
 	// ErrScopeLookupFailed reports that the granted scopes could not be

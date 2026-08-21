@@ -215,7 +215,7 @@ type Config struct {
 	// write tier as well.
 	EnableDestructiveTools bool
 	// ToolAllowlist, when non-empty, restricts registration to these tool
-	// names. It is intersected with scopes, never a substitute for them.
+	// names. It only narrows tier authorization and never substitutes for it.
 	ToolAllowlist []string
 	// ToolDenylist removes tool names from registration.
 	ToolDenylist []string

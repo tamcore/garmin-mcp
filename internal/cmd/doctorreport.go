@@ -2,11 +2,12 @@ package cmd
 
 import "strings"
 
-// tierNote states the rule an operator cannot see from the enablement flags alone:
-// enabling a tier is necessary and never sufficient, because a call in that tier
-// also needs a granted OAuth scope, and this repository issues none yet.
-const tierNote = "a write or destructive call also needs a granted OAuth scope, " +
-	"which no deployment issues yet, so both tiers refuse today"
+func tierNote(remote bool) string {
+	if remote {
+		return "a write or destructive call also needs the matching OAuth scope"
+	}
+	return "on stdio, each enabled tier is authorized by its operator flag"
+}
 
 // render formats the report for an operator.
 //
@@ -38,7 +39,7 @@ func (d diagnosis) render() string {
 	writeLine(&b, "  read-only", "always registered")
 	writeLine(&b, "  write", enabledLabel(d.WriteEnabled))
 	writeLine(&b, "  destructive", enabledLabel(d.DestructiveEnabled))
-	b.WriteString("  note: " + tierNote + "\n")
+	b.WriteString("  note: " + tierNote(d.Remote) + "\n")
 
 	b.WriteString("\neffective configuration:\n")
 	b.WriteString(d.ConfigLine + "\n")

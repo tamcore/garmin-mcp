@@ -57,7 +57,7 @@ is still a requirement.
 | Protected Resource Metadata and the RFC 6750 challenge, with `realm`, `resource_metadata`, and `invalid_token` / `insufficient_scope`, and a bare challenge when no credential was presented. `bearer_methods_supported` is exactly `["header"]` | `internal/mcpserver/http.go`, `internal/oauthserver/verify.go`, `e2e/remote_test.go` | 2, 8 |
 | Origin allowlist with CORS defaulting to deny, forwarded headers trusted only from configured proxy CIDRs, and a cleartext public bind refused without an explicit development override | `internal/mcpserver/httporigin.go`, `internal/mcpserver/http.go` (`validateBind`) | 8 |
 | The remote browser profile: a `__Host-` cookie, HSTS, a capability that never appears in a path, a query, a page or a log line, the disclosure page before credential entry, an independent CSRF token that is constant-time compared and rotated, and MFA continuation held server-side | `internal/loginweb/remote.go`, `headers.go`, `remoteflow.go`, `remotesession.go`, `remotehandlers.go`, with `TestTheCapabilityNeverAppearsInAURLOrAPage` and `TestRemoteMFAKeepsTheContinuationServerSide` | 6 |
-| Tool policy as the intersection of operator enablement and granted scope, with explicit tier name lists validated against the registered set in both directions at start-up, an allowlist that can only narrow, and a refusal reason that never names the tool | `internal/policy/policy.go`, `internal/policy/tier.go`, `internal/tools/register.go` (`validateTierLists`), `internal/mcpserver/middleware.go` | 11 |
+| Tool policy using explicit operator authority on local stdio and the intersection of operator enablement and granted scope remotely, with tier name lists validated against the registered set in both directions at start-up, an allowlist that can only narrow, and a refusal reason that never names the tool | `internal/policy/policy.go`, `internal/policy/tier.go`, `internal/tools/register.go` (`validateTierLists`), `internal/mcpserver/middleware.go` | 11 |
 | Destructive confirmation that fails closed. A client that cannot be asked, a user who declines and a wait that elapses all refuse the call | `internal/policy/confirm.go`, `internal/mcpserver/confirm.go` | 11 |
 | Bounded reads. Wire and decompressed response sizes, page size, page start and date windows are all capped, and a caller-chosen page size is narrowed to the configured cap rather than honored | `internal/garmin/client/limits.go`, `internal/garmin/client/models.go`, `internal/tools/args.go` | 7, 12 |
 | No caller-supplied server filesystem path exists on the tool surface. `download_activity_file` takes an activity id and a format only and returns a bounded embedded resource, refusing an oversized payload rather than truncating it; `set_fit_download_dir` is not registered at all | `internal/tools/downloads.go` | 7 |
@@ -487,13 +487,13 @@ indistinguishable from a slow one to the client, which blunts the delay for a hu
 watching, and is part of why the setting is off by default.
 
 Every tool must have a strict JSON schema with ranges, formats, and defaults, and
-must declare all four annotation hints. Scope and operator policy must be
-enforced before any Garmin call. Write and destructive tiers must require the
-intersection of operator enablement and granted scope; remote deployments must
-default to read-only. Explicit `writeTools` and `destructiveTools` name lists must
+must declare all four annotation hints. Operator policy must be enforced before
+any Garmin call. Local stdio higher tiers require explicit operator enablement;
+remote higher tiers require its intersection with the caller's granted scope and
+must default to read-only. Explicit `writeTools` and `destructiveTools` name lists must
 be validated against the registered set at startup, so a typo fails fast.
-Allowlists and denylists must reject unknown names at startup and be intersected
-with scopes, never used to bypass them. Destructive operations must request MCP
+Allowlists and denylists must reject unknown names at startup and only narrow
+transport-specific authorization. Destructive operations must request MCP
 elicitation confirmation with a bounded timeout and **fail closed**: without
 confirmation the operation is refused and the refusal names the reason. An
 optional safety delay must precede write and destructive execution, must be
@@ -501,7 +501,8 @@ interruptible â€” a pause nothing can interrupt is latency rather than safety â€
 must sit after every gate so a refused call never waits. The progress notifications
 during that pause are still required and still missing. This is also the control against prompt injection in
 Garmin-sourced text: no model-authored argument may reach a destructive path
-without scope, enablement, and human confirmation.
+without local operator authority or remote scope, tier enablement, and human
+confirmation.
 
 ### 12. Denial of service and Garmin account rate limiting
 

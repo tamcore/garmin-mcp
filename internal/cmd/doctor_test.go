@@ -313,7 +313,7 @@ func TestDoctorReportsTheToolTiers(t *testing.T) {
 	if !strings.Contains(stdout, "destructive: disabled") {
 		t.Errorf("report does not show the disabled destructive tier:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "scope") {
-		t.Errorf("report does not say enablement alone grants nothing:\n%s", stdout)
+	if !strings.Contains(stdout, "authorized by its operator flag") {
+		t.Errorf("report does not say local enablement authorizes the tier:\n%s", stdout)
 	}
 }

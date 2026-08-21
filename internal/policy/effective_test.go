@@ -25,6 +25,23 @@ func TestEffectiveTiersAlwaysIncludesReadOnly(t *testing.T) {
 	}
 }
 
+func TestEffectiveTiersIncludesLocallyAuthorizedTiers(t *testing.T) {
+	t.Parallel()
+
+	cfg := withEnable(baseConfig(), true)
+	cfg.LocalOperatorAuthority = true
+	pol, err := policy.New(cfg, nil)
+	if err != nil {
+		t.Fatalf("policy.New() = %v", err)
+	}
+
+	got := pol.EffectiveTiers(context.Background())
+	want := []policy.Tier{policy.TierReadOnly, policy.TierWrite, policy.TierDestructive}
+	if !slices.Equal(got, want) {
+		t.Fatalf("EffectiveTiers() = %v, want %v", got, want)
+	}
+}
+
 // TestEffectiveTiersMatchesDecideForEveryRegisteredTool is the property the
 // tools/list filter and server_info must never disagree on: a tier EffectiveTiers
 // reports absent must never be a tier Decide allows for a registered tool, and a

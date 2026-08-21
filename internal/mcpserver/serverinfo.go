@@ -54,9 +54,8 @@ type ServerInfo struct {
 	Mode string `json:"mode" jsonschema:"the deployment mode, local or remote"`
 
 	// EnabledTiers names the policy tiers this caller may use: read-only is
-	// always present; write and destructive appear only when the operator has
-	// enabled the tier AND this caller's own granted scopes include it — the
-	// same intersection the tools/call gate applies.
+	// always present; local stdio uses operator enablement, while remote callers
+	// need both operator enablement and the matching OAuth scope.
 	EnabledTiers []string `json:"enabledTiers" jsonschema:"the policy tiers this caller may use"`
 
 	// GrantedScopes names the OAuth scopes this caller's session holds. It is

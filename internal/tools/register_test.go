@@ -121,9 +121,8 @@ var wantReadOnlyToolNames = []string{
 	tools.ToolGetCourses,
 }
 
-// wantWriteToolNames is the write tier. Every one of them needs the operator's
-// enablement and the caller's write scope, so a default deployment refuses all of
-// them and a stdio deployment refuses them whatever the operator enabled.
+// wantWriteToolNames is the write tier. Every one needs operator enablement; a
+// remote caller additionally needs the write scope.
 var wantWriteToolNames = []string{
 	tools.ToolUploadCourse,
 	tools.ToolAddBodyComposition,

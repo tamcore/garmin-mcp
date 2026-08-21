@@ -150,9 +150,8 @@ func (e ToolEntry) effect() string {
 // let the two higher ones run.
 //
 // It is part of the listing because a tool's tier answers only half the question
-// an operator has. Enablement is the operator's half of the gate; the caller's
-// granted scope is the other half, and only the remote transport can carry one, so
-// the summary states both.
+// an operator has. On stdio enablement is sufficient; remotely a caller also
+// needs the matching OAuth scope.
 func writeTierSummary(out io.Writer, cfg config.Config, entries []ToolEntry) {
 	counts := map[policy.Tier]int{}
 	for _, entry := range entries {
@@ -164,9 +163,12 @@ func writeTierSummary(out io.Writer, cfg config.Config, entries []ToolEntry) {
 		counts[policy.TierWrite], counts[policy.TierDestructive])
 	_, _ = fmt.Fprintf(out, "write tier: %s\n", enablementOf(cfg.EnableWriteTools))
 	_, _ = fmt.Fprintf(out, "destructive tier: %s\n", enablementOf(cfg.EnableDestructiveTools))
+	if cfg.Transport == config.TransportStdio {
+		_, _ = fmt.Fprintln(out, "On stdio, each enabled tier is authorized by its operator flag.")
+		return
+	}
 	_, _ = fmt.Fprintln(out,
-		"A call in either higher tier also needs the tier's OAuth scope, which only "+
-			"the remote transport can present; stdio grants none.")
+		"A remote call in either higher tier also needs the matching OAuth scope.")
 }
 
 // enablementOf renders one tier's operator switch.

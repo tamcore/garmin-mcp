@@ -70,12 +70,40 @@ func TestReadOnlyToolIsAllowedWithNoScopesGranted(t *testing.T) {
 	}
 }
 
-// The default scope source grants nothing, so operator enablement alone must not
-// open the write or destructive tier. This is the intersection rule.
-func TestOperatorEnablementAloneNeverSuffices(t *testing.T) {
+func TestLocalOperatorAuthorityAllowsEnabledTiersWithoutOAuthScopes(t *testing.T) {
 	t.Parallel()
 
 	cfg := baseConfig()
+	cfg.LocalOperatorAuthority = true
+	cfg.EnableWrite = true
+	cfg.EnableDestructive = true
+	p := mustNew(t, cfg, nil)
+
+	write := p.Decide(context.Background(), writeTool)
+	if !write.Allowed {
+		t.Fatalf("local write denied: %v (%s)", write.Err, write.Reason)
+	}
+	if write.RequiresConfirmation {
+		t.Fatal("local write tool requires confirmation")
+	}
+
+	destructive := p.Decide(context.Background(), destructiveTool)
+	if !destructive.Allowed {
+		t.Fatalf("local destructive call denied: %v (%s)", destructive.Err, destructive.Reason)
+	}
+	if !destructive.RequiresConfirmation {
+		t.Fatal("local destructive tool does not require confirmation")
+	}
+	if scopes := p.GrantedScopes(context.Background()); len(scopes) != 0 {
+		t.Fatalf("GrantedScopes() = %v, want none for local operator authority", scopes)
+	}
+}
+
+func TestRemoteOperatorEnablementAloneNeverSuffices(t *testing.T) {
+	t.Parallel()
+
+	cfg := baseConfig()
+	cfg.Mode = policy.ModeRemote
 	cfg.EnableWrite = true
 	cfg.EnableDestructive = true
 	p := mustNew(t, cfg, policy.NoScopes{})
@@ -88,6 +116,39 @@ func TestOperatorEnablementAloneNeverSuffices(t *testing.T) {
 		if !errors.Is(decision.Err, policy.ErrScopeNotGranted) {
 			t.Errorf("%s Err = %v, want ErrScopeNotGranted", tool, decision.Err)
 		}
+	}
+}
+
+func TestLocalOperatorAuthorityDoesNotBypassNameLists(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		set  func(*policy.Config)
+		err  error
+	}{
+		{"allowlist", func(c *policy.Config) { c.Allowlist = []string{readTool} }, policy.ErrNotAllowlisted},
+		{"denylist", func(c *policy.Config) { c.Denylist = []string{writeTool} }, policy.ErrToolDenied},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := baseConfig()
+			cfg.LocalOperatorAuthority = true
+			cfg.EnableWrite = true
+			tc.set(&cfg)
+			p := mustNew(t, cfg, nil)
+
+			decision := p.Decide(context.Background(), writeTool)
+			if decision.Allowed {
+				t.Fatal("local operator authority bypassed a name list")
+			}
+			if !errors.Is(decision.Err, tc.err) {
+				t.Fatalf("Err = %v, want %v", decision.Err, tc.err)
+			}
+		})
 	}
 }
 

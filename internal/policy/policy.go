@@ -21,12 +21,8 @@ type ScopeSource interface {
 	GrantedScopes(ctx context.Context) ([]Scope, error)
 }
 
-// NoScopes is the default ScopeSource and grants nothing.
-//
-// It is what the stdio transport runs with, because a process-bound local account
-// presents no token: every write and destructive tool is refused there. A nil
-// ScopeSource behaves identically. The remote transport supplies a real source
-// instead, so this is the default and not the only implementation.
+// NoScopes is the default ScopeSource and grants nothing. Local stdio policy can
+// separately trust explicit operator enablement without inventing OAuth scopes.
 type NoScopes struct{}
 
 // GrantedScopes returns no scopes and no error.
@@ -48,20 +44,23 @@ type Config struct {
 	WriteTools       []string
 	DestructiveTools []string
 
-	// EnableWrite and EnableDestructive are the operator half of the gate. They
-	// are necessary and never sufficient: the caller must also hold the tier's
-	// scope. Both default to false, which is what makes a remote deployment
-	// read-only until the operator says otherwise.
+	// EnableWrite and EnableDestructive are the operator gate. They are sufficient
+	// under local operator authority; remote callers must also hold the tier's
+	// scope. Both default to false.
 	EnableWrite       bool
 	EnableDestructive bool
 
+	// LocalOperatorAuthority makes operator enablement sufficient in the local
+	// stdio shape, which has no OAuth caller or scope grant.
+	LocalOperatorAuthority bool
+
 	// Allowlist, when non-empty, restricts calls to the names it contains. It is
 	// intersected with the tiers: an allowlisted write tool still needs
-	// enablement and scope.
+	// local operator authority or remote enablement and scope.
 	Allowlist []string
 
 	// Denylist refuses the names it contains before any tier check runs, so it
-	// beats enablement and scope.
+	// beats every authorization path.
 	Denylist []string
 }
 
@@ -80,14 +79,15 @@ type Decision struct {
 	Err                  error
 }
 
-// A Policy evaluates tool calls against the operator configuration and the
-// caller's granted scopes. It is immutable after New and safe for concurrent use.
+// A Policy evaluates tool calls against local operator authority or remote OAuth
+// grants. It is immutable after New and safe for concurrent use.
 type Policy struct {
-	mode      Mode
-	tiers     map[string]Tier
-	enabled   map[Tier]bool
-	allowlist map[string]struct{}
-	denylist  map[string]struct{}
+	mode                   Mode
+	tiers                  map[string]Tier
+	enabled                map[Tier]bool
+	localOperatorAuthority bool
+	allowlist              map[string]struct{}
+	denylist               map[string]struct{}
 	// configured preserves every name the operator wrote, in order, so Validate
 	// can report the first offender deterministically.
 	configured []string
@@ -96,13 +96,17 @@ type Policy struct {
 
 // New validates cfg and returns the Policy it describes.
 //
-// scopes may be nil, which is treated as NoScopes. New checks only what it can
-// see on its own: the mode, the shape of every name, and that no name appears in
-// two tiers. Checking the names against reality is Validate's job, because the
-// registered set does not exist until the tools are registered.
+// scopes may be nil, which is treated as NoScopes. Local operator authority is
+// valid only in local mode with that nil source. New also checks the shape of
+// every name and that no name appears in two tiers. Checking the names against
+// reality is Validate's job because the registered set does not exist yet.
 func New(cfg Config, scopes ScopeSource) (*Policy, error) {
 	if !cfg.Mode.IsValid() {
 		return nil, fmt.Errorf("mode %d: %w", int(cfg.Mode), ErrInvalidMode)
+	}
+	if cfg.LocalOperatorAuthority && (cfg.Mode != ModeLocal || scopes != nil) {
+		return nil, fmt.Errorf("mode %s with scope source present=%t: %w",
+			cfg.Mode, scopes != nil, ErrInvalidLocalAuthority)
 	}
 	if scopes == nil {
 		scopes = NoScopes{}
@@ -122,11 +126,12 @@ func New(cfg Config, scopes ScopeSource) (*Policy, error) {
 	}
 
 	return &Policy{
-		mode:      cfg.Mode,
-		tiers:     tiers,
-		enabled:   map[Tier]bool{TierWrite: cfg.EnableWrite, TierDestructive: cfg.EnableDestructive},
-		allowlist: allowlist,
-		denylist:  denylist,
+		mode:                   cfg.Mode,
+		tiers:                  tiers,
+		enabled:                map[Tier]bool{TierWrite: cfg.EnableWrite, TierDestructive: cfg.EnableDestructive},
+		localOperatorAuthority: cfg.LocalOperatorAuthority,
+		allowlist:              allowlist,
+		denylist:               denylist,
 		configured: slices.Concat(configured,
 			slices.Clone(cfg.Allowlist), slices.Clone(cfg.Denylist)),
 		scopes: scopes,
@@ -204,8 +209,7 @@ func (p *Policy) Validate(registered []string) error {
 //
 // The evaluation order is deliberate: the denylist first, so an operator's
 // refusal cannot be reopened by anything downstream; then the allowlist, which
-// narrows but never widens; then the tier gate, which is the intersection of
-// operator enablement and granted scope.
+// narrows but never widens; then the transport-specific tier gate.
 func (p *Policy) Decide(ctx context.Context, tool string) Decision {
 	tier, ok := p.tiers[tool]
 	if !ok {
@@ -240,8 +244,9 @@ func (p *Policy) checkLists(tool string, tier Tier) (Decision, bool) {
 	return Decision{}, false
 }
 
-// checkTier applies the intersection gate. A read-only tool passes without
-// consulting the scope source at all, so a broken source cannot take reads down.
+// checkTier applies local operator authority or the remote intersection gate. A
+// read-only tool never consults the scope source, so a broken source cannot take
+// reads down.
 func (p *Policy) checkTier(ctx context.Context, tool string, tier Tier) (Decision, bool) {
 	scope, gated := tier.RequiredScope()
 	if !gated {
@@ -250,6 +255,9 @@ func (p *Policy) checkTier(ctx context.Context, tool string, tier Tier) (Decisio
 	if !p.enabled[tier] {
 		return refuse(tool, tier, ErrTierNotEnabled,
 			"the "+tier.String()+" tier is not enabled for this deployment"), true
+	}
+	if p.localOperatorAuthority {
+		return Decision{}, false
 	}
 
 	granted, err := p.scopes.GrantedScopes(ctx)
@@ -272,9 +280,9 @@ func (p *Policy) checkTier(ctx context.Context, tool string, tier Tier) (Decisio
 // without it. TierWrite and TierDestructive are included only when Decide would
 // actually allow at least one registered tool in that tier — the identical
 // per-tool decision the tools/list filter and the tools/call gate both apply,
-// intersecting operator enablement, granted scope, AND the allowlist/denylist
-// name filters. A tier enabled and granted but emptied by the allowlist (or
-// entirely denylisted) is therefore reported absent, which is what keeps this
+// intersecting transport-specific authorization with the allowlist/denylist name
+// filters. A tier authorized but emptied by the allowlist (or entirely
+// denylisted) is therefore reported absent, which is what keeps this
 // report and VisibleToolCount from disagreeing about the same deployment: a
 // tier can never be named here with zero of its tools actually reachable.
 func (p *Policy) EffectiveTiers(ctx context.Context) []Tier {

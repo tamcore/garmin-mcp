@@ -175,9 +175,9 @@ oauth-clients:
 
 | Key | Flag | Default | Applies to | Validation |
 |-----|------|---------|-----------|-----------|
-| `enable-write-tools` | `--enable-write-tools` | `false` | both | Remotely this is only half of the gate: a granted OAuth write scope is required as well. |
-| `enable-destructive-tools` | `--enable-destructive-tools` | `false` | both | Requires `enable-write-tools`. |
-| `tool-allowlist` | `--tool-allowlist` | empty | both | Lower-case tool names of letters, digits, and underscores, at most 64 bytes, no repeats. A non-empty list restricts registration to those names. It is intersected with scopes and is never a substitute for one. A name that this build does not register is a start-up failure, so a typo cannot silently allow nothing. |
+| `enable-write-tools` | `--enable-write-tools` | `false` | both | Sufficient authorization on local stdio. Remotely, a granted OAuth write scope is also required. |
+| `enable-destructive-tools` | `--enable-destructive-tools` | `false` | both | Requires `enable-write-tools`. Sufficient tier authorization on local stdio; remote callers also need `garmin:destructive`. Every destructive call still needs client confirmation. |
+| `tool-allowlist` | `--tool-allowlist` | empty | both | Lower-case tool names of letters, digits, and underscores, at most 64 bytes, no repeats. A non-empty list restricts registration to those names. It can only narrow local operator authority or remote scope authorization. A name that this build does not register is a start-up failure, so a typo cannot silently allow nothing. |
 | `tool-denylist` | `--tool-denylist` | empty | both | Same name rules. A name may not appear in both lists. |
 
 ### Limits
@@ -265,6 +265,10 @@ Local stdio, defaults everywhere except the tool tier:
 transport: stdio
 enable-write-tools: true
 ```
+
+This exposes write tools to the local MCP client. Add
+`enable-destructive-tools: true` to expose destructive tools to a client that
+declares elicitation support; every destructive call still requires confirmation.
 
 Remote, TLS terminated by this process:
 

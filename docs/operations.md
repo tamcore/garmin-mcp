@@ -542,7 +542,9 @@ repository uses.
 
 Grant `garmin:write` and `garmin:destructive` only to a client that must have
 them, and remember that the operator flags `enable-write-tools` and
-`enable-destructive-tools` must be set as well. Neither half alone opens a tier.
+`enable-destructive-tools` must be set as well. This intersection applies to
+remote callers. Stdio has no OAuth caller, so its explicit operator flags
+authorize the corresponding tiers.
 
 **What a client actually sees.** `tools/list` is not the full registered
 surface — it is narrowed, per request, to the tools the session's own scopes
@@ -553,7 +555,10 @@ what removed it, not a separate guess. The shapes:
 
 | Deployment | Scopes presented | What `tools/list` shows |
 | --- | --- | --- |
-| stdio | none, by construction | read-only tools plus `server_info` only |
+| stdio, higher tiers disabled | none, by construction | read-only tools plus `server_info` only |
+| stdio, write enabled | none, by construction | read-only and write tools |
+| stdio, both enabled, client declares elicitation | none, by construction | read-only, write, and destructive tools |
+| stdio, both enabled, client declares no elicitation | none, by construction | read-only and write tools; destructive stays hidden |
 | remote, `garmin:read`-only token | no tier scope | read-only tools plus `server_info` only |
 | remote, `garmin:write` granted, write tier enabled | `garmin:write` | read-only and write tools |
 | remote, `garmin:destructive` also granted, destructive tier also enabled, client declares elicitation | `garmin:write`, `garmin:destructive` | read-only, write, and destructive tools |
@@ -573,7 +578,7 @@ narrows them.
 
 `server_info` answers "why is a tool missing" without a client having to infer
 it from an absence: it reports `enabledTiers` (this session's effective
-tiers — enablement, granted scope, AND the operator's tool allowlist/denylist,
+tiers — transport-specific authorization AND the operator's tool allowlist/denylist,
 so a tier is only ever named here when at least one of its tools would
 actually pass `Decide`) and `grantedScopes` (the session's raw OAuth grant).
 `toolCount` is the total registered regardless of caller; `visibleToolCount`
@@ -1198,7 +1203,5 @@ Stated once, so an operator does not go looking:
 - No **online** key rotation: `rotate-key` exists and re-seals both backends, but it is offline and one-shot, and it is not meant to run beside a live `serve`. See Rotation above.
 - No dynamic OAuth client registration.
 - No OS keyring integration.
-- Write and destructive tools are refused over stdio regardless of
-  `enable-write-tools`, because the local deployment supplies no scope source and
-  those tiers require a granted scope as well as operator enablement. Remotely
-  they need both the operator flag and the granted scope.
+- Stdio write and destructive tiers are authorized by their explicit operator
+  flags. Remote callers need both the operator flag and the matching OAuth scope.

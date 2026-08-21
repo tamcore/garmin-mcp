@@ -116,6 +116,34 @@ func TestTheToolSeamAcceptsAFakeRegistry(t *testing.T) {
 	}
 }
 
+func TestLocalDependencyGraphAllowsExplicitlyEnabledWriteTier(t *testing.T) {
+	registrar := &fakeRegistrar{}
+	factory := func(ToolDeps) (ToolSet, error) {
+		return ToolSet{
+			Registrar: registrar,
+			ReadOnly:  []string{fakeReadTool},
+			Write:     []string{fakeWriteTool},
+		}, nil
+	}
+	cfg := localConfig(t)
+	cfg.EnableWriteTools = true
+
+	deps, err := newDependencies(cfg, &wiring{Tools: factory})
+	if err != nil {
+		t.Fatalf("newDependencies returned error: %v", err)
+	}
+	t.Cleanup(deps.close)
+
+	decision := deps.policy.Decide(t.Context(), fakeWriteTool)
+	if !decision.Allowed {
+		t.Fatalf("explicitly enabled local write tier was refused: %v (%s)",
+			decision.Err, decision.Reason)
+	}
+	if scopes := deps.policy.GrantedScopes(t.Context()); len(scopes) != 0 {
+		t.Fatalf("local operator authority was reported as OAuth scopes: %v", scopes)
+	}
+}
+
 // TestAFailingToolFactoryStopsStartUp keeps a broken tool package a start-up failure
 // rather than a server that silently serves fewer tools.
 func TestAFailingToolFactoryStopsStartUp(t *testing.T) {

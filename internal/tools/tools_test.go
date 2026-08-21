@@ -175,9 +175,8 @@ func newServer(t *testing.T, registrar *tools.Registrar) *mcpserver.Server {
 	return newServerWithPolicy(t, registrar, restrictivePolicy(t))
 }
 
-// restrictivePolicy is the default test policy: both higher tiers unenabled and
-// no scope source, which is what a stdio deployment actually runs with. Tests
-// that assert a write or destructive call is refused rely on this default.
+// restrictivePolicy is the default test policy: both higher tiers are disabled.
+// Tests that assert a write or destructive call is refused rely on this default.
 func restrictivePolicy(t *testing.T) *policy.Policy {
 	t.Helper()
 

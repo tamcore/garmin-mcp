@@ -184,11 +184,15 @@ server enforces it or whether it is yours to keep.
 ### Tools
 
 - [ ] `enable-write-tools` and `enable-destructive-tools` stay off unless writes
-      are genuinely wanted; destructive requires write. *Enforced.*
+      are genuinely wanted; on stdio these flags authorize their tiers, and
+      destructive requires write. *Enforced.*
 - [ ] Clients that only read are granted only read scopes. Enablement and scope
-      are both required, and neither alone is enough. *Enforced.*
+      are both required remotely, and neither alone is enough. *Enforced.*
 - [ ] `tool-denylist` names anything that must never be exposed. *Enforced: the
       denylist beats enablement and scope.*
+- [ ] Local stdio deployments that enable writes use `tool-allowlist`,
+      `tool-denylist`, or `safety-delay` where model-driven writes need a narrower
+      boundary. *Operator-controlled.*
 
 ### Operations
 

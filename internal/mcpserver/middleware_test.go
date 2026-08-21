@@ -116,13 +116,33 @@ func destructiveEnabled(t *testing.T) func(*mcpserver.Deps) {
 
 	return func(d *mcpserver.Deps) {
 		p, err := policy.New(policy.Config{
-			Mode:              policy.ModeLocal,
+			Mode:              policy.ModeRemote,
 			ReadOnlyTools:     []string{mcpserver.ServerInfoToolName, readTool},
 			WriteTools:        []string{writeTool},
 			DestructiveTools:  []string{destructiveTool},
 			EnableWrite:       true,
 			EnableDestructive: true,
 		}, grantAll{})
+		if err != nil {
+			t.Fatalf("policy.New returned error: %v", err)
+		}
+		d.Policy = p
+	}
+}
+
+func localDestructiveEnabled(t *testing.T) func(*mcpserver.Deps) {
+	t.Helper()
+
+	return func(d *mcpserver.Deps) {
+		p, err := policy.New(policy.Config{
+			Mode:                   policy.ModeLocal,
+			ReadOnlyTools:          []string{mcpserver.ServerInfoToolName, readTool},
+			WriteTools:             []string{writeTool},
+			DestructiveTools:       []string{destructiveTool},
+			EnableWrite:            true,
+			EnableDestructive:      true,
+			LocalOperatorAuthority: true,
+		}, nil)
 		if err != nil {
 			t.Fatalf("policy.New returned error: %v", err)
 		}
@@ -199,9 +219,8 @@ func TestToolArgumentsCannotOverrideThePrincipalThroughTheServer(t *testing.T) {
 	}
 }
 
-// The write tier is refused today because no scope is granted anywhere, and the
-// refusal must reach the caller as a readable tool error.
-func TestWriteToolIsRefusedWithNoScopesGranted(t *testing.T) {
+// A disabled write tier must reach the caller as a readable tool error.
+func TestWriteToolIsRefusedWhenTierIsDisabled(t *testing.T) {
 	t.Parallel()
 
 	server, probes, _ := tieredServer(t, nil)

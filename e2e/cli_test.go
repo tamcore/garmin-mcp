@@ -3,8 +3,12 @@
 package e2e
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -167,6 +171,131 @@ func TestStdioTransportKeepsStdoutClean(t *testing.T) {
 	if strings.Contains(stderr, "jsonrpc") {
 		t.Errorf("stderr = %q, want no MCP frame on the log stream", stderr)
 	}
+}
+
+func TestStdioEnablementFlagsControlWriteAndDestructiveTools(t *testing.T) {
+	bin := buildBinary(t)
+	enabled := stdioListedTools(t, bin, "--enable-write-tools", "--enable-destructive-tools")
+	disabled := stdioListedTools(t, bin)
+
+	for label, names := range map[string]map[string]struct{}{"enabled": enabled, "disabled": disabled} {
+		if _, ok := names["server_info"]; !ok {
+			t.Fatalf("%s tools/list omitted server_info", label)
+		}
+	}
+	for _, want := range []string{"upload_workout", "delete_workout"} {
+		if _, ok := enabled[want]; !ok {
+			t.Errorf("tools/list omitted %q with both stdio tier flags enabled", want)
+		}
+		if _, ok := disabled[want]; ok {
+			t.Errorf("tools/list exposed %q with stdio tier flags disabled", want)
+		}
+	}
+}
+
+func stdioListedTools(t *testing.T, bin string, flags ...string) map[string]struct{} {
+	t.Helper()
+	cmd, stdin, scanner, stderr := startStdioSession(t, bin, flags...)
+
+	writeFrame(t, stdin,
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{"elicitation":{}},"clientInfo":{"name":"stdio-e2e","version":"1"}}}`)
+	initialize := readFrame(t, scanner)
+	if !strings.Contains(initialize, `"id":1`) {
+		t.Fatalf("initialize response = %q, want id 1", initialize)
+	}
+	writeFrame(t, stdin, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+	writeFrame(t, stdin, `{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`)
+	listResponse := readFrame(t, scanner)
+	if err := stdin.Close(); err != nil {
+		t.Errorf("close stdin: %v", err)
+	}
+
+	// SDK may report peer EOF as exit 1 after valid frames; no other nonzero exit is accepted.
+	err := cmd.Wait()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 ||
+			!strings.Contains(stderr.String(), "server is closing: EOF") {
+			t.Fatalf("stdio session: %v (stderr %q)", err, stderr.String())
+		}
+	}
+
+	return listedTools(t, listResponse)
+}
+
+func startStdioSession(
+	t *testing.T, bin string, flags ...string,
+) (*exec.Cmd, io.WriteCloser, *bufio.Scanner, *bytes.Buffer) {
+	t.Helper()
+	args := append([]string{"serve", "--transport=stdio"}, flags...)
+	cmd := offlineCommand(bin, args...)
+	cmd.Env = append(cmd.Env, "GARMIN_MCP_STATE_DIR="+stateDir(t))
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatalf("open stdin: %v", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("open stdout: %v", err)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start stdio session: %v", err)
+	}
+	t.Cleanup(func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+	})
+
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
+	return cmd, stdin, scanner, &stderr
+}
+
+func writeFrame(t *testing.T, stdin io.Writer, frame string) {
+	t.Helper()
+	if _, err := fmt.Fprintln(stdin, frame); err != nil {
+		t.Fatalf("write stdio frame: %v", err)
+	}
+}
+
+func readFrame(t *testing.T, scanner *bufio.Scanner) string {
+	t.Helper()
+	if !scanner.Scan() {
+		t.Fatalf("read stdio frame: %v", scanner.Err())
+	}
+	return scanner.Text()
+}
+
+func listedTools(t *testing.T, responseFrame string) map[string]struct{} {
+	t.Helper()
+
+	var response struct {
+		ID     int             `json:"id"`
+		Error  json.RawMessage `json:"error"`
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(responseFrame), &response); err != nil {
+		t.Fatalf("decode tools/list response %q: %v", responseFrame, err)
+	}
+	if response.ID != 2 {
+		t.Fatalf("tools/list response id = %d, want 2", response.ID)
+	}
+	if len(response.Error) != 0 {
+		t.Fatalf("tools/list returned JSON-RPC error: %s", response.Error)
+	}
+	names := make(map[string]struct{}, len(response.Result.Tools))
+	for _, tool := range response.Result.Tools {
+		names[tool.Name] = struct{}{}
+	}
+	return names
 }
 
 // stateDir returns a private, symlink-free state directory. Every path component

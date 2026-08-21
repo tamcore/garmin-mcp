@@ -53,6 +53,21 @@ func TestServerInfoReportsOnlyTheReadOnlyTierOnStdio(t *testing.T) {
 	}
 }
 
+func TestServerInfoReportsLocalOperatorAuthorityWithoutOAuthScopes(t *testing.T) {
+	t.Parallel()
+
+	server, _, _ := tieredServer(t, localDestructiveEnabled(t))
+	info := callServerInfo(t, server)
+
+	want := []string{tierReadOnly, tierWrite, tierDestructive}
+	if !slices.Equal(info.EnabledTiers, want) {
+		t.Fatalf("EnabledTiers = %v, want %v", info.EnabledTiers, want)
+	}
+	if len(info.GrantedScopes) != 0 {
+		t.Fatalf("GrantedScopes = %v, want none for local operator authority", info.GrantedScopes)
+	}
+}
+
 // TestServerInfoReportsEveryEnabledAndGrantedTier proves both tiers show up once
 // both are enabled and granted.
 func TestServerInfoReportsEveryEnabledAndGrantedTier(t *testing.T) {

@@ -23,14 +23,15 @@ func (d *dependencies) buildToolsAndPolicy(factory ToolFactory) error {
 
 	readOnly, write, destructive := set.tierNames()
 	gate, err := policy.New(policy.Config{
-		Mode:              d.mode,
-		ReadOnlyTools:     readOnly,
-		WriteTools:        write,
-		DestructiveTools:  destructive,
-		EnableWrite:       d.cfg.EnableWriteTools,
-		EnableDestructive: d.cfg.EnableDestructiveTools,
-		Allowlist:         d.cfg.ToolAllowlist,
-		Denylist:          d.cfg.ToolDenylist,
+		Mode:                   d.mode,
+		ReadOnlyTools:          readOnly,
+		WriteTools:             write,
+		DestructiveTools:       destructive,
+		EnableWrite:            d.cfg.EnableWriteTools,
+		EnableDestructive:      d.cfg.EnableDestructiveTools,
+		LocalOperatorAuthority: d.localOperatorAuthority,
+		Allowlist:              d.cfg.ToolAllowlist,
+		Denylist:               d.cfg.ToolDenylist,
 	}, d.scopes)
 	if err != nil {
 		return fmt.Errorf("building the tool policy: %w", err)

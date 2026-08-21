@@ -56,8 +56,8 @@ func TestRequestReloadAcceptsAnEmptyAcknowledgement(t *testing.T) {
 }
 
 // TestRequestReloadIsRegisteredInTheWriteTier pins the tier and the annotation set:
-// the write tier needs operator enablement and a granted write scope, and no
-// confirmation, because the call is not destructive.
+// the write tier needs transport-specific authorization and no confirmation,
+// because the call is not destructive.
 func TestRequestReloadIsRegisteredInTheWriteTier(t *testing.T) {
 	t.Parallel()
 

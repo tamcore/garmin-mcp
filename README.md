@@ -187,11 +187,11 @@ $ garmin-mcp tools list | tail -1
 
 **Writes and destructive tools are off by default.** `enable-write-tools` and
 `enable-destructive-tools` both default to false, and destructive requires write.
-Remotely that operator flag is only half of the gate: the caller's OAuth grant
-must also carry the matching scope, and neither half alone is sufficient. A
-destructive call additionally requires an explicit confirmation from the client
-and fails closed when it cannot obtain one. Over stdio no scope source exists, so
-write and destructive tools are refused there today even with the flag set.
+On stdio those explicit operator flags authorize their tiers. Remotely the flag
+is only half of the gate: the caller's OAuth grant must also carry the matching
+scope. A destructive call additionally requires explicit client confirmation and
+fails closed when it cannot obtain one. Write tools need no confirmation; local
+operators should use the allowlist, denylist, and safety delay to narrow exposure.
 
 **MCP conformance is blocked upstream, and it is not outstanding work in this
 repository.** The official `@modelcontextprotocol/conformance` suite was run

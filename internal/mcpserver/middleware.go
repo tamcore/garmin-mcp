@@ -63,7 +63,7 @@ func recordFromContext(ctx context.Context) *callRecord {
 //	3. rate limiting — before the policy gate on purpose. A caller probing tools it
 //	   is not allowed to use must still be throttled; if policy ran first, a
 //	   scanning attacker would cost nothing to refuse and could probe without limit.
-//	4. policy — the tier and scope intersection, plus destructive confirmation.
+//	4. policy — transport-specific tier authorization plus destructive confirmation.
 //	   Last, so it is the final word before the handler runs.
 func (s *Server) installMiddleware() {
 	s.mcpServer.AddReceivingMiddleware(

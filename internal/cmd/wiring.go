@@ -102,6 +102,8 @@ type dependencies struct {
 	// stdio, which grants none.
 	scopes policy.ScopeSource
 
+	localOperatorAuthority bool
+
 	tokenGate    *auth.TokenGate
 	tokenConfigs tokenConfigs
 
@@ -135,6 +137,8 @@ type shape struct {
 	tokens auth.TokenStore
 	// scopes reports the caller's granted OAuth scopes. Nil grants none.
 	scopes policy.ScopeSource
+	// localOperatorAuthority makes explicit local tier enablement sufficient.
+	localOperatorAuthority bool
 	// staging holds a login's token set until its principal exists. It is set for
 	// remote only, where the account is discovered from the credentials.
 	staging *stagedTokens
@@ -166,11 +170,12 @@ func newDependencies(cfg config.Config, w *wiring) (*dependencies, error) {
 	}
 
 	return newGraph(cfg, w, paths, shape{
-		mode:       policy.ModeLocal,
-		principals: principals,
-		tokens:     tokens,
-		files:      files,
-		principal:  principal,
+		mode:                   policy.ModeLocal,
+		principals:             principals,
+		tokens:                 tokens,
+		files:                  files,
+		principal:              principal,
+		localOperatorAuthority: true,
 	})
 }
 
@@ -188,19 +193,20 @@ func newGraph(
 	}
 
 	deps := &dependencies{
-		cfg:        cfg,
-		paths:      paths,
-		logger:     logger,
-		events:     events,
-		mode:       s.mode,
-		principal:  s.principal,
-		principals: s.principals,
-		files:      s.files,
-		tokens:     s.tokens,
-		staging:    s.staging,
-		scopes:     s.scopes,
-		httpClient: newHTTPClient(cfg),
-		version:    w.version(),
+		cfg:                    cfg,
+		paths:                  paths,
+		logger:                 logger,
+		events:                 events,
+		mode:                   s.mode,
+		principal:              s.principal,
+		principals:             s.principals,
+		files:                  s.files,
+		tokens:                 s.tokens,
+		staging:                s.staging,
+		scopes:                 s.scopes,
+		localOperatorAuthority: s.localOperatorAuthority,
+		httpClient:             newHTTPClient(cfg),
+		version:                w.version(),
 	}
 	if err := deps.buildGarmin(); err != nil {
 		return nil, err
