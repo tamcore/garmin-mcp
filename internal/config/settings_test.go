@@ -218,3 +218,31 @@ func TestSettingsHaveUniqueKeysAndFlags(t *testing.T) {
 		flags[s.flag] = struct{}{}
 	}
 }
+
+// TestMCPStatelessDefaultsToTrue pins the default that lets a current client
+// connect at all. The MCP SDK offers protocol 2026-07-28 only from a stateless
+// transport, so a stateful default would advertise 2025-11-25 at best and a
+// client that speaks only the newer protocol could not negotiate a version.
+func TestMCPStatelessDefaultsToTrue(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := Load(LoadOptions{})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.MCPStateless {
+		t.Fatal("mcp-stateless defaults to false, want true")
+	}
+}
+
+func TestMCPStatelessReadsFromTheEnvironment(t *testing.T) {
+	t.Setenv("GARMIN_MCP_MCP_STATELESS", "false")
+
+	cfg, err := Load(LoadOptions{})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.MCPStateless {
+		t.Fatal("the environment variable did not turn the stateless transport off")
+	}
+}

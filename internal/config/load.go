@@ -177,6 +177,7 @@ func withPolicy(cfg Config, store *viper.Viper) Config {
 	out.EnableDestructiveTools = store.GetBool(keyEnableDestructiveTools)
 	out.ToolAllowlist = stringList(store, keyToolAllowlist)
 	out.ToolDenylist = stringList(store, keyToolDenylist)
+	out.MCPStateless = store.GetBool(keyMCPStateless)
 	out.LoginAllowedEmails = stringList(store, keyLoginAllowedEmails)
 	return out
 }

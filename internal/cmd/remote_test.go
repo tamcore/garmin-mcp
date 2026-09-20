@@ -431,3 +431,19 @@ func TestRemoteRefusesAnUnknownClient(t *testing.T) {
 		t.Fatal("the client store answered for an unregistered client")
 	}
 }
+
+// TestHTTPOptionsCarryTheStatelessSetting is the wire between the setting and
+// the transport. Without it the setting exists and changes nothing: the SDK
+// offers MCP protocol 2026-07-28 only from a stateless transport, so a
+// deployment that failed to pass this through advertises 2025-11-25 at best
+// and a client speaking only the newer protocol cannot negotiate at all.
+func TestHTTPOptionsCarryTheStatelessSetting(t *testing.T) {
+	t.Parallel()
+
+	for _, stateless := range []bool{true, false} {
+		cfg := config.Config{MCPStateless: stateless}
+		if got := httpOptions(cfg, nil, nil, nil).Stateless; got != stateless {
+			t.Errorf("httpOptions with MCPStateless=%v gave Stateless=%v", stateless, got)
+		}
+	}
+}

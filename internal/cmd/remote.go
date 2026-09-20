@@ -297,6 +297,7 @@ func httpOptions(cfg config.Config, authorizer *mcpserver.OAuthAuthorizer,
 		AllowInsecureCleartext: cfg.AllowInsecureHTTP,
 		SessionTimeout:         cfg.SessionTimeout,
 		MaxRequestBodyBytes:    cfg.MaxRequestBytes,
+		Stateless:              cfg.MCPStateless,
 	}
 }
 

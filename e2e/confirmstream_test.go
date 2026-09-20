@@ -138,6 +138,13 @@ func writeDestructiveRemoteConfig(t *testing.T, dir string, port int, origin str
 		"database-path: " + filepath.Join(dir, "garmin.db"),
 		"enable-write-tools: true",
 		"enable-destructive-tools: true",
+		// Elicitation is a server-to-client request, so it needs a session to
+		// travel on. mcp-stateless defaults to true — it is what lets a client
+		// speaking MCP 2026-07-28 negotiate at all — and a stateless transport
+		// has no stream to deliver a confirmation over, so the destructive tier
+		// refuses instead of prompting. This suite is the one that exercises
+		// the prompt, so it opts back into sessions explicitly.
+		"mcp-stateless: false",
 		"oauth-clients:",
 		"  - id: " + remoteClientID,
 		"    name: " + remoteClientName,

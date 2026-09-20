@@ -23,6 +23,7 @@ type redactedConfig struct {
 	AllowedOrigins              []string `json:"allowedOrigins,omitempty"`
 	OAuthClientIDs              []string `json:"oauthClientIDs,omitempty"`
 	OAuthAllowRedirectWildcards bool     `json:"oauthAllowRedirectWildcards"`
+	MCPStateless                bool     `json:"mcpStateless"`
 	LoginAllowedEmailsLen       int      `json:"loginAllowedEmailsLen"`
 	SessionTimeout              string   `json:"sessionTimeout"`
 	AllowInsecureHTTP           bool     `json:"allowInsecureHTTP"`
@@ -66,6 +67,7 @@ func (c Config) redacted() redactedConfig {
 		AllowedOrigins:              copyStrings(c.AllowedOrigins),
 		OAuthClientIDs:              clientIDs(c.OAuthClients),
 		OAuthAllowRedirectWildcards: c.OAuthAllowRedirectWildcards,
+		MCPStateless:                c.MCPStateless,
 		LoginAllowedEmailsLen:       len(c.LoginAllowedEmails),
 		SessionTimeout:              c.SessionTimeout.String(),
 		AllowInsecureHTTP:           c.AllowInsecureHTTP,
@@ -111,6 +113,7 @@ func (r redactedConfig) pairs() []string {
 		"allowedOrigins:" + strconv.Itoa(len(r.AllowedOrigins)),
 		"oauthClients:" + strconv.Itoa(len(r.OAuthClientIDs)),
 		"oauthAllowRedirectWildcards:" + strconv.FormatBool(r.OAuthAllowRedirectWildcards),
+		"mcpStateless:" + strconv.FormatBool(r.MCPStateless),
 		"loginAllowedEmailsLen:" + strconv.Itoa(r.LoginAllowedEmailsLen),
 		"sessionTimeout:" + r.SessionTimeout,
 		"allowInsecureHTTP:" + strconv.FormatBool(r.AllowInsecureHTTP),
@@ -163,6 +166,7 @@ func (c Config) LogValue() slog.Value {
 		slog.Int("allowedOrigins", len(red.AllowedOrigins)),
 		slog.Int("oauthClients", len(red.OAuthClientIDs)),
 		slog.Bool("oauthAllowRedirectWildcards", red.OAuthAllowRedirectWildcards),
+		slog.Bool("mcpStateless", red.MCPStateless),
 		slog.Int("loginAllowedEmailsLen", red.LoginAllowedEmailsLen),
 		slog.String("sessionTimeout", red.SessionTimeout),
 		slog.Bool("allowInsecureHTTP", red.AllowInsecureHTTP),

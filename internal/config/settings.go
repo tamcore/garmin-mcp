@@ -27,6 +27,7 @@ const (
 	keySessionTimeout              = "session-timeout"
 	keyOAuthClients                = "oauth-clients"
 	keyOAuthAllowRedirectWildcards = "oauth-allow-redirect-wildcards"
+	keyMCPStateless                = "mcp-stateless"
 	keyAllowInsecureHTTP           = "allow-insecure-http"
 	keyTLSCertFile                 = "tls-cert-file"
 	keyTLSKeyFile                  = "tls-key-file"
@@ -191,6 +192,12 @@ var settingTable = [...]setting{
 	{
 		key: keyRegion, flag: keyRegion, kind: kindString, def: "",
 		usage: "Garmin account region: garmin.com or garmin.cn",
+	},
+	{
+		key: keyMCPStateless, flag: keyMCPStateless, kind: kindBool, def: true,
+		usage: "serve streamable-http without server-side sessions; required for " +
+			"MCP protocol 2026-07-28, and it disables elicitation, so destructive " +
+			"tools refuse rather than prompt",
 	},
 	{
 		key: keyLoginAllowedEmails, kind: kindStringSlice, def: []string{},

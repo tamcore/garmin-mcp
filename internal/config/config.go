@@ -208,6 +208,19 @@ type Config struct {
 	// wildcarded prefix yields an authorization code. See docs/threat-model.md.
 	OAuthAllowRedirectWildcards bool
 
+	// MCPStateless serves the streamable-http transport without server-side
+	// sessions. It defaults to true because the MCP SDK offers protocol
+	// 2026-07-28 (SEP-2575) only from a stateless transport, so a stateful
+	// deployment advertises 2025-11-25 at best and a client that speaks only
+	// the newer protocol cannot negotiate a version at all.
+	//
+	// The cost is elicitation: a stateless transport cannot make a request of
+	// its client, so destructive tools have no way to ask for confirmation and
+	// refuse instead. That is the fail-closed behavior they are specified to
+	// have, not a new hazard, but it does mean the destructive tier is
+	// unusable while this is set.
+	MCPStateless bool
+
 	// LoginAllowedEmails restricts which Garmin accounts may complete the remote
 	// browser login. Empty admits any account, which is what a deployment that
 	// does not set it gets. It gates login, where a principal is created, and is
