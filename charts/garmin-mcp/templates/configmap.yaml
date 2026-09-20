@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "garmin-mcp.fullname" . }}
+  labels:
+    {{- include "garmin-mcp.labels" . | nindent 4 }}
+data:
+  GARMIN_MCP_TRANSPORT: streamable-http
+  GARMIN_MCP_BIND_ADDRESS: "0.0.0.0:8080"
+  GARMIN_MCP_PUBLIC_URL: {{ required "config.publicURL is required: it is the OAuth issuer, the resource identifier, and the audience of every token" .Values.config.publicURL | quote }}
+  GARMIN_MCP_REGION: {{ .Values.config.region | quote }}
+  # A volume mount root is owned by uid 0 whatever fsGroup says, and the state
+  # directory must be owner-only, so both settings point at a subdirectory the
+  # process creates and therefore owns.
+  GARMIN_MCP_STATE_DIR: /data/gm
+  GARMIN_MCP_DATABASE_PATH: /data/gm/garmin.db
+  # Required for streamable-http. The setting names a FILE whose directory is
+  # the key directory, so this puts key-v<N>.json inside /data/gm/keys/.
+  GARMIN_MCP_MASTER_KEY_FILE: /data/gm/keys/key.json
+  GARMIN_MCP_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  GARMIN_MCP_LOG_FORMAT: {{ .Values.config.logFormat | quote }}
+  GARMIN_MCP_ENABLE_WRITE_TOOLS: {{ .Values.config.enableWriteTools | quote }}
+  GARMIN_MCP_ENABLE_DESTRUCTIVE_TOOLS: {{ .Values.config.enableDestructiveTools | quote }}
+  GARMIN_MCP_OAUTH_ALLOW_REDIRECT_WILDCARDS: {{ .Values.config.oauthAllowRedirectWildcards | quote }}
+  GARMIN_MCP_MCP_STATELESS: {{ .Values.config.stateless | quote }}
+  GARMIN_MCP_LOG_TOOL_NAMES: {{ .Values.config.logToolNames | quote }}
+  {{- with .Values.config.trustedProxyCIDRs }}
+  GARMIN_MCP_TRUSTED_PROXY_CIDRS: {{ join "," . | quote }}
+  {{- end }}
+  {{- if .Values.config.allowInsecureHTTP }}
+  GARMIN_MCP_ALLOW_INSECURE_HTTP: "true"
+  {{- end }}
+  {{- with .Values.config.loginAllowedEmails }}
+  GARMIN_MCP_LOGIN_ALLOWED_EMAILS: {{ join "," . | quote }}
+  {{- end }}

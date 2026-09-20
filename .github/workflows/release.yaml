@@ -72,3 +72,35 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  chart:
+    # Publishes the Helm chart as an OCI artifact so a GitOps repository can
+    # depend on a released version instead of vendoring a copy of this
+    # directory. Chart version and appVersion both track the release tag, so
+    # `helm show chart` names the image the chart defaults to.
+    #
+    # It runs after `release`, because the chart's appVersion points at an
+    # image tag that must exist before the chart claiming it does.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: release
+    permissions:
+      contents: read
+      packages: write # push the chart to GHCR
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Package and push
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          helm package ./charts/garmin-mcp --version "$version" --app-version "$GITHUB_REF_NAME"
+          helm push "garmin-mcp-${version}.tgz" oci://ghcr.io/tamcore/charts

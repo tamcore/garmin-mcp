@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "garmin-mcp.fullname" . }}
+  labels:
+    {{- include "garmin-mcp.labels" . | nindent 4 }}
+spec:
+  # One replica, and Recreate rather than RollingUpdate: the store is one
+  # SQLite database with a single writer, so two pods must never hold it at
+  # once — not even for the overlap of a rollout.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "garmin-mcp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        # The registry, including the client secret digests, is a Secret rather
+        # than part of the ConfigMap, so it needs its own checksum: without it
+        # a rotated digest updates the Secret and leaves the running pod on the
+        # old one, which fails client authentication with no visible cause.
+        {{- if not .Values.oauth.existingSecret }}
+        checksum/oauth: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "garmin-mcp.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "garmin-mcp.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        # fsGroup gives the mounted volume a group this process belongs to. It
+        # never changes the mount root's owner, which is why the state
+        # directory is a subdirectory the process creates for itself.
+        fsGroup: 65532
+        # Without OnRootMismatch the kubelet re-walks the whole volume on every
+        # pod start and chmods every file it finds, widening the key file this
+        # process tightened to 0600 back to 0660 — and the server then refuses
+        # to start, by design, because 0660 is group-WRITABLE and the key's
+        # integrity is no longer assured. A CSI driver advertising
+        # VOLUME_MOUNT_GROUP may ignore this policy and reintroduce the
+        # widening; verify the mode survives a restart on the driver in use.
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: garmin-mcp
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["serve"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "garmin-mcp.fullname" . }}
+            - secretRef:
+                name: {{ .Values.oauth.existingSecret | default (printf "%s-oauth" (include "garmin-mcp.fullname" .)) }}
+          {{- with .Values.config.extraEnv }}
+          env:
+            {{- range $name, $value := . }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-data" (include "garmin-mcp.fullname" .)) }}
+          {{- else }}
+          # Ephemeral: every restart loses the token store and the encryption
+          # key, so every user has to log in again. For evaluation only.
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

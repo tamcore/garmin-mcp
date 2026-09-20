@@ -1,0 +1,83 @@
+name: Chart
+
+on:
+  push:
+    # Every branch, not just master: a feature branch otherwise gets no chart
+    # CI at all until a pull request exists. The concurrency block below
+    # cancels superseded runs, so the cost of this is bounded.
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: chart-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-template:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
+
+      - run: helm lint ./charts/garmin-mcp --set config.publicURL=https://mcp.example/mcp
+
+      - name: template with the documented minimum
+        run: >
+          helm template garmin-mcp ./charts/garmin-mcp
+          --set config.publicURL=https://mcp.example/mcp
+
+      # publicURL is the OAuth issuer, the resource identifier and the audience
+      # of every token, so a chart that rendered without it would produce a
+      # deployment that cannot start.
+      - name: publicURL is required
+        run: |
+          if helm template garmin-mcp ./charts/garmin-mcp >/dev/null 2>&1; then
+            echo "chart rendered without config.publicURL" >&2
+            exit 1
+          fi
+
+      - name: template with an Ingress
+        run: >
+          helm template garmin-mcp ./charts/garmin-mcp
+          --set config.publicURL=https://mcp.example/mcp
+          --set ingress.enabled=true --set ingress.host=mcp.example
+
+      - name: template with an HTTPRoute
+        run: >
+          helm template garmin-mcp ./charts/garmin-mcp
+          --set config.publicURL=https://mcp.example/mcp
+          --set httpRoute.enabled=true
+          --set-json 'httpRoute.parentRefs=[{"name":"nginx-gateway","namespace":"nginx-gateway"}]'
+          --set-json 'httpRoute.hostnames=["mcp.example"]'
+
+      - name: template with a confidential client and a redirect wildcard
+        run: >
+          helm template garmin-mcp ./charts/garmin-mcp
+          --set config.publicURL=https://mcp.example/mcp
+          --set config.oauthAllowRedirectWildcards=true
+          --set-json 'oauth.clients=[{"id":"chatgpt","redirectURIs":["https://chatgpt.com/connector/oauth/*"],"scopes":["garmin:read"],"secretHash":"0000000000000000000000000000000000000000000000000000000000000000"}]'
+
+      # The registry reaches the server as one JSON document, so the key
+      # spellings the chart emits must be the ones internal/config reads.
+      - name: the rendered registry uses the wire key names
+        run: |
+          set -euo pipefail
+          rendered=$(helm template garmin-mcp ./charts/garmin-mcp \
+            --set config.publicURL=https://mcp.example/mcp \
+            --set-json 'oauth.clients=[{"id":"chatgpt","redirectURIs":["https://chatgpt.com/connector/oauth/*"],"scopes":["garmin:read"],"secretHash":"00"}]' \
+            --show-only templates/secret.yaml)
+          for key in 'id' 'redirect-uris' 'scopes' 'resources' 'secret-hash'; do
+            echo "$rendered" | grep -q "\\\\\"$key\\\\\"" || { echo "missing key $key" >&2; exit 1; }
+          done
+
+      - name: template with persistence off
+        run: >
+          helm template garmin-mcp ./charts/garmin-mcp
+          --set config.publicURL=https://mcp.example/mcp
+          --set persistence.enabled=false

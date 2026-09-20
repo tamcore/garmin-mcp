@@ -1,0 +1,15 @@
+apiVersion: v2
+name: garmin-mcp
+description: Model Context Protocol server for Garmin Connect
+type: application
+# version and appVersion are placeholders. The release workflow passes the tag
+# through `helm package --version/--app-version`, so the committed values are
+# never the published ones and must not drift into looking authoritative.
+version: 0.0.0
+appVersion: "v0.0.0"
+home: https://github.com/tamcore/garmin-mcp
+sources:
+  - https://github.com/tamcore/garmin-mcp
+keywords:
+  - mcp
+  - garmin

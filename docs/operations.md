@@ -154,16 +154,22 @@ volume, never at the mount root itself.** This is the shape that works without
 pre-provisioning on Kubernetes:
 
 ```yaml
-- {name: GARMIN_MCP_STATE_DIR,     value: /data/gm}
-- {name: GARMIN_MCP_DATABASE_PATH, value: /data/gm/garmin.db}
+- {name: GARMIN_MCP_STATE_DIR,       value: /data/gm}
+- {name: GARMIN_MCP_DATABASE_PATH,   value: /data/gm/garmin.db}
+- {name: GARMIN_MCP_MASTER_KEY_FILE, value: /data/gm/keys/key.json}
 ```
 
 with the `PersistentVolumeClaim` mounted at `/data` and `runAsUser`,
-`runAsGroup`, and `fsGroup` all set to the image's non-root uid. Do not set
-`master-key-file` here: its default, `<state-dir>/keys/`, is already what this
-example wants. `master-key-file` selects the key **directory**, not the file
-name, so a value like `/data/gm/keys` would put the key directly under
-`/data/gm` rather than inside a `keys/` subdirectory.
+`runAsGroup`, and `fsGroup` all set to the image's non-root uid.
+
+`master-key-file` is **required** for the streamable-http transport, so unlike
+stdio there is no default to fall back on here. The setting names a **file**,
+and the directory that file sits in is the key directory
+(`internal/cmd/statepaths.go` takes `filepath.Dir` of it); `internal/cryptostore`
+owns the name of the versioned material inside it. The value above therefore
+puts `key-v<N>.json` inside `/data/gm/keys/`. A value of `/data/gm/keys` with no
+file name would make `/data/gm` the key directory instead, which still works but
+mixes the key in beside the database.
 
 Mounting the setting directly at `/data` does not work. A volume mount root is
 owned by uid 0 regardless of `fsGroup`: `fsGroup` typically (depending on the

@@ -1,0 +1,45 @@
+garmin-mcp {{ .Chart.AppVersion }} is installed as {{ include "garmin-mcp.fullname" . }}.
+
+Origin: {{ .Values.config.publicURL }}
+
+{{- if not .Values.oauth.clients }}
+{{- if not .Values.oauth.existingSecret }}
+
+WARNING: no OAuth client is registered, so nothing can connect. Set
+oauth.clients, or point oauth.existingSecret at a Secret that carries the
+registry.
+{{- end }}
+{{- end }}
+
+{{- if not (or .Values.ingress.enabled .Values.httpRoute.enabled) }}
+
+WARNING: neither ingress nor httpRoute is enabled, so the origin above does not
+resolve to this Service from outside the cluster.
+{{- end }}
+
+{{- if .Values.config.oauthAllowRedirectWildcards }}
+
+UNSAFE: redirect wildcards are enabled. An open redirector anywhere under a
+wildcarded prefix yields a victim's authorization code, and PKCE does not
+mitigate it. See docs/threat-model.md and ADR 0009.
+{{- end }}
+
+{{- if not .Values.persistence.enabled }}
+
+WARNING: persistence is off. A restart loses the token store and the encryption
+key, and every user must log in again.
+{{- end }}
+
+Connect a client:
+
+  1. Register the client's callback URL in oauth.clients. For ChatGPT, add the
+     server at https://chatgpt.com/plugins and register
+     https://chatgpt.com/connector/oauth/* with
+     config.oauthAllowRedirectWildcards=true.
+  2. Point the client at {{ .Values.config.publicURL }}.
+  3. Each user completes the Garmin login in the browser once, at
+     {{ trimSuffix "/mcp" .Values.config.publicURL }}/login.
+
+Check readiness:
+
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "garmin-mcp.fullname" . }}

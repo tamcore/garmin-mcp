@@ -1,0 +1,181 @@
+---
+# garmin-mcp — remote (streamable-http) deployment.
+#
+# The server stores a per-user Garmin token set, so it is stateful and
+# single-writer: the chart runs exactly one replica against one SQLite
+# database and does not expose a replica count.
+
+image:
+  repository: ghcr.io/tamcore/garmin-mcp
+  # tag defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+
+config:
+  # publicURL is REQUIRED. It is the canonical origin plus the MCP path, and it
+  # becomes the OAuth issuer, the resource identifier, and the audience every
+  # token is minted for. It must match what the client connects to exactly.
+  publicURL: ""  # https://garmin-mcp.example.com/mcp
+
+  # region selects the Garmin account region: garmin.com or garmin.cn.
+  region: garmin.com
+
+  # The pod serves cleartext; TLS terminates at the Ingress or the Gateway.
+  # The server refuses to serve an https origin over cleartext unless one of
+  # these says the hop in front of it is trusted. Prefer naming the proxy's
+  # network over the blanket override.
+  trustedProxyCIDRs: []      # e.g. ["10.42.0.0/16"]
+  allowInsecureHTTP: false
+
+  # Tool tiers. Remotely each also needs the matching granted OAuth scope, so
+  # enabling here widens what a token *may* authorize, never what it does.
+  enableWriteTools: false
+  enableDestructiveTools: false
+
+  # loginAllowedEmails restricts which Garmin accounts may complete the browser
+  # login. Empty admits any account. It gates login, where a principal is
+  # created — it is not a kill switch for a principal that already exists.
+  loginAllowedEmails: []
+
+  # oauthAllowRedirectWildcards admits ONE trailing-path wildcard redirect URI
+  # per client, such as https://chatgpt.com/connector/oauth/*.
+  #
+  # UNSAFE by design, and off by default. Prefix matching is weaker than exact
+  # matching: an open redirector, or attacker-influenced content, anywhere
+  # under the wildcarded prefix yields a victim's authorization code, and PKCE
+  # does not mitigate it because the attacker generates their own challenge.
+  # Set it only when the client's callback path cannot be known in advance.
+  oauthAllowRedirectWildcards: false
+
+  # stateless serves the streamable-http transport without server-side
+  # sessions. Leave it on: the MCP SDK offers protocol 2026-07-28 (SEP-2575)
+  # only from a stateless transport, so a stateful deployment advertises
+  # 2025-11-25 at best and a client that speaks only the newer protocol —
+  # ChatGPT's connector among them — cannot negotiate a version and reports a
+  # connection failure.
+  #
+  # The cost is elicitation: a stateless transport cannot make a request of its
+  # client, so destructive tools have no way to ask for confirmation and refuse
+  # instead. That is their specified fail-closed behavior, but it does mean the
+  # destructive tier is unusable while this is on.
+  stateless: true
+
+  # logToolNames logs the exact tool name on every call. Off by default: a
+  # tool name can itself disclose a medical domain, and an operator shipping
+  # logs elsewhere would be shipping that. The pseudonymous principal, the
+  # category, the tier, the argument and result sizes, and a read-only call's
+  # own arguments are logged either way.
+  logToolNames: false
+
+  logLevel: info
+  logFormat: json
+
+  # extraEnv is merged last and wins over everything above. Keys are full
+  # environment variable names.
+  extraEnv: {}
+    # GARMIN_MCP_SAFETY_DELAY: "0"
+
+oauth:
+  # The client registry. Each entry becomes one registered OAuth client.
+  #
+  # -- Connecting ChatGPT ---------------------------------------------------
+  # Add the server at https://chatgpt.com/plugins as a new MCP connector. Its
+  # callback URL is not known before the connector exists, so register the
+  # documented prefix as a wildcard and set config.oauthAllowRedirectWildcards
+  # above:
+  #
+  #   redirectURIs: ["https://chatgpt.com/connector/oauth/*"]
+  #
+  # Read the wildcard warning above first. If ChatGPT shows you the exact
+  # callback it will use, register that instead and leave the acknowledgement
+  # off.
+  #
+  # -- The secret -----------------------------------------------------------
+  # A confidential client carries secretHash: the hex SHA-256 of its client
+  # secret. The server never sees the secret itself.
+  #
+  #   secret=$(openssl rand -base64 32)
+  #   printf %s "$secret" | shasum -a 256
+  #
+  # The digest is unsalted and single-round, so a low-entropy secret is
+  # recoverable offline from it. Generate the secret, never invent one.
+  #
+  # Set public: true instead for a client that cannot keep a secret; PKCE S256
+  # is mandatory either way.
+  clients: []
+    # - id: chatgpt
+    #   name: ChatGPT
+    #   redirectURIs:
+    #     - https://chatgpt.com/connector/oauth/*
+    #   scopes: [garmin:read]
+    #   public: false
+    #   secretHash: "<hex sha-256 of the client secret>"
+
+  # existingSecret supplies the whole registry instead, as one key holding the
+  # JSON document GARMIN_MCP_OAUTH_CLIENTS expects. Use it to keep digests out
+  # of values. When set, oauth.clients is ignored.
+  existingSecret: ""
+  existingSecretKey: GARMIN_MCP_OAUTH_CLIENTS
+
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  # existingClaim skips the PersistentVolumeClaim this chart would create.
+  existingClaim: ""
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  host: ""
+  tls: true
+  # tlsSecretName defaults to <fullname>-tls.
+  tlsSecretName: ""
+
+# httpRoute is the Gateway API equivalent of ingress. Enable one or the other.
+httpRoute:
+  enabled: false
+  parentRefs: []
+    # - name: nginx-gateway
+    #   namespace: nginx-gateway
+  hostnames: []
+    # - garmin-mcp.example.com
+  matches:
+    - path:
+        type: PathPrefix
+        value: /
+
+  # rewriteRootTo serves the MCP endpoint at the origin root as well, by
+  # rewriting an exact "/" onto the given path. Set it to the publicURL's path
+  # for a client that keeps the configured path for discovery and then POSTs
+  # JSON-RPC to the bare origin. Empty leaves "/" alone.
+  rewriteRootTo: ""  # e.g. /mcp
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+podLabels: {}
