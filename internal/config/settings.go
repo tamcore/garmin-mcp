@@ -28,6 +28,7 @@ const (
 	keyOAuthClients                = "oauth-clients"
 	keyOAuthAllowRedirectWildcards = "oauth-allow-redirect-wildcards"
 	keyMCPStateless                = "mcp-stateless"
+	keyLogToolNames                = "log-tool-names"
 	keyAllowInsecureHTTP           = "allow-insecure-http"
 	keyTLSCertFile                 = "tls-cert-file"
 	keyTLSKeyFile                  = "tls-key-file"
@@ -244,6 +245,11 @@ var settingTable = [...]setting{
 	{
 		key: keyWriteRateLimit, flag: keyWriteRateLimit, kind: kindInt, def: DefaultWriteRateLimitPerMinute,
 		usage: "write tool calls allowed per principal per minute",
+	},
+	{
+		key: keyLogToolNames, flag: keyLogToolNames, kind: kindBool, def: false,
+		usage: "log the exact tool name on every call; a tool name can itself " +
+			"disclose a sensitive domain, so this is off unless an operator wants it",
 	},
 	{
 		key: keyLogLevel, flag: keyLogLevel, kind: kindString, def: DefaultLogLevel,

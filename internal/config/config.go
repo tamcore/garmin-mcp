@@ -208,6 +208,15 @@ type Config struct {
 	// wildcarded prefix yields an authorization code. See docs/threat-model.md.
 	OAuthAllowRedirectWildcards bool
 
+	// LogToolNames logs the exact tool name on every call.
+	//
+	// It is off by default because a tool name is itself disclosive: this
+	// server carries tools whose names name a medical domain, and an operator
+	// who ships logs elsewhere would be shipping that. A deployment that wants
+	// per-call attribution turns it on deliberately. The pseudonymous
+	// principal, the category, the tier and the sizes are logged either way.
+	LogToolNames bool
+
 	// MCPStateless serves the streamable-http transport without server-side
 	// sessions. It defaults to true because the MCP SDK offers protocol
 	// 2026-07-28 (SEP-2575) only from a stateless transport, so a stateful

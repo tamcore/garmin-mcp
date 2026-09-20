@@ -107,6 +107,24 @@ type ToolEvent struct {
 	// body. The policy package guarantees its reasons exclude the tool name.
 	Reason string
 
+	// ArgumentBytes is the size of the call's arguments as they arrived.
+	// A size is safe where the value is not: it says whether a call was a small
+	// selector or a bulk upload without disclosing what was uploaded.
+	ArgumentBytes int
+
+	// Arguments is the caller's arguments rendered for the log.
+	//
+	// The caller decides whether a call's arguments may appear here at all,
+	// and passes empty when they may not. The rule the server applies is in
+	// mcpserver: a read-only tool's arguments are selectors — a date, an
+	// identifier, a page size — while a write or destructive tool's arguments
+	// are the payload itself, which for this server means body weight, blood
+	// pressure or a food log. Only the former are ever rendered.
+	Arguments string
+
+	// ResultBytes is the size of the serialized result.
+	ResultBytes int
+
 	// Latency is how long the call took.
 	Latency time.Duration
 
@@ -117,7 +135,7 @@ type ToolEvent struct {
 // attrs renders the event. Empty fields are omitted rather than logged blank, so
 // a record never implies a value the server does not have.
 func (e ToolEvent) attrs(debugToolNames bool) []slog.Attr {
-	attrs := make([]slog.Attr, 0, 9)
+	attrs := make([]slog.Attr, 0, 12)
 	attrs = appendNonEmpty(attrs, "requestId", e.RequestID)
 	attrs = appendNonEmpty(attrs, "principalId", e.PrincipalID)
 	attrs = appendNonEmpty(attrs, "clientId", e.ClientID)
@@ -128,6 +146,13 @@ func (e ToolEvent) attrs(debugToolNames bool) []slog.Attr {
 	}
 	attrs = append(attrs, slog.String("outcome", e.Outcome.String()))
 	attrs = appendNonEmpty(attrs, "reason", e.Reason)
+	if e.ArgumentBytes > 0 {
+		attrs = append(attrs, slog.Int("argumentBytes", e.ArgumentBytes))
+	}
+	attrs = appendNonEmpty(attrs, "arguments", e.Arguments)
+	if e.ResultBytes > 0 {
+		attrs = append(attrs, slog.Int("resultBytes", e.ResultBytes))
+	}
 	attrs = append(attrs, slog.Int64("latencyMs", e.Latency.Milliseconds()))
 	if e.Status != "" {
 		attrs = append(attrs, slog.String("status", e.Status.String()))

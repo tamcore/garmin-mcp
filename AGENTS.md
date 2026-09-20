@@ -622,8 +622,25 @@ These apply to every commit, including the code that already exists.
   through the suite logger and every error through `safeError`, because a raw
   `*url.Error` carries the request URL and that URL names an account object.
   Log request ID, pseudonymous principal ID,
-  client ID, coarse category, outcome, latency, and coarse status. Never log
-  request or response bodies by default.
+  client ID, coarse category, outcome, latency, and coarse status, plus the
+  argument and result **sizes** and, for an upstream call, the endpoint label,
+  the Garmin status code and the response size. A size answers "was this a
+  selector or a bulk transfer" without disclosing what was transferred.
+
+  **Never log a response body, and never log a write or destructive tool's
+  arguments.** Those arguments are the payload itself, which on this server
+  means a weight, a blood pressure or a food log. A read-only tool's arguments
+  are selectors — a date, an identifier, a page size — and are logged, bounded
+  at 256 bytes, because a longer one is a payload in disguise whatever its
+  tier claims. The rule lives in `renderableArguments`
+  (`internal/mcpserver/middleware.go`) and is pinned in both directions by
+  `TestEveryToolCallIsLoggedOnceWithCoarseFields` and
+  `TestWriteToolArgumentsAreNeverLogged`.
+
+  The exact tool name is off by default behind `log-tool-names`, because a
+  tool name can itself disclose a medical domain. An upstream log line names
+  the endpoint **label**, never the request URL, which would name an account
+  object.
 - Stdout is reserved exclusively for MCP frames in stdio mode. Logs go to
   stderr.
 - Prefer the standard library. Every nontrivial dependency needs a rationale,

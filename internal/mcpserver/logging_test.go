@@ -54,8 +54,55 @@ func TestEveryToolCallIsLoggedOnceWithCoarseFields(t *testing.T) {
 	if _, ok := record["tool"]; ok {
 		t.Error("the exact tool name must not be logged without the debug policy")
 	}
-	if strings.Contains(sink.String(), testText) {
-		t.Error("the log must not carry tool arguments")
+	// A read-only tool's arguments select what to read — a date, an identifier,
+	// a page size — so they are rendered, bounded, and are what makes a log
+	// line answer "which call was this". The rule that matters is the next
+	// test: a write or destructive tool's arguments are the payload and must
+	// never appear.
+	if args, _ := record["arguments"].(string); !strings.Contains(args, testText) {
+		t.Errorf("arguments = %q, want the read-only call's own arguments", args)
+	}
+	if bytes, _ := record["argumentBytes"].(float64); bytes <= 0 {
+		t.Error("argumentBytes must be set so a bulk call is distinguishable by size")
+	}
+	if bytes, _ := record["resultBytes"].(float64); bytes <= 0 {
+		t.Error("resultBytes must be set so a large response is visible without its content")
+	}
+}
+
+// TestWriteToolArgumentsAreNeverLogged is the half of the argument rule that
+// protects the account. A write or destructive tool's arguments are the thing
+// being written — on this server a weight, a blood pressure, a food log — so
+// they are reported by size and never rendered, whatever their length.
+func TestWriteToolArgumentsAreNeverLogged(t *testing.T) {
+	t.Parallel()
+
+	const secretPayload = "233-over-illegal"
+
+	// The policy may refuse this call outright — that is fine and is not what
+	// is under test. Refused or served, the arguments must not reach the log.
+	server, _, sink := tieredServer(t, nil)
+	ctx := t.Context()
+	session := connectClient(t, ctx, server, nil)
+
+	_, _ = session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      writeTool,
+		Arguments: map[string]any{textArg: secretPayload},
+	})
+
+	if strings.Contains(sink.String(), secretPayload) {
+		t.Error("a write tool's arguments reached the log")
+	}
+	for _, record := range sink.Records(t) {
+		if record["msg"] != msgToolCall {
+			continue
+		}
+		if args, _ := record["arguments"].(string); args != "" {
+			t.Errorf("arguments = %q, want empty for a write tool", args)
+		}
+		if bytes, _ := record["argumentBytes"].(float64); bytes <= 0 {
+			t.Error("argumentBytes must still be set for a write tool")
+		}
 	}
 }
 

@@ -255,9 +255,11 @@ func (s *Server) toolEvent(ctx context.Context, req mcp.Request, record *callRec
 		Reason:      record.reason,
 		Status:      record.status,
 	}
+	event.ArgumentBytes, event.ResultBytes = len(argumentsOf(req)), resultSize(result)
 	if spec, ok := s.registry.Spec(tool); ok {
 		event.Category = spec.Category
 		event.Tier = spec.Tier.String()
+		event.Arguments = renderableArguments(spec.Tier, argumentsOf(req))
 	}
 	if event.Outcome != "" {
 		return event
@@ -474,6 +476,54 @@ func toolNameOf(req mcp.Request) string {
 		return ""
 	}
 	return params.Name
+}
+
+// maxLoggedArgumentBytes bounds what a log line may carry of a call's
+// arguments. A selector is short; anything longer is a payload in disguise and
+// is reported by size alone.
+const maxLoggedArgumentBytes = 256
+
+// argumentsOf returns the raw arguments of a tool call, or nil.
+func argumentsOf(req mcp.Request) []byte {
+	params, ok := req.GetParams().(*mcp.CallToolParamsRaw)
+	if !ok || params == nil {
+		return nil
+	}
+	return params.Arguments
+}
+
+// renderableArguments decides whether a call's arguments may appear in a log.
+//
+// Only a read-only tool's arguments do. That tier's arguments select what to
+// read — a date, an activity identifier, a page size — while a write or
+// destructive tool's arguments are the thing being written, which on this
+// server is body weight, blood pressure, a food log or a workout. Those are
+// exactly the health payloads the logging rules exclude, so they are reported
+// by size alone and never rendered.
+//
+// The result is also bounded: a read-only call carrying more than
+// maxLoggedArgumentBytes is not a selector, whatever its tier says.
+func renderableArguments(tier policy.Tier, arguments []byte) string {
+	if tier != policy.TierReadOnly || len(arguments) == 0 {
+		return ""
+	}
+	if len(arguments) > maxLoggedArgumentBytes {
+		return ""
+	}
+	return string(arguments)
+}
+
+// resultSize reports the serialized size of a result, and zero when it cannot
+// be measured. It never returns the content.
+func resultSize(result mcp.Result) int {
+	if result == nil {
+		return 0
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return 0
+	}
+	return len(encoded)
 }
 
 func principalIDOf(ctx context.Context) string {

@@ -179,6 +179,8 @@ func (c *Client) attempt(ctx context.Context, session Session, req Request) (Pay
 	attemptCtx, cancel := context.WithTimeout(ctx, c.limits.RequestTimeout)
 	defer cancel()
 
+	started := time.Now()
+
 	httpReq, err := c.newHTTPRequest(attemptCtx, req)
 	if err != nil {
 		return Payload{}, c.fail(req, 0, KindValidation, 0, err)
@@ -196,6 +198,7 @@ func (c *Client) attempt(ctx context.Context, session Session, req Request) (Pay
 	}
 
 	payload := newPayload(req.Op, req.Endpoint, resp.StatusCode, resp.Header.Get(headerContentType), body)
+	c.logAttempt(req, resp.StatusCode, len(body), time.Since(started))
 	if kind, failed := classifyStatus(resp.StatusCode, req.FileTransfer); failed {
 		return payload, c.fail(req, resp.StatusCode, kind, c.retryAfter(resp), nil)
 	}
@@ -272,4 +275,23 @@ func closeBody(resp *http.Response) {
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<10))
 	_ = resp.Body.Close()
+}
+
+// logAttempt records one upstream call: what was asked of Garmin, what Garmin
+// answered, and how big the answer was.
+//
+// Every field is safe to keep. The endpoint is the package's own constant
+// label, never the request URL — a URL names an activity, a date or an
+// account object, and the label does not. The body is reported by size alone,
+// because a Garmin response body is the account's health data.
+func (c *Client) logAttempt(req Request, status, bytes int, latency time.Duration) {
+	if c.logger == nil {
+		return
+	}
+	c.logger.Info("garmin call",
+		slog.String("op", string(req.Op)),
+		slog.String("endpoint", string(req.Endpoint)),
+		slog.Int("status", status),
+		slog.Int("responseBytes", bytes),
+		slog.Int64("latencyMs", latency.Milliseconds()))
 }

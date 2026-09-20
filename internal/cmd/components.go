@@ -53,7 +53,9 @@ func newLoggers(cfg config.Config, sink io.Writer) (*mcplog.Logger, *slog.Logger
 		return nil, nil, err
 	}
 
-	logger, err := mcplog.New(sink, mcplog.Config{Level: level, Format: format})
+	logger, err := mcplog.New(sink, mcplog.Config{
+		Level: level, Format: format, DebugToolNames: cfg.LogToolNames,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("building the MCP logger: %w", err)
 	}
