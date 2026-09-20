@@ -88,7 +88,6 @@ var moduleNotices = map[string]moduleNotice{
 	"github.com/sagikazarmark/locafero":   licenseOnly(spdxMIT),
 	"github.com/segmentio/asm":            licenseOnly(spdxMIT),
 	"github.com/segmentio/encoding":       licenseOnly(spdxMIT),
-	"github.com/sourcegraph/conc":         licenseOnly(spdxMIT),
 	"github.com/spf13/cast":               licenseOnly(spdxMIT),
 	"github.com/spf13/pflag":              licenseOnly(spdxBSD3),
 	"github.com/spf13/viper":              licenseOnly(spdxMIT),
@@ -149,8 +148,9 @@ var moduleNotices = map[string]moduleNotice{
 	"modernc.org/sqlite": {
 		SPDX: spdxBSD3,
 		Note: "The driver is BSD-3-Clause. It bundles SQLite itself, which its authors " +
-			"dedicated to the public domain; `SQLITE-LICENSE` states that dedication and is " +
-			"reproduced below.",
-		Files: []string{fileLicense, "SQLITE-LICENSE"},
+			"dedicated to the public domain; `LICENSE-SQLITE` states that dedication and is " +
+			"reproduced below. Since v1.59.0 it also bundles the sqlite-vec extension, " +
+			"which is MIT and is reproduced below as `LICENSE-SQLITE_VEC`.",
+		Files: []string{fileLicense, "LICENSE-SQLITE", "LICENSE-SQLITE_VEC"},
 	},
 }

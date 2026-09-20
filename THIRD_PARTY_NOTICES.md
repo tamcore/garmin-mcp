@@ -112,21 +112,20 @@ artifact.
 
 | Module | Version | SPDX |
 |--------|---------|------|
-| `github.com/dustin/go-humanize` | `v1.0.1` | `MIT` |
-| `github.com/fsnotify/fsnotify` | `v1.9.0` | `BSD-3-Clause` |
-| `github.com/go-viper/mapstructure/v2` | `v2.4.0` | `MIT` |
+| `github.com/dustin/go-humanize` | `v1.1.0` | `MIT` |
+| `github.com/fsnotify/fsnotify` | `v1.10.1` | `BSD-3-Clause` |
+| `github.com/go-viper/mapstructure/v2` | `v2.5.0` | `MIT` |
 | `github.com/google/jsonschema-go` | `v0.4.3` | `MIT` |
 | `github.com/google/uuid` | `v1.6.0` | `BSD-3-Clause` |
 | `github.com/mattn/go-isatty` | `v0.0.24` | `MIT` |
-| `github.com/modelcontextprotocol/go-sdk` | `v1.7.0` | `Apache-2.0 AND MIT` |
-| `github.com/muktihari/fit` | `v0.28.3` | `BSD-3-Clause` |
+| `github.com/modelcontextprotocol/go-sdk` | `v1.8.0` | `Apache-2.0 AND MIT` |
+| `github.com/muktihari/fit` | `v0.28.4` | `BSD-3-Clause` |
 | `github.com/ncruces/go-strftime` | `v1.0.0` | `MIT` |
-| `github.com/pelletier/go-toml/v2` | `v2.2.4` | `MIT` |
+| `github.com/pelletier/go-toml/v2` | `v2.4.3` | `MIT` |
 | `github.com/remyoudompheng/bigfft` | `v0.0.0-20230129092748-24d4a6f8daec` | `BSD-3-Clause` |
-| `github.com/sagikazarmark/locafero` | `v0.11.0` | `MIT` |
-| `github.com/segmentio/asm` | `v1.1.3` | `MIT` |
+| `github.com/sagikazarmark/locafero` | `v0.12.0` | `MIT` |
+| `github.com/segmentio/asm` | `v1.2.1` | `MIT` |
 | `github.com/segmentio/encoding` | `v0.5.4` | `MIT` |
-| `github.com/sourcegraph/conc` | `v0.3.1-0.20240121214520-5f936abd7ae8` | `MIT` |
 | `github.com/spf13/afero` | `v1.15.0` | `Apache-2.0` |
 | `github.com/spf13/cast` | `v1.10.0` | `MIT` |
 | `github.com/spf13/cobra` | `v1.10.2` | `Apache-2.0` |
@@ -134,23 +133,23 @@ artifact.
 | `github.com/spf13/viper` | `v1.21.0` | `MIT` |
 | `github.com/subosito/gotenv` | `v1.6.0` | `MIT` |
 | `github.com/yosida95/uritemplate/v3` | `v3.0.2` | `BSD-3-Clause` |
-| `go.yaml.in/yaml/v3` | `v3.0.4` | `MIT AND Apache-2.0` |
-| `golang.org/x/oauth2` | `v0.35.0` | `BSD-3-Clause` |
-| `golang.org/x/sync` | `v0.22.0` | `BSD-3-Clause` |
-| `golang.org/x/sys` | `v0.47.0` | `BSD-3-Clause` |
-| `golang.org/x/text` | `v0.40.0` | `BSD-3-Clause` |
-| `golang.org/x/time` | `v0.15.0` | `BSD-3-Clause` |
-| `modernc.org/libc` | `v1.74.4` | `BSD-3-Clause` |
+| `go.yaml.in/yaml/v3` | `v3.0.5` | `MIT AND Apache-2.0` |
+| `golang.org/x/oauth2` | `v0.37.0` | `BSD-3-Clause` |
+| `golang.org/x/sync` | `v0.23.0` | `BSD-3-Clause` |
+| `golang.org/x/sys` | `v0.48.0` | `BSD-3-Clause` |
+| `golang.org/x/text` | `v0.42.0` | `BSD-3-Clause` |
+| `golang.org/x/time` | `v0.16.0` | `BSD-3-Clause` |
+| `modernc.org/libc` | `v1.77.0` | `BSD-3-Clause` |
 | `modernc.org/mathutil` | `v1.7.1` | `BSD-3-Clause` |
-| `modernc.org/memory` | `v1.11.0` | `BSD-3-Clause` |
-| `modernc.org/sqlite` | `v1.56.0` | `BSD-3-Clause` |
+| `modernc.org/memory` | `v1.12.1` | `BSD-3-Clause` |
+| `modernc.org/sqlite` | `v1.59.0` | `BSD-3-Clause` |
 
-32 modules. Every licence was read from the module cache;
+31 modules. Every licence was read from the module cache;
 none was inferred.
 
 ## Full licence texts
 
-### `github.com/dustin/go-humanize` v1.0.1
+### `github.com/dustin/go-humanize` v1.1.0
 
 SPDX identifier: `MIT`
 
@@ -180,7 +179,7 @@ SOFTWARE.
 <http://www.opensource.org/licenses/mit-license.php>
 ```
 
-### `github.com/fsnotify/fsnotify` v1.9.0
+### `github.com/fsnotify/fsnotify` v1.10.1
 
 SPDX identifier: `BSD-3-Clause`
 
@@ -214,7 +213,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### `github.com/go-viper/mapstructure/v2` v2.4.0
+### `github.com/go-viper/mapstructure/v2` v2.5.0
 
 SPDX identifier: `MIT`
 
@@ -328,7 +327,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### `github.com/modelcontextprotocol/go-sdk` v1.7.0
+### `github.com/modelcontextprotocol/go-sdk` v1.8.0
 
 SPDX identifier: `Apache-2.0 AND MIT`
 
@@ -555,7 +554,7 @@ CC-BY-4.0. See https://creativecommons.org/licenses/by/4.0/legalcode for
 the full license text.
 ```
 
-### `github.com/muktihari/fit` v0.28.3
+### `github.com/muktihari/fit` v0.28.4
 
 SPDX identifier: `BSD-3-Clause`
 
@@ -703,7 +702,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### `github.com/pelletier/go-toml/v2` v2.2.4
+### `github.com/pelletier/go-toml/v2` v2.4.3
 
 SPDX identifier: `MIT`
 
@@ -770,7 +769,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### `github.com/sagikazarmark/locafero` v0.11.0
+### `github.com/sagikazarmark/locafero` v0.12.0
 
 SPDX identifier: `MIT`
 
@@ -798,34 +797,29 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### `github.com/segmentio/asm` v1.1.3
+### `github.com/segmentio/asm` v1.2.1
 
 SPDX identifier: `MIT`
 
 `LICENSE`:
 
 ```text
-MIT License
+MIT No Attribution
 
-Copyright (c) 2021 Segment
+Copyright 2023 Segment
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this
+software and associated documentation files (the "Software"), to deal in the Software
+without restriction, including without limitation the rights to use, copy, modify,
+merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
 ### `github.com/segmentio/encoding` v0.5.4
@@ -838,36 +832,6 @@ SPDX identifier: `MIT`
 MIT License
 
 Copyright (c) 2019 Segment.io, Inc.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-### `github.com/sourcegraph/conc` v0.3.1-0.20240121214520-5f936abd7ae8
-
-SPDX identifier: `MIT`
-
-`LICENSE`:
-
-```text
-MIT License
-
-Copyright (c) 2023 Sourcegraph
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1415,7 +1379,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### `go.yaml.in/yaml/v3` v3.0.4
+### `go.yaml.in/yaml/v3` v3.0.5
 
 SPDX identifier: `MIT AND Apache-2.0`
 
@@ -1494,7 +1458,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### `golang.org/x/oauth2` v0.35.0
+### `golang.org/x/oauth2` v0.37.0
 
 SPDX identifier: `BSD-3-Clause`
 
@@ -1530,70 +1494,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### `golang.org/x/sync` v0.22.0
-
-SPDX identifier: `BSD-3-Clause`
-
-`LICENSE`:
-
-```text
-Copyright 2009 The Go Authors.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-   * Redistributions of source code must retain the above copyright
-notice, this list of conditions and the following disclaimer.
-   * Redistributions in binary form must reproduce the above
-copyright notice, this list of conditions and the following disclaimer
-in the documentation and/or other materials provided with the
-distribution.
-   * Neither the name of Google LLC nor the names of its
-contributors may be used to endorse or promote products derived from
-this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-```
-
-`PATENTS`:
-
-```text
-Additional IP Rights Grant (Patents)
-
-"This implementation" means the copyrightable works distributed by
-Google as part of the Go project.
-
-Google hereby grants to You a perpetual, worldwide, non-exclusive,
-no-charge, royalty-free, irrevocable (except as stated in this section)
-patent license to make, have made, use, offer to sell, sell, import,
-transfer and otherwise run, modify and propagate the contents of this
-implementation of Go, where such license applies only to those patent
-claims, both currently owned or controlled by Google and acquired in
-the future, licensable by Google that are necessarily infringed by this
-implementation of Go.  This grant does not include claims that would be
-infringed only as a consequence of further modification of this
-implementation.  If you or your agent or exclusive licensee institute or
-order or agree to the institution of patent litigation against any
-entity (including a cross-claim or counterclaim in a lawsuit) alleging
-that this implementation of Go or any code incorporated within this
-implementation of Go constitutes direct or contributory patent
-infringement, or inducement of patent infringement, then any patent
-rights granted to you under this License for this implementation of Go
-shall terminate as of the date such litigation is filed.
-```
-
-### `golang.org/x/sys` v0.47.0
+### `golang.org/x/sync` v0.23.0
 
 SPDX identifier: `BSD-3-Clause`
 
@@ -1656,7 +1557,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 ```
 
-### `golang.org/x/text` v0.40.0
+### `golang.org/x/sys` v0.48.0
 
 SPDX identifier: `BSD-3-Clause`
 
@@ -1719,7 +1620,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 ```
 
-### `golang.org/x/time` v0.15.0
+### `golang.org/x/text` v0.42.0
 
 SPDX identifier: `BSD-3-Clause`
 
@@ -1782,7 +1683,70 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 ```
 
-### `modernc.org/libc` v1.74.4
+### `golang.org/x/time` v0.16.0
+
+SPDX identifier: `BSD-3-Clause`
+
+`LICENSE`:
+
+```text
+Copyright 2009 The Go Authors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+`PATENTS`:
+
+```text
+Additional IP Rights Grant (Patents)
+
+"This implementation" means the copyrightable works distributed by
+Google as part of the Go project.
+
+Google hereby grants to You a perpetual, worldwide, non-exclusive,
+no-charge, royalty-free, irrevocable (except as stated in this section)
+patent license to make, have made, use, offer to sell, sell, import,
+transfer and otherwise run, modify and propagate the contents of this
+implementation of Go, where such license applies only to those patent
+claims, both currently owned or controlled by Google and acquired in
+the future, licensable by Google that are necessarily infringed by this
+implementation of Go.  This grant does not include claims that would be
+infringed only as a consequence of further modification of this
+implementation.  If you or your agent or exclusive licensee institute or
+order or agree to the institution of patent litigation against any
+entity (including a cross-claim or counterclaim in a lawsuit) alleging
+that this implementation of Go or any code incorporated within this
+implementation of Go constitutes direct or contributory patent
+infringement, or inducement of patent infringement, then any patent
+rights granted to you under this License for this implementation of Go
+shall terminate as of the date such litigation is filed.
+```
+
+### `modernc.org/libc` v1.77.0
 
 SPDX identifier: `BSD-3-Clause`
 
@@ -2166,7 +2130,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### `modernc.org/memory` v1.11.0
+### `modernc.org/memory` v1.12.1
 
 SPDX identifier: `BSD-3-Clause`
 
@@ -2271,11 +2235,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 https://commons.wikimedia.org/wiki/File:Memory_infra_logo.png
 ```
 
-### `modernc.org/sqlite` v1.56.0
+### `modernc.org/sqlite` v1.59.0
 
 SPDX identifier: `BSD-3-Clause`
 
-The driver is BSD-3-Clause. It bundles SQLite itself, which its authors dedicated to the public domain; `SQLITE-LICENSE` states that dedication and is reproduced below.
+The driver is BSD-3-Clause. It bundles SQLite itself, which its authors dedicated to the public domain; `LICENSE-SQLITE` states that dedication and is reproduced below. Since v1.59.0 it also bundles the sqlite-vec extension, which is MIT and is reproduced below as `LICENSE-SQLITE_VEC`.
 
 `LICENSE`:
 
@@ -2308,7 +2272,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-`SQLITE-LICENSE`:
+`LICENSE-SQLITE`:
 
 ```text
 SQLite Is Public Domain
@@ -2336,4 +2300,30 @@ has been taken from other projects or from the open internet. Every line of
 code can be traced back to its original author, and all of those authors have
 public domain dedications on file. So the SQLite code base is clean and is
 uncontaminated with licensed code from other projects.
+```
+
+`LICENSE-SQLITE_VEC`:
+
+```text
+MIT License
+
+Copyright (c) 2024 Alex Garcia
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
