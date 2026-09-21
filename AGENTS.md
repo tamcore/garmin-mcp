@@ -42,13 +42,13 @@ date.
 |------|---------------|----------|
 | `cmd/garmin-mcp/main.go` | Thin `main`: passes the ldflags-injected `version` and `commit` into `cmd.Execute` and calls `os.Exit` with the returned code | n/a |
 | `cmd/notices/main.go` | Thin `main` for the notices generator: flags, then `notices.Generate`. A maintenance tool, never linked into `garmin-mcp` | n/a |
-| `internal/cmd` | Cobra tree and the composition root. `serve` (stdio and streamable-http), `auth`, `doctor`, `version`, `tools list` and `migrate` all do real work; no command returns a not-implemented sentinel | 84.0% |
-| `internal/config` | `Config`, deterministic four-layer precedence, `_FILE` secret variants, full lexical validation, redacted output, the operator OAuth client registry, the coarse redirect-wildcard gate, and the login allowlist's lexical validation | 91.7% |
+| `internal/cmd` | Cobra tree and the composition root. `serve` (stdio and streamable-http), `auth`, `doctor`, `version`, `tools list` and `migrate` all do real work; no command returns a not-implemented sentinel | 83.2% |
+| `internal/config` | `Config`, deterministic four-layer precedence, `_FILE` secret variants, full lexical validation, redacted output, the operator OAuth client registry, the coarse redirect-wildcard gate, and the login allowlist's lexical validation | 91.8% |
 | `internal/garmin/protocol` | Garmin host/path/endpoint-label constants, client identities, DI client-ID candidates, the login response classifier (JSON and widget HTML), the rejected-OTP outcome, and the widget MFA variable parse. No I/O | 96.7% |
-| `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, explicit widget MFA code delivery, refresh with per-principal collapsing and CAS, the shared `TokenGate`, the request-time host guard, unverified-JWT `exp` parsing | 66.3% untagged, 90.2% with `-tags=fakegarmin` |
+| `internal/garmin/auth` | Login state machine, strategy fallback, bounded MFA transaction registry with a single completion lease, DI ticket exchange, session validation, explicit widget MFA code delivery, refresh with per-principal collapsing and CAS, the shared `TokenGate`, the request-time host guard, unverified-JWT `exp` parsing | 65.7% untagged, 90.2% with `-tags=fakegarmin` |
 | `internal/garmin/client` | The authenticated request layer: bounded wire and decompressed sizes, page and page-start caps, one bounded post-`401` retry that never replays a `POST` or `PATCH`, typed errors, and the exact-integer accessor an identifier is compared through | 94.9% |
 | `internal/garmin/api` | Domain clients — activities, analysis, splits, profile, workouts, gear, strength writes, downloads, the published exercise catalog with its compiled-in fallback, FIT activity decoding through `github.com/muktihari/fit`, the training scores, thresholds and trends, nutrition, challenges and badges, and the device inventory | 86.3% |
-| `internal/mcpserver` | Server, registry, stdio and Streamable HTTP transports, bearer middleware, session binding, origin and forwarded-header guards, elicitation confirmation, `server_info` | 90.3% |
+| `internal/mcpserver` | Server, registry, stdio and Streamable HTTP transports, bearer middleware, session binding, origin and forwarded-header guards, elicitation confirmation, `server_info` | 90.0% |
 | `internal/resources` | The five constant MCP documents — four workout templates and the structure reference — with the manifest contract, the render, and the check that this server's own upload path accepts every template | 96.8% |
 | `internal/tools` | 144 registered tools — 100 read-only, 35 write, 9 destructive — the whole pinned manifest bar one documented refusal, with contracts snapshot-tested against `compat/tools.json` | 86.2% |
 | `internal/policy` | Three tiers, explicit name lists validated against the registered set at start-up, local operator authority, the remote enablement-and-scope intersection, confirmation requirement | 95.4% |
@@ -62,6 +62,7 @@ date.
 | `internal/tokenlink` | `Store`, the one adapter that makes either store — the file store for stdio, the SQLite store for remote — satisfy `auth.TokenStore` by converting between the two packages' `TokenSet` types | 88.0% |
 | `internal/loginweb` | The browser login flow in two profiles: the one-shot loopback profile and the remote profile with the `__Host-` cookie, HSTS, disclosure page, independent CSRF token, server-held MFA continuation, and an opt-in login allowlist (`EmailAllowlist`) checked before the Garmin call | 87.4% |
 | `internal/mcplog` | Structured `slog` logging with the allowlisted field set, level mapping, and the single constructor that refuses stdout as a sink | 95.3% |
+| `internal/metrics` | Prometheus counters, histograms and gauges for tool calls, upstream requests, token refresh and login outcomes, registered tool counts and build info, plus the Go runtime and process collectors. A nil `*Recorder` is a no-op on every method, so a deployment with metrics disabled needs no branch at the call site | 99.1% |
 | `internal/notices` | The `THIRD_PARTY_NOTICES.md` generator: the linked module set unioned over the six released targets, the curated SPDX and licence-file registry, verbatim licence copying, and the freshness test that fails on a stale notices file | 92.8% |
 | `internal/ratelimit` | The per-principal limiter and its handler middleware | 95.9% |
 | `internal/testkit` | Scripted fake Garmin service, fake clock, fixtures, synthetic FIT builder, transport guard | 92.0% |
@@ -73,7 +74,7 @@ Everything else in the repository is documentation, contract manifests
 
 Every package in the untagged profile is at or above the 80% rule below.
 `internal/garmin/auth` is the one exception CI carries on merit: its login, MFA
-and refresh paths are tagged `fakegarmin`, so the untagged profile sees 66.3% and
+and refresh paths are tagged `fakegarmin`, so the untagged profile sees 65.7% and
 the tagged job reports 90.2%. `cmd/garmin-mcp` is the other, because it is the
 process entry point and the `e2e` job runs the built command instead. CI enforces
 the floor per package against that explicit list in both directions, so a package
@@ -81,8 +82,9 @@ that drops under it fails the build and a listed package that reaches it must
 leave the list.
 
 `go.mod` direct requirements: `modelcontextprotocol/go-sdk`, `spf13/cobra`,
-`spf13/viper`, `spf13/pflag`, `golang.org/x/sys`, `modernc.org/sqlite` and
-`github.com/muktihari/fit`, plus the transitive indirect set. `muktihari/fit`
+`spf13/viper`, `spf13/pflag`, `golang.org/x/sys`, `modernc.org/sqlite`,
+`github.com/prometheus/client_golang` and `github.com/muktihari/fit`, plus the
+transitive indirect set. `muktihari/fit`
 decodes Garmin activity files and links no third-party package of its own; ADR
 0007 records why the format is not hand-decoded. `golang.org/x/sys` is direct because
 `internal/cmd` reads terminal state through
@@ -218,7 +220,7 @@ internal/
   tokenlink/             store-to-auth TokenSet adapter                        exists
   notices/               THIRD_PARTY_NOTICES.md generator and freshness test  exists
   policy/                scopes, write/destructive gates, limits               exists
-  observability/         redacted logging, metrics, tracing hooks              planned (logging lives in mcplog; no metrics, no tracing)
+  observability/         redacted logging, metrics, tracing hooks              partial (logging lives in mcplog, metrics live in internal/metrics; tracing still planned)
   testkit/               fake Garmin, fake clock, fixtures, test keys          exists
 e2e/                     end-to-end tests (build tag: e2e)                     exists (CLI-level only)
 live/                    opt-in live tests (build tag: garminlive)            exists (read-only, three gates)
@@ -641,6 +643,10 @@ These apply to every commit, including the code that already exists.
   tool name can itself disclose a medical domain. An upstream log line names
   the endpoint **label**, never the request URL, which would name an account
   object.
+- Metric labels are the same closed vocabulary as the log fields above:
+  `ToolEvent.Arguments` and `ToolEvent.Reason` are never rendered as a label,
+  the same way they are never logged. `internal/metrics.Recorder` takes the
+  same `mcplog.ToolEvent` the logger takes, so the two cannot drift apart.
 - Stdout is reserved exclusively for MCP frames in stdio mode. Logs go to
   stderr.
 - Prefer the standard library. Every nontrivial dependency needs a rationale,

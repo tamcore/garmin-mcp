@@ -364,3 +364,46 @@ func TestLoginDefaultJitterStaysWithinPacingBounds(t *testing.T) {
 		t.Fatalf("sleep %v is outside [%v, %v]", sleeps[0], protocol.WidgetPacingMin, protocol.WidgetPacingMax)
 	}
 }
+
+// TestLoginRecordsTheStrategyThatRan pins which strategy of the fallback chain
+// answered. That is the number an operator needs when Garmin changes its login
+// shape and the chain silently starts falling through.
+func TestLoginRecordsTheStrategyThatRan(t *testing.T) {
+	server := testkit.NewServer(t, mobileSuccessScript())
+	clock := testkit.NewFakeClock(fakeStart())
+	registry, err := auth.NewRegistry(auth.RegistryConfig{Clock: clock})
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+	observer := &fakeAuthObserver{}
+	authenticator, err := auth.NewAuthenticator(auth.Config{
+		Hosts:     server.Hosts(protocol.DomainGlobal),
+		Transport: server.Doer(),
+		Store:     newFakeStore(),
+		Registry:  registry,
+		Clock:     clock,
+		Sleeper:   clock,
+		Metrics:   observer,
+	})
+	if err != nil {
+		t.Fatalf("NewAuthenticator: %v", err)
+	}
+
+	if _, err := authenticator.Login(t.Context(), testPrincipal,
+		auth.NewCredentials(testEmail, testPassword)); err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+
+	observer.mu.Lock()
+	defer observer.mu.Unlock()
+	if len(observer.attempts) == 0 {
+		t.Fatal("a completed login recorded no attempt")
+	}
+	last := observer.attempts[len(observer.attempts)-1]
+	if last[1] != "ok" {
+		t.Fatalf("the last attempt is %v, want an ok outcome", last)
+	}
+	if last[0] != string(auth.StrategyMobileIOS) {
+		t.Fatalf("the recorded attempt is %v, want strategy %q", last, auth.StrategyMobileIOS)
+	}
+}

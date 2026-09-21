@@ -1264,7 +1264,97 @@ When you upgrade, the tool names and schemas a client depends on either match
 that manifest or the build did not ship. See `docs/parity.md` for what each
 release covers.
 
-## 8. What this deployment does not do
+## 8. Metrics
+
+Prometheus metrics are optional. Setting `metrics-address`
+(`GARMIN_MCP_METRICS_ADDRESS`) to a `host:port` starts a **second**,
+metrics-only `http.Server` that serves `/metrics` and answers `404` to
+everything else; leaving it empty, the default, disables the listener
+entirely. The setting is validated in the transport-independent configuration
+path, so it applies the same way under stdio and under Streamable HTTP, and it
+is never on the MCP mux.
+
+The endpoint is plain HTTP with no authentication.
+
+> The metrics port must never be reachable from outside the deployment's trust
+> boundary. It carries pseudonymous personal data and per-tool call counts, it
+> has no authentication, and a scraper retains both for months with no
+> redaction path.
+
+Bind it to loopback or a cluster-internal address only, and never place it
+behind a public Ingress, HTTPRoute, or LoadBalancer.
+
+### Metrics
+
+Every metric is prefixed `garmin_mcp_`, plus the standard Go runtime and
+process collectors.
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `tool_calls_total` | counter | `tool`, `category`, `tier`, `outcome`, `status`, `principal` |
+| `tool_duration_seconds` | histogram | `tool`, `category`, `tier` |
+| `tool_argument_bytes` | histogram | `category`, `tier` |
+| `tool_result_bytes` | histogram | `category`, `tier` |
+| `upstream_requests_total` | counter | `endpoint`, `op`, `status` |
+| `upstream_duration_seconds` | histogram | `endpoint` |
+| `upstream_response_bytes` | histogram | `endpoint` |
+
+The three `upstream_*` metrics count only completed round trips: they record
+after a response is received, so a transport-level failure — DNS, TLS, a
+timeout, connection refused — records nothing at all. A flat upstream counter
+during a period of tool activity is itself the signal that Garmin is
+unreachable, not evidence that no calls were attempted.
+| `token_refreshes_total` | counter | `outcome` |
+| `login_attempts_total` | counter | `strategy`, `outcome` |
+| `registered_tools` | gauge | `tier` |
+| `build_info` | gauge (always `1`) | `version`, `commit` |
+
+`outcome` on `login_attempts_total` takes three values: `ok`, `error`, and
+`mfa-required` — an MFA challenge is not a completed login, so it is counted
+separately rather than as a success. Every other counter's `outcome` is `ok` or
+`error` only.
+
+`registered_tools{tier="read-only"}` counts every registered read-only tool,
+including the built-in `server_info`, so it reads one higher than the
+upstream-manifest tool count in `docs/parity.md`. The two counts measure
+different things: the gauge is what this server actually registered.
+
+`principal` appears only on `tool_calls_total`, never on a histogram — a
+per-principal label on a multi-bucket histogram multiplies series for a number
+the counter and the per-tool histogram already give.
+
+### Scraping with a plain Prometheus
+
+```yaml
+scrape_configs:
+  - job_name: garmin-mcp
+    static_configs:
+      - targets: ["garmin-mcp.internal:9090"]
+```
+
+The Helm chart ships a `ServiceMonitor` for the Prometheus Operator instead
+(`metrics.serviceMonitor.enabled`, default `false`); use one or the other, not
+both.
+
+### Alerts
+
+The chart's `PrometheusRule` (`metrics.prometheusRule.enabled`, default
+`false`) ships two alerts:
+
+- **`GarminMCPToolFailureRate`** — fires when a tool's error share, computed
+  over calls that actually reached Garmin (`outcome=~"ok|error"`, which
+  excludes `denied` and `rate-limited` calls that never left this process),
+  exceeds `metrics.prometheusRule.failureRatio` for
+  `metrics.prometheusRule.for`. `metrics.prometheusRule.minimumCallRate` only
+  excludes a tool with zero traffic in the window; the real guard against
+  paging on a barely-used tool is `for` itself — a single failure cannot
+  sustain the ratio for 30 continuous minutes. Garmin's API is unofficial and
+  can change shape without notice; this is usually the first sign.
+- **`GarminMCPTokenRefreshFailing`** — fires when `token_refreshes_total{outcome="error"}`
+  has a positive rate for 30 minutes. The session is about to expire, and every
+  tool is about to start failing.
+
+## 9. What this deployment does not do
 
 Stated once, so an operator does not go looking:
 

@@ -6,6 +6,7 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/garmin/api"
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 	"github.com/tamcore/garmin-mcp/internal/mcpserver"
+	"github.com/tamcore/garmin-mcp/internal/policy"
 )
 
 // ToolDeps is everything a tool package needs from the composition root.
@@ -98,4 +99,17 @@ func copyNames(in []string) []string {
 	out := make([]string, len(in))
 	copy(out, in)
 	return out
+}
+
+// countsByTier reports how many tools each tier registers, keyed by the tier's
+// own label. Every tier is present, including an empty one: a gauge that
+// disappears when writes are disabled cannot be distinguished from a scrape that
+// failed.
+func (s ToolSet) countsByTier() map[string]int {
+	readOnly, write, destructive := s.tierNames()
+	return map[string]int{
+		policy.TierReadOnly.String():    len(readOnly),
+		policy.TierWrite.String():       len(write),
+		policy.TierDestructive.String(): len(destructive),
+	}
 }

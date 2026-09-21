@@ -33,3 +33,6 @@ data:
   {{- with .Values.config.loginAllowedEmails }}
   GARMIN_MCP_LOGIN_ALLOWED_EMAILS: {{ join "," . | quote }}
   {{- end }}
+  {{- if .Values.metrics.enabled }}
+  GARMIN_MCP_METRICS_ADDRESS: "0.0.0.0:{{ .Values.metrics.port }}"
+  {{- end }}

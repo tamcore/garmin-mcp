@@ -1,0 +1,48 @@
+{{- if and .Values.metrics.enabled .Values.metrics.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "garmin-mcp.fullname" . }}
+  labels:
+    {{- include "garmin-mcp.labels" . | nindent 4 }}
+    {{- with .Values.metrics.prometheusRule.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: garmin-mcp
+      rules:
+        # Garmin's API is unofficial and can change shape without notice. When it
+        # does, one tool starts failing for everyone and nothing else notices.
+        - alert: GarminMCPToolFailureRate
+          expr: |
+            (
+              sum by (tool) (rate(garmin_mcp_tool_calls_total{outcome="error"}[15m]))
+                /
+              sum by (tool) (rate(garmin_mcp_tool_calls_total{outcome=~"ok|error"}[15m]))
+            ) > {{ .Values.metrics.prometheusRule.failureRatio }}
+            and
+            sum by (tool) (rate(garmin_mcp_tool_calls_total{outcome=~"ok|error"}[15m]))
+              > {{ .Values.metrics.prometheusRule.minimumCallRate }}
+          for: {{ .Values.metrics.prometheusRule.for }}
+          labels:
+            severity: warning
+          annotations:
+            summary: "garmin-mcp tool {{ `{{ $labels.tool }}` }} is failing"
+            description: >-
+              More than {{ .Values.metrics.prometheusRule.failureRatio }} of calls to
+              {{ `{{ $labels.tool }}` }} have failed for
+              {{ .Values.metrics.prometheusRule.for }}. Garmin's API is unofficial;
+              a shape change upstream is the usual cause.
+        - alert: GarminMCPTokenRefreshFailing
+          expr: |
+            rate(garmin_mcp_token_refreshes_total{outcome="error"}[30m]) > 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "garmin-mcp token refresh is failing"
+            description: >-
+              Garmin token refresh has been failing for 30 minutes. The session
+              will expire and every tool will start failing.
+{{- end }}

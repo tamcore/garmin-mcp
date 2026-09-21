@@ -53,6 +53,7 @@ const (
 	keySafetyDelay                 = "safety-delay"
 	keyLogLevel                    = "log-level"
 	keyLogFormat                   = "log-format"
+	keyMetricsAddress              = "metrics-address"
 )
 
 // The keys inside one entry of the OAuth client registry. They are sub-keys of
@@ -258,6 +259,11 @@ var settingTable = [...]setting{
 	{
 		key: keyLogFormat, flag: keyLogFormat, kind: kindString, def: DefaultLogFormat,
 		usage: "log encoding: text or json",
+	},
+	{
+		key: keyMetricsAddress, flag: keyMetricsAddress, kind: kindString, def: "",
+		usage: "host:port for the Prometheus metrics listener on its own port; " +
+			"empty disables it; unauthenticated, so never expose it publicly",
 	},
 }
 

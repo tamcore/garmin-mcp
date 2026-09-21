@@ -106,6 +106,20 @@ var moduleNotices = map[string]moduleNotice{
 		Files: []string{fileLicense, "LICENSE-FIT-SDK"},
 	},
 
+	"github.com/beorn7/perks":      licenseOnly(spdxMIT),
+	"github.com/munnerz/goautoneg": licenseOnly(spdxBSD3),
+
+	"github.com/cespare/xxhash/v2": {SPDX: spdxMIT, Files: []string{fileLicenseTxt}},
+
+	// The Prometheus modules are Apache-2.0 and each ships the attribution
+	// NOTICE the licence requires to be carried with a redistribution.
+	"github.com/prometheus/client_golang": {SPDX: spdxApache2, Files: []string{fileLicense, fileNotice}},
+	"github.com/prometheus/client_model":  {SPDX: spdxApache2, Files: []string{fileLicense, fileNotice}},
+	"github.com/prometheus/common":        {SPDX: spdxApache2, Files: []string{fileLicense, fileNotice}},
+	"github.com/prometheus/procfs":        {SPDX: spdxApache2, Files: []string{fileLicense, fileNotice}},
+
+	"google.golang.org/protobuf": {SPDX: spdxBSD3, Files: []string{fileLicense, filePatents}},
+
 	"github.com/spf13/afero": {SPDX: spdxApache2, Files: []string{fileLicenseTxt}},
 	"github.com/spf13/cobra": {SPDX: spdxApache2, Files: []string{fileLicenseTxt}},
 

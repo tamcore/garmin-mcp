@@ -97,6 +97,18 @@ type Config struct {
 	Jitter func() float64
 	// Logger receives redacted records. Nil means slog.Default.
 	Logger *slog.Logger
+	// Metrics observes every upstream attempt. Nil disables observation; unlike
+	// Logger, there is no fallback.
+	Metrics UpstreamObserver
+}
+
+// An UpstreamObserver records one Garmin request.
+//
+// Declared here because the consumer owns its interfaces, and so this package
+// never imports Prometheus. The endpoint is this package's own constant label,
+// never a URL.
+type UpstreamObserver interface {
+	UpstreamRequest(endpoint, op string, status, responseBytes int, latency time.Duration)
 }
 
 // Client is the authenticated request layer for Garmin's API tier.
@@ -113,6 +125,7 @@ type Client struct {
 	sleeper Sleeper
 	jitter  func() float64
 	logger  *slog.Logger
+	metrics UpstreamObserver
 }
 
 // New validates cfg and returns a Client.
@@ -131,6 +144,7 @@ func New(cfg Config) (*Client, error) {
 		sleeper: cfg.Sleeper,
 		jitter:  cfg.Jitter,
 		logger:  cfg.Logger,
+		metrics: cfg.Metrics,
 	}
 	if c.now == nil {
 		c.now = time.Now
@@ -198,7 +212,7 @@ func (c *Client) attempt(ctx context.Context, session Session, req Request) (Pay
 	}
 
 	payload := newPayload(req.Op, req.Endpoint, resp.StatusCode, resp.Header.Get(headerContentType), body)
-	c.logAttempt(req, resp.StatusCode, len(body), time.Since(started))
+	c.observeAttempt(req, resp.StatusCode, len(body), time.Since(started))
 	if kind, failed := classifyStatus(resp.StatusCode, req.FileTransfer); failed {
 		return payload, c.fail(req, resp.StatusCode, kind, c.retryAfter(resp), nil)
 	}
@@ -277,14 +291,17 @@ func closeBody(resp *http.Response) {
 	_ = resp.Body.Close()
 }
 
-// logAttempt records one upstream call: what was asked of Garmin, what Garmin
-// answered, and how big the answer was.
+// observeAttempt records one upstream call: what was asked of Garmin, what
+// Garmin answered, and how big the answer was.
 //
 // Every field is safe to keep. The endpoint is the package's own constant
 // label, never the request URL — a URL names an activity, a date or an
 // account object, and the label does not. The body is reported by size alone,
 // because a Garmin response body is the account's health data.
-func (c *Client) logAttempt(req Request, status, bytes int, latency time.Duration) {
+func (c *Client) observeAttempt(req Request, status, bytes int, latency time.Duration) {
+	if c.metrics != nil {
+		c.metrics.UpstreamRequest(string(req.Endpoint), string(req.Op), status, bytes, latency)
+	}
 	if c.logger == nil {
 		return
 	}

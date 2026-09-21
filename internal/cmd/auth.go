@@ -102,6 +102,7 @@ func runAuth(ctx context.Context, cfg config.Config, opts Options, flow loginFlo
 	deps, err := newDependencies(cfg, &wiring{
 		Logs:    opts.stderr(),
 		Version: opts.BuildInfo.Version,
+		Commit:  opts.BuildInfo.Commit,
 	})
 	if err != nil {
 		return err

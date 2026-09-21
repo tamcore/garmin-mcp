@@ -159,6 +159,24 @@ func splitListenHost(address string) (string, error) {
 	return host, nil
 }
 
+// validateMetricsAddress checks the optional metrics listener's bind address.
+//
+// An empty value is the disabled default. A non-loopback bind is permitted here
+// although validateBindAddress refuses one: the metrics listener terminates no
+// TLS and holds no token, and a scrape target that may only bind loopback cannot
+// be reached from a Prometheus outside the pod. The protection is the network
+// boundary, which docs/threat-model.md states.
+func (c Config) validateMetricsAddress() []error {
+	if c.MetricsAddress == "" {
+		return nil
+	}
+	if _, err := splitListenHost(c.MetricsAddress); err != nil {
+		return []error{newFieldError(keyMetricsAddress,
+			"must be host:port with a port between 1 and 65535", ErrInvalidConfig)}
+	}
+	return nil
+}
+
 // isLoopbackHost reports whether host is a loopback address or the loopback
 // name. An empty host means every interface and is never loopback.
 func isLoopbackHost(host string) bool {

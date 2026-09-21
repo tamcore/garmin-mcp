@@ -2,6 +2,7 @@ package mcpserver_test
 
 import (
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -228,6 +229,79 @@ func TestNonToolMethodsAreNotGatedAsToolCalls(t *testing.T) {
 			t.Fatalf("a non-tool method was logged as a tool call: %v", record)
 		}
 	}
+}
+
+// fakeToolObserver captures what the server records, so a test can assert the
+// metric seam fires exactly once per call with the same event the log got.
+type fakeToolObserver struct {
+	mu     sync.Mutex
+	events []mcplog.ToolEvent
+}
+
+func (f *fakeToolObserver) ToolCall(event mcplog.ToolEvent) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.events = append(f.events, event)
+}
+
+func (f *fakeToolObserver) recorded() []mcplog.ToolEvent {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]mcplog.ToolEvent(nil), f.events...)
+}
+
+// newTestServerWithMetrics builds the same tiered server TestEveryToolCall...
+// uses, with observer wired onto Deps.Metrics. A nil observer is valid.
+func newTestServerWithMetrics(t *testing.T, observer mcpserver.ToolObserver) *mcpserver.Server {
+	t.Helper()
+
+	server, _, _ := tieredServer(t, func(d *mcpserver.Deps) { d.Metrics = observer })
+	return server
+}
+
+// callTestTool drives one call to the read-only tool every tiered server
+// registers, the same call TestEveryToolCallIsLoggedOnceWithCoarseFields makes.
+func callTestTool(t *testing.T, server *mcpserver.Server) {
+	t.Helper()
+
+	ctx := t.Context()
+	session := connectClient(t, ctx, server, nil)
+	if _, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      readTool,
+		Arguments: map[string]any{textArg: testText},
+	}); err != nil {
+		t.Fatalf("CallTool returned error: %v", err)
+	}
+}
+
+// TestEveryToolCallIsRecordedOnce pins the metric seam against the log seam. It
+// is the sibling of TestEveryToolCallIsLoggedOnceWithCoarseFields, and it fails
+// against a refactor that records twice or stops recording.
+func TestEveryToolCallIsRecordedOnce(t *testing.T) {
+	t.Parallel()
+
+	observer := &fakeToolObserver{}
+	server := newTestServerWithMetrics(t, observer)
+
+	callTestTool(t, server)
+
+	events := observer.recorded()
+	if len(events) != 1 {
+		t.Fatalf("the server recorded %d events, want exactly 1", len(events))
+	}
+	if events[0].ToolName == "" || events[0].Outcome == "" {
+		t.Fatalf("the recorded event is missing its identity: %+v", events[0])
+	}
+}
+
+// TestToolCallRecordingSurvivesANilObserver proves a deployment without metrics
+// needs no branch at the call site.
+func TestToolCallRecordingSurvivesANilObserver(t *testing.T) {
+	t.Parallel()
+
+	server := newTestServerWithMetrics(t, nil)
+
+	callTestTool(t, server) // must not panic
 }
 
 func resultText(t *testing.T, result *mcp.CallToolResult) string {

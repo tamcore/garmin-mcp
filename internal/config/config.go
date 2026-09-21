@@ -277,6 +277,14 @@ type Config struct {
 	// LogFormat is the log encoding: text or json.
 	LogFormat string
 
+	// MetricsAddress is the host:port the Prometheus metrics listener binds, on
+	// its own port. Empty disables the listener entirely, which is the default.
+	//
+	// The endpoint is unauthenticated and its labels carry the pseudonymous
+	// principal identifier and the exact tool name, so the operator's network
+	// boundary is the only thing protecting it. See docs/threat-model.md.
+	MetricsAddress string
+
 	// ConfigFile is the configuration file that was read, or "" when none was.
 	ConfigFile string
 }

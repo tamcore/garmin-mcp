@@ -40,6 +40,7 @@ func runRemote(ctx context.Context, cfg config.Config, opts Options) error {
 		Logs:    opts.stderr(),
 		Tools:   opts.Tools,
 		Version: opts.BuildInfo.Version,
+		Commit:  opts.BuildInfo.Commit,
 	})
 	if err != nil {
 		return err
@@ -88,6 +89,8 @@ func (r *remoteDeployment) serve(ctx context.Context) error {
 func (r *remoteDeployment) serveOn(
 	ctx context.Context, server *http.Server, listener net.Listener,
 ) error {
+	r.deps.publishToolCounts()
+
 	watch, watchDone := context.WithCancel(ctx)
 	defer watchDone()
 	revocations := make(chan error, 1)
@@ -98,19 +101,36 @@ func (r *remoteDeployment) serveOn(
 	cleanups := make(chan error, 1)
 	go func() { cleanups <- r.cleanup.Run(watch) }()
 
+	// The metrics listener shares the watch context, so it never outlives the
+	// server it reports on.
+	metricsErr := make(chan error, 1)
+	go func() {
+		if r.cfg.MetricsAddress == "" {
+			metricsErr <- nil
+			return
+		}
+		err := serveMetrics(watch, r.cfg.MetricsAddress, r.deps.metrics.Handler())
+		// streamable-http is long-lived, so a silent bind failure here would
+		// otherwise sit undetected until process exit, weeks away.
+		if err != nil {
+			r.deps.events.Error("metrics listener failed", "error", err)
+		}
+		metricsErr <- err
+	}()
+
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- serveListener(server, listener) }()
 
 	select {
 	case err := <-serveErr:
 		watchDone()
-		return errors.Join(err, <-revocations, <-cleanups)
+		return errors.Join(err, <-revocations, <-cleanups, <-metricsErr)
 	case <-ctx.Done():
 	}
 
 	stopErr := r.stop(server)
 	watchDone()
-	return errors.Join(stopErr, <-revocations, <-cleanups, <-serveErr)
+	return errors.Join(stopErr, <-revocations, <-cleanups, <-metricsErr, <-serveErr)
 }
 
 // httpServer builds the listener's server, with TLS when the operator configured

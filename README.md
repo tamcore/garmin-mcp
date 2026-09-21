@@ -219,7 +219,7 @@ database cleanup, no key rotation command, and no working `migrate` or
 | Document | Contents |
 |----------|----------|
 | [docs/configuration.md](docs/configuration.md) | Every setting, its flag, environment variable, default, and validation |
-| [docs/operations.md](docs/operations.md) | Deployment, clients, database, keys, revocation, upgrades |
+| [docs/operations.md](docs/operations.md) | Deployment, clients, database, keys, revocation, upgrades, metrics |
 | [SECURITY.md](SECURITY.md) | Disclosure process, supported versions, data held, deployment checklist |
 | [docs/threat-model.md](docs/threat-model.md) | Assets, adversaries, and the decisions that follow |
 | [docs/parity.md](docs/parity.md) | Per-tool status against the pinned upstream manifest |

@@ -81,3 +81,29 @@ jobs:
           helm template garmin-mcp ./charts/garmin-mcp
           --set config.publicURL=https://mcp.example/mcp
           --set persistence.enabled=false
+
+      # The metrics port, ServiceMonitor and PrometheusRule all default to
+      # off, and the shipped alert's tool label only means something once
+      # every metrics flag is on.
+      - name: template with metrics, ServiceMonitor and PrometheusRule enabled
+        run: |
+          set -euo pipefail
+          rendered=$(helm template garmin-mcp ./charts/garmin-mcp \
+            --set config.publicURL=https://mcp.example/mcp \
+            --set metrics.enabled=true \
+            --set metrics.serviceMonitor.enabled=true \
+            --set metrics.prometheusRule.enabled=true)
+          for needle in 'kind: ServiceMonitor' 'kind: PrometheusRule' 'GARMIN_MCP_METRICS_ADDRESS'; do
+            echo "$rendered" | grep -qF "$needle" || { echo "missing: $needle" >&2; exit 1; }
+          done
+
+      - name: template with defaults renders no metrics resources
+        run: |
+          set -euo pipefail
+          rendered=$(helm template garmin-mcp ./charts/garmin-mcp --set config.publicURL=https://mcp.example/mcp)
+          for needle in 'kind: ServiceMonitor' 'kind: PrometheusRule' 'GARMIN_MCP_METRICS_ADDRESS'; do
+            if echo "$rendered" | grep -qF "$needle"; then
+              echo "unexpected: $needle" >&2
+              exit 1
+            fi
+          done

@@ -14,6 +14,27 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/testkit"
 )
 
+// fakeAuthObserver records login and refresh outcomes for tests that pin the
+// metrics seam. It is used by both the fakegarmin-tagged login tests and the
+// untagged refresh tests, so it lives in this shared, untagged helper file.
+type fakeAuthObserver struct {
+	mu       sync.Mutex
+	refresh  []string
+	attempts [][2]string
+}
+
+func (f *fakeAuthObserver) TokenRefresh(outcome string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.refresh = append(f.refresh, outcome)
+}
+
+func (f *fakeAuthObserver) LoginAttempt(strategy, outcome string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.attempts = append(f.attempts, [2]string{strategy, outcome})
+}
+
 // stubTransport is an in-memory Doer. It reaches no network: every response is
 // produced by the handler the test supplies.
 type stubTransport struct {

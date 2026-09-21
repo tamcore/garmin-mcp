@@ -23,6 +23,7 @@ func populatedConfig(t *testing.T) Config {
 	cfg.MasterKey = NewSecret(sentinelSecret)
 	cfg.GarminTokensPath = "/run/secrets/garmin_tokens.json"
 	cfg.GarminTokens = NewSecret(sentinelTokens)
+	cfg.MetricsAddress = metricsLoopback
 	return cfg
 }
 
@@ -60,7 +61,7 @@ func TestConfigRenderingStaysUseful(t *testing.T) {
 	cfg := populatedConfig(t)
 
 	for name, rendering := range configRenderings(t, cfg) {
-		for _, want := range []string{"streamable-http", "mcp.example.test"} {
+		for _, want := range []string{"streamable-http", "mcp.example.test", metricsLoopback} {
 			if !strings.Contains(rendering, want) {
 				t.Errorf("%s rendering = %q, want it to contain %q", name, rendering, want)
 			}

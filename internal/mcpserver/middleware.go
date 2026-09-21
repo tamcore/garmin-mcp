@@ -233,7 +233,11 @@ func (s *Server) loggingMiddleware() mcp.Middleware {
 			started := s.clock()
 			result, err := next(context.WithValue(ctx, callRecordKey{}, record), method, req)
 
-			s.deps.Logger.ToolCall(s.toolEvent(ctx, req, record, result, err, s.clock().Sub(started)))
+			event := s.toolEvent(ctx, req, record, result, err, s.clock().Sub(started))
+			s.deps.Logger.ToolCall(event)
+			if s.deps.Metrics != nil {
+				s.deps.Metrics.ToolCall(event)
+			}
 			return result, err
 		}
 	}

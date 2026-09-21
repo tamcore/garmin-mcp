@@ -24,6 +24,34 @@ service:
   type: ClusterIP
   port: 8080
 
+# metrics exposes Prometheus metrics on a port of their own.
+#
+# The endpoint is unauthenticated, and its labels carry the pseudonymous
+# principal identifier and the exact tool name. Keep the port off any Ingress,
+# HTTPRoute, or LoadBalancer: a ClusterIP reachable by Prometheus is the whole
+# intended exposure.
+metrics:
+  enabled: false
+  port: 9090
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    # additionalLabels are what a Prometheus Operator release selector needs.
+    additionalLabels: {}
+  prometheusRule:
+    enabled: false
+    additionalLabels: {}
+    # failureRatio fires the alert when this share of a tool's calls fail.
+    failureRatio: 0.25
+    # for is how long the ratio must hold before it pages.
+    for: 30m
+    # minimumCallRate at this size only excludes a tool with zero traffic in
+    # the window: even one call in 15m already clears it. The real guard
+    # against paging on a barely-used tool is `for`, above — a single failure
+    # cannot sustain the ratio for 30 continuous minutes against a 15m
+    # lookback.
+    minimumCallRate: 0.001
+
 config:
   # publicURL is REQUIRED. It is the canonical origin plus the MCP path, and it
   # becomes the OAuth issuer, the resource identifier, and the audience every

@@ -11,6 +11,7 @@ import (
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/auth"
 	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
+	"github.com/tamcore/garmin-mcp/internal/testkit"
 )
 
 const (
@@ -379,5 +380,34 @@ func TestRefreshErrorsCarryNoSecrets(t *testing.T) {
 		if strings.Contains(err.Error(), bad) {
 			t.Fatalf("error %q leaked %q", err, bad)
 		}
+	}
+}
+
+// TestRefreshRecordsItsOutcome is the counter the token-expiry alert reads.
+func TestRefreshRecordsItsOutcome(t *testing.T) {
+	clock := testkit.NewFakeClock(refreshStart())
+	store := newFakeStore()
+	store.put(testPrincipalID, storedSet(refreshStart()), 1)
+	observer := &fakeAuthObserver{}
+
+	refresher, err := auth.NewRefresher(auth.RefreshConfig{
+		Hosts:     offlineHosts(t),
+		Transport: &stubTransport{handler: alwaysRotate},
+		Store:     store,
+		Clock:     clock,
+		Metrics:   observer,
+	})
+	if err != nil {
+		t.Fatalf("NewRefresher: %v", err)
+	}
+
+	if _, err := refresher.Refresh(t.Context(), testPrincipalID); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	observer.mu.Lock()
+	defer observer.mu.Unlock()
+	if len(observer.refresh) != 1 || observer.refresh[0] != "ok" {
+		t.Fatalf("the refresh recorded %v, want exactly one ok", observer.refresh)
 	}
 }

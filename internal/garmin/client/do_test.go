@@ -309,3 +309,93 @@ func jsonHeader() http.Header {
 	header.Set("Content-Type", mediaTypeJSON)
 	return header
 }
+
+type observedAttempt struct {
+	endpoint, op  string
+	status, bytes int
+}
+
+// fakeUpstreamObserver stands in for the consumer's metrics.Recorder.
+type fakeUpstreamObserver struct {
+	mu    sync.Mutex
+	calls []observedAttempt
+}
+
+func (f *fakeUpstreamObserver) UpstreamRequest(
+	endpoint, op string, status, responseBytes int, _ time.Duration,
+) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, observedAttempt{endpoint, op, status, responseBytes})
+}
+
+func (f *fakeUpstreamObserver) recorded() []observedAttempt {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]observedAttempt(nil), f.calls...)
+}
+
+// newTestClientWithMetrics is newTestClient plus an UpstreamObserver.
+func newTestClientWithMetrics(t *testing.T, observer client.UpstreamObserver) *client.Client {
+	t.Helper()
+
+	c, err := client.New(client.Config{
+		Hosts:   testHosts(t),
+		Sleeper: client.SleeperFunc(func(context.Context, time.Duration) error { return nil }),
+		Jitter:  func() float64 { return 1 },
+		Metrics: observer,
+	})
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	return c
+}
+
+// doOneTestRequest drives exactly one successful request through c.
+func doOneTestRequest(t *testing.T, c *client.Client) {
+	t.Helper()
+
+	caller := &stubCaller{outcomes: []stubOutcome{{
+		status: http.StatusOK,
+		header: jsonHeader(),
+		body:   []byte(profileBody),
+	}}}
+	if _, err := c.Do(t.Context(), mustSession(t, caller), profileRequest()); err != nil {
+		t.Fatalf("Do() = %v, want nil", err)
+	}
+}
+
+// TestEveryAttemptIsObservedWithItsEndpointLabel pins the upstream seam. One
+// tool call fans out into many Garmin requests, and a tool-level latency number
+// alone hides that entirely, so each attempt must be counted.
+func TestEveryAttemptIsObservedWithItsEndpointLabel(t *testing.T) {
+	t.Parallel()
+
+	observer := &fakeUpstreamObserver{}
+	c := newTestClientWithMetrics(t, observer)
+
+	doOneTestRequest(t, c)
+
+	calls := observer.recorded()
+	if len(calls) != 1 {
+		t.Fatalf("the client observed %d attempts, want exactly 1", len(calls))
+	}
+	if calls[0].endpoint != string(client.EndpointSocialProfile) {
+		t.Fatalf("endpoint = %q, want the constant label %q, never a URL",
+			calls[0].endpoint, client.EndpointSocialProfile)
+	}
+	if calls[0].op != string(client.OpGetSocialProfile) {
+		t.Fatalf("op = %q, want the constant %q", calls[0].op, client.OpGetSocialProfile)
+	}
+	if calls[0].status != http.StatusOK {
+		t.Fatalf("the observed status is %d, want 200", calls[0].status)
+	}
+}
+
+func TestAttemptObservationSurvivesANilObserver(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClientWithMetrics(t, nil)
+
+	doOneTestRequest(t, c) // must not panic
+}

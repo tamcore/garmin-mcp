@@ -196,6 +196,7 @@ func withLimits(cfg Config, store *viper.Viper) Config {
 	out.WriteRateLimitPerMinute = store.GetInt(keyWriteRateLimit)
 	out.LogLevel = strings.ToLower(strings.TrimSpace(store.GetString(keyLogLevel)))
 	out.LogFormat = strings.ToLower(strings.TrimSpace(store.GetString(keyLogFormat)))
+	out.MetricsAddress = strings.TrimSpace(store.GetString(keyMetricsAddress))
 	return out
 }
 

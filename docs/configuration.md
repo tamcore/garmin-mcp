@@ -74,6 +74,7 @@ when the deployment is assembled — see [Start-up refusals](#start-up-refusals)
 | `state-dir` | `--state-dir` | per-user configuration directory + `/garmin-mcp` | both | No `..` segment. Holds `keys/` and `tokens/`. On a Kubernetes volume mount, point this at a subdirectory of the mount, never at the mount root — see [operations.md](operations.md#the-state-directory-on-a-kubernetes-volume-mount). |
 | `log-level` | `--log-level` | `info` | both | `debug`, `info`, `warn`, or `error`. An unknown level is rejected rather than defaulted. |
 | `log-format` | `--log-format` | `text` | both | `text` or `json`. |
+| `metrics-address` | `--metrics-address` | *(empty)* | both | `host:port` for the Prometheus metrics listener, on a port of its own. Empty disables it. The endpoint is unauthenticated and its labels carry the pseudonymous principal identifier and the exact tool name, so it must never be reachable from outside the deployment's trust boundary. |
 
 Logs never go to standard output. In stdio mode that stream carries MCP frames
 only.

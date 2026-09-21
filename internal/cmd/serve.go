@@ -69,6 +69,7 @@ func runStdio(ctx context.Context, cfg config.Config, opts Options) error {
 		Logs:    opts.stderr(),
 		Tools:   opts.Tools,
 		Version: opts.BuildInfo.Version,
+		Commit:  opts.BuildInfo.Commit,
 	})
 	if err != nil {
 		return err
@@ -84,11 +85,45 @@ func runStdio(ctx context.Context, cfg config.Config, opts Options) error {
 		return fmt.Errorf("assembling the MCP server: %w", err)
 	}
 
-	err = server.RunStdio(ctx, mcpserver.StdioOptions{In: opts.stdin(), Out: opts.stdout()})
-	if isGracefulStop(ctx, err) {
-		return nil
+	deps.publishToolCounts()
+	if cfg.MetricsAddress == "" {
+		err = server.RunStdio(ctx, mcpserver.StdioOptions{In: opts.stdin(), Out: opts.stdout()})
+		if isGracefulStop(ctx, err) {
+			return nil
+		}
+		return err
 	}
-	return err
+	return runStdioWithMetrics(ctx, cfg, opts, deps, server)
+}
+
+// runStdioWithMetrics serves the session alongside the metrics listener.
+//
+// A failed bind does not abort the session: metrics are observability, and a
+// scrape port that cannot bind must not take down a working MCP session. The
+// error surfaces at exit instead.
+func runStdioWithMetrics(
+	ctx context.Context, cfg config.Config, opts Options,
+	deps *dependencies, server *mcpserver.Server,
+) error {
+	metricsCtx, stopMetrics := context.WithCancel(ctx)
+	defer stopMetrics()
+	metricsErr := make(chan error, 1)
+	go func() {
+		bindErr := serveMetrics(metricsCtx, cfg.MetricsAddress, deps.metrics.Handler())
+		if bindErr != nil {
+			// deps.events shares newLoggers' sink, which mcplog.New refuses to let
+			// be standard output, so this can never corrupt the MCP frame stream.
+			deps.events.Error("metrics listener failed", "error", bindErr)
+		}
+		metricsErr <- bindErr
+	}()
+
+	err := server.RunStdio(ctx, mcpserver.StdioOptions{In: opts.stdin(), Out: opts.stdout()})
+	stopMetrics()
+	if isGracefulStop(ctx, err) {
+		err = nil
+	}
+	return errors.Join(err, <-metricsErr)
 }
 
 // serverDeps projects the assembled graph onto the MCP server's dependency set.
@@ -104,6 +139,7 @@ func (d *dependencies) serverDeps(instructions string) mcpserver.Deps {
 			Version: d.version,
 		},
 		Logger:       d.logger,
+		Metrics:      d.metrics,
 		Policy:       d.policy,
 		Limiter:      d.limiter,
 		Principals:   d.principals,

@@ -41,6 +41,9 @@ type RefreshConfig struct {
 	// publishes a refresh result and retires its flight, so a test can prove that
 	// no second caller can observe a retired-but-unpublished flight.
 	onFlightRetire func()
+
+	// Metrics receives refresh outcomes. Nil means no metrics.
+	Metrics Observer
 }
 
 // Refresher keeps one principal's DI token set usable.
@@ -63,6 +66,7 @@ type Refresher struct {
 	clock   Clock
 	window  time.Duration
 	logger  *slog.Logger
+	metrics Observer
 
 	// onFlightRetire is the test seam from RefreshConfig; nil in production.
 	onFlightRetire func()
@@ -115,6 +119,7 @@ func NewRefresher(cfg RefreshConfig) (*Refresher, error) {
 		clock:   clock,
 		window:  window,
 		logger:  logger,
+		metrics: cfg.Metrics,
 		flights: make(map[string]*refreshFlight),
 
 		onFlightRetire: cfg.onFlightRetire,
@@ -162,8 +167,21 @@ func (r *Refresher) Refresh(ctx context.Context, principal string) (TokenSet, er
 	}
 
 	set, err := r.rotate(ctx, principal)
+	r.recordRefresh(err)
 	r.finishFlight(principal, flight, set, err)
 	return set, err
+}
+
+// recordRefresh reports one refresh's outcome. metrics may be nil.
+func (r *Refresher) recordRefresh(err error) {
+	if r.metrics == nil {
+		return
+	}
+	outcome := outcomeOK
+	if err != nil {
+		outcome = outcomeError
+	}
+	r.metrics.TokenRefresh(outcome)
 }
 
 // joinFlight returns the flight for principal, creating it when none is running.

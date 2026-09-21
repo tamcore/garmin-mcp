@@ -60,6 +60,7 @@ code and the tests that only covered it.
 | `internal/identity` | 97.7% |
 | `internal/loginweb` | 87.4% |
 | `internal/mcpserver` | 90.3% |
+| `internal/metrics` | 99.1% (measured 2026-09-21, added after this table's 2026-09-08 sweep) |
 | `internal/notices` | 92.8% |
 | `internal/oauthserver` | 93.1% |
 | `internal/oauthstore` | 85.0% |
@@ -74,6 +75,33 @@ code and the tests that only covered it.
 
 Every package is at or above the 80% floor `AGENTS.md`'s "Testing" section
 states as universal, enforced by `ci.yaml` in both directions.
+
+## 2026-09-21: Prometheus metrics landed
+
+`internal/metrics` exists and is wired into the tool-call path, the upstream
+request path, and login and token-refresh outcomes, plus a `registered_tools`
+gauge and a `build_info` gauge. A separate, metrics-only `http.Server` serves
+`/metrics` under `metrics-address` (`GARMIN_MCP_METRICS_ADDRESS`), validated in
+the transport-independent configuration path so it works the same under stdio
+and Streamable HTTP; empty, the default, disables it. ADR 0010 records the
+`prometheus/client_golang` dependency, and `docs/threat-model.md` and
+`docs/operations.md` record the exposure decision — network boundary only,
+default off, no authentication — because the per-tool failure-rate alert this
+enables is the feature's purpose. The Helm chart gained `metrics.enabled`, a
+`ServiceMonitor` and a `PrometheusRule` shipping two alerts, all default off.
+
+**Not landed, by design or not yet:**
+
+- No tracing and no exemplars. Only counters, histograms and gauges exist;
+  `AGENTS.md`'s `observability/` entry still lists tracing as planned.
+- No authentication on the metrics port. The mitigation is exclusively the
+  network boundary, stated in `docs/threat-model.md`'s "Operational exposure"
+  section.
+- No e2e coverage of the stdio metrics listener: `e2e/` drives the compiled
+  binary over stdio and Streamable HTTP for MCP behavior, but no e2e test
+  starts a stdio process with `metrics-address` set and scrapes it. Unit
+  coverage on `internal/metrics` and the tool/upstream/auth instrumentation
+  seams is what stands behind the listener today.
 
 ## 2026-09-08: over-engineering sweep
 

@@ -580,10 +580,26 @@ readiness check is injected and bounded by a two-second timeout, so a wedged
 store answers honestly instead of hanging. A real MCP route published on either
 path still wins, so a probe cannot shadow the server's own surface.
 
-There are still **no** metrics and **no** separate administration listener.
+Metrics exist now (`internal/metrics`), served on their own `http.Server` bound
+to `metrics-address` (empty, the default, disables the listener) and reachable
+under both transports. There is still **no** separate administration listener.
 
-`/livez` and `/readyz` must expose no secret detail. Metrics are optional and
-must use bounded-cardinality labels only; raw user IDs, emails, activity IDs, and
-tool arguments must never appear in labels. Administration and metrics endpoints
-must run on a separate listener or be explicitly protected. Audit events must
-contain no credentials and no health or location payloads.
+The metrics port is unauthenticated, plain HTTP, and carries labels including
+the pseudonymous principal ID and the exact tool name. An attacker who reaches
+it learns which principal called which tool, and on this server a tool name can
+itself name a medical domain (`get_sleep_data`, `get_blood_pressure`,
+`get_menstrual_calendar_data`). The mitigation is the network boundary alone —
+the port must stay off any Ingress, HTTPRoute, or LoadBalancer, and both the
+listener setting and the chart's `ServiceMonitor`/`PrometheusRule` default off —
+with no authentication layered on top. This is a deliberate decision, not an
+oversight: the per-tool failure-rate alert is the feature's purpose, and a
+principal or tool label with reduced cardinality could not drive it. See
+`docs/operations.md` for the exposure rule and the full metric table.
+
+`/livez` and `/readyz` must expose no secret detail. Metrics use
+bounded-cardinality labels only; raw user IDs, emails, activity IDs, and tool
+arguments must never appear in labels — landed, not merely required: neither
+`ToolEvent.Arguments` nor `ToolEvent.Reason` is ever rendered as a label, and
+`TestToolCallNeverRendersArgumentsOrReason` pins it. Administration and metrics
+endpoints must run on a separate listener or be explicitly protected. Audit
+events must contain no credentials and no health or location payloads.

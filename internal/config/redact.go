@@ -50,6 +50,7 @@ type redactedConfig struct {
 	WriteRateLimit              int      `json:"writeRateLimitPerMinute"`
 	LogLevel                    string   `json:"logLevel"`
 	LogFormat                   string   `json:"logFormat"`
+	MetricsAddress              string   `json:"metricsAddress,omitempty"`
 	ConfigFile                  string   `json:"configFile,omitempty"`
 }
 
@@ -95,6 +96,7 @@ func (c Config) redacted() redactedConfig {
 		WriteRateLimit:              c.WriteRateLimitPerMinute,
 		LogLevel:                    c.LogLevel,
 		LogFormat:                   c.LogFormat,
+		MetricsAddress:              c.MetricsAddress,
 		ConfigFile:                  c.ConfigFile,
 	}
 }
@@ -142,6 +144,7 @@ func (r redactedConfig) pairs() []string {
 		"writeRateLimitPerMinute:" + strconv.Itoa(r.WriteRateLimit),
 		"logLevel:" + quoteValue(r.LogLevel),
 		"logFormat:" + quoteValue(r.LogFormat),
+		"metricsAddress:" + quoteValue(r.MetricsAddress),
 		"configFile:" + quoteValue(r.ConfigFile),
 	}
 }
@@ -188,6 +191,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("safetyDelay", red.SafetyDelay),
 		slog.String("logLevel", red.LogLevel),
 		slog.String("logFormat", red.LogFormat),
+		slog.String("metricsAddress", red.MetricsAddress),
 		slog.String("configFile", red.ConfigFile),
 	)
 }

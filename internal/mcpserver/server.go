@@ -65,6 +65,16 @@ func (i Info) validate() error {
 	return nil
 }
 
+// A ToolObserver records one completed tool call.
+//
+// It is declared here rather than in the metrics package because the consumer
+// owns its interfaces, and because it keeps the Prometheus dependency out of
+// this package's import graph. Both *metrics.Recorder and *mcplog.Logger
+// satisfy it, which is the point: both see the identical event.
+type ToolObserver interface {
+	ToolCall(mcplog.ToolEvent)
+}
+
 // Deps is the injected dependency set.
 //
 // Policy and Principals are required. Logger and Limiter may be nil, because both
@@ -78,6 +88,10 @@ type Deps struct {
 
 	// Logger is the structured logging seam. A nil logger records nothing.
 	Logger *mcplog.Logger
+
+	// Metrics records each tool call alongside the log. A nil value disables
+	// recording; it is not an error, because metrics are opt-in.
+	Metrics ToolObserver
 
 	// Policy is the tier and scope gate. Required.
 	Policy *policy.Policy

@@ -41,6 +41,8 @@ type Config struct {
 	Jitter Jitter
 	// Logger receives redacted progress records. Nil means slog.Default.
 	Logger *slog.Logger
+	// Metrics receives login attempt outcomes. Nil means no metrics.
+	Metrics Observer
 }
 
 // Authenticator runs the Garmin login state machine over a pluggable transport.
@@ -60,6 +62,7 @@ type Authenticator struct {
 	sleeper  Sleeper
 	jitter   Jitter
 	logger   *slog.Logger
+	metrics  Observer
 }
 
 // NewAuthenticator validates cfg and returns an Authenticator.
@@ -83,6 +86,7 @@ func NewAuthenticator(cfg Config) (*Authenticator, error) {
 		sleeper:  cfg.Sleeper,
 		jitter:   cfg.Jitter,
 		logger:   cfg.Logger,
+		metrics:  cfg.Metrics,
 	}
 	if authenticator.gate == nil {
 		authenticator.gate = NewTokenGate()
@@ -154,6 +158,7 @@ func (a *Authenticator) attemptStrategy(
 ) (Result, error, bool) {
 	step, err := a.runStrategy(ctx, strategy, creds)
 	if err != nil {
+		a.recordLogin(strategy, outcomeError)
 		return failedResult(strategy), err, false
 	}
 
@@ -161,25 +166,41 @@ func (a *Authenticator) attemptStrategy(
 	case protocol.OutcomeSuccess:
 		account, err := a.completeLogin(ctx, principal, step.class, step.serviceURL)
 		if err != nil {
+			a.recordLogin(strategy, outcomeError)
 			// A rejected or unverifiable session says nothing about the
 			// password, so the next strategy still gets a turn. A failed
 			// persistence is different: no other strategy can fix the store, and
 			// a stale candidate must not be rewritten, so the chain ends.
 			return failedResult(strategy), err, errors.Is(err, ErrTokenPersistenceFailed)
 		}
+		a.recordLogin(strategy, outcomeOK)
 		return authenticatedResult(strategy, account), nil, true
 
 	case protocol.OutcomeMFARequired:
 		result, err := a.beginMFA(principal, strategy, step)
+		if err != nil {
+			a.recordLogin(strategy, outcomeError)
+		} else {
+			a.recordLogin(strategy, outcomeMFARequired)
+		}
 		return result, err, true
 
 	default:
+		a.recordLogin(strategy, outcomeError)
 		verdict := step.class.Err(strategy.loginOp(), strategy.loginEndpoint(), nil)
 		if step.class.Outcome().StopsFallback() {
 			return failedResult(strategy), verdict, true
 		}
 		return failedResult(strategy), verdict, false
 	}
+}
+
+// recordLogin reports one strategy's attempt outcome. metrics may be nil.
+func (a *Authenticator) recordLogin(strategy StrategyName, outcome string) {
+	if a.metrics == nil {
+		return
+	}
+	a.metrics.LoginAttempt(strategy.String(), outcome)
 }
 
 // completeLogin turns a success verdict into a stored, validated token set: the

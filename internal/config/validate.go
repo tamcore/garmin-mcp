@@ -29,6 +29,7 @@ func (c Config) Validate() error {
 	errs = append(errs, c.validatePaths()...)
 	errs = append(errs, c.validateToolPolicy()...)
 	errs = append(errs, c.validateLoginAllowedEmails()...)
+	errs = append(errs, c.validateMetricsAddress()...)
 
 	switch c.Transport {
 	case TransportStdio:

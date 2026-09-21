@@ -13,6 +13,7 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
 	"github.com/tamcore/garmin-mcp/internal/identity"
 	"github.com/tamcore/garmin-mcp/internal/mcplog"
+	"github.com/tamcore/garmin-mcp/internal/metrics"
 	"github.com/tamcore/garmin-mcp/internal/policy"
 	"github.com/tamcore/garmin-mcp/internal/ratelimit"
 	"github.com/tamcore/garmin-mcp/internal/store"
@@ -31,6 +32,10 @@ type wiring struct {
 
 	// Version is the advertised build version. Empty renders as "unknown".
 	Version string
+
+	// Commit is the build's source revision. It is published only as a metrics
+	// label, so an empty value is left empty rather than rendered.
+	Commit string
 }
 
 func (w *wiring) logs() io.Writer {
@@ -45,6 +50,15 @@ func (w *wiring) toolFactory() ToolFactory {
 		return nil
 	}
 	return w.Tools
+}
+
+// commit returns the build revision, empty when unset: it is a metrics label
+// rather than something an operator reads, so "unknown" would be noise.
+func (w *wiring) commit() string {
+	if w == nil {
+		return ""
+	}
+	return w.Commit
 }
 
 func (w *wiring) version() string {
@@ -78,6 +92,11 @@ type dependencies struct {
 
 	logger *mcplog.Logger
 	events *slog.Logger
+
+	// metrics records the server's own telemetry. It is nil when no metrics
+	// address is configured, and every Recorder method is nil-safe, so no
+	// consumer branches on it.
+	metrics *metrics.Recorder
 
 	// mode is the deployment shape the policy is built for.
 	mode policy.Mode
@@ -192,11 +211,17 @@ func newGraph(
 		return nil, err
 	}
 
+	var recorder *metrics.Recorder
+	if cfg.MetricsAddress != "" {
+		recorder = metrics.New(metrics.Config{Version: w.version(), Commit: w.commit()})
+	}
+
 	deps := &dependencies{
 		cfg:                    cfg,
 		paths:                  paths,
 		logger:                 logger,
 		events:                 events,
+		metrics:                recorder,
 		mode:                   s.mode,
 		principal:              s.principal,
 		principals:             s.principals,
@@ -242,6 +267,7 @@ func (d *dependencies) buildGarmin() error {
 			Registry:  registry,
 			TokenGate: gate,
 			Logger:    d.events,
+			Metrics:   d.metrics,
 		},
 		refresh: auth.RefreshConfig{
 			Hosts:     hosts,
@@ -249,6 +275,7 @@ func (d *dependencies) buildGarmin() error {
 			Store:     d.tokens,
 			TokenGate: gate,
 			Logger:    d.events,
+			Metrics:   d.metrics,
 		},
 	}
 
@@ -261,9 +288,10 @@ func (d *dependencies) buildGarmin() error {
 		return fmt.Errorf("building the Garmin token refresher: %w", err)
 	}
 	rest, err := client.New(client.Config{
-		Hosts:  hosts,
-		Limits: garminLimits(d.cfg),
-		Logger: d.events,
+		Hosts:   hosts,
+		Limits:  garminLimits(d.cfg),
+		Logger:  d.events,
+		Metrics: d.metrics,
 	})
 	if err != nil {
 		return fmt.Errorf("building the Garmin request layer: %w", err)
@@ -322,4 +350,15 @@ func garminLimits(cfg config.Config) client.Limits {
 	decompressed := min(cfg.MaxResponseBytes*decompressedHeadroom, client.MaxDecompressedBytesCap)
 	limits.MaxDecompressedBytes = decompressed
 	return limits
+}
+
+// publishToolCounts publishes how many tools each tier registered, so a
+// dashboard can tell a read-only deployment from one with writes enabled.
+func (d *dependencies) publishToolCounts() {
+	if d.metrics == nil {
+		return
+	}
+	for tier, count := range d.tools.countsByTier() {
+		d.metrics.SetRegisteredTools(tier, count)
+	}
 }

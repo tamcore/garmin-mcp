@@ -43,6 +43,50 @@ func startMFA(t *testing.T, h *harness) string {
 	return result.TransactionID()
 }
 
+// TestLoginRecordsMFARequiredAsItsOwnOutcome pins that an MFA challenge is
+// never counted as a completed login: credentials were accepted, but no
+// session exists yet, so an outage that stalls every login at MFA must not
+// read as a 100% success rate.
+func TestLoginRecordsMFARequiredAsItsOwnOutcome(t *testing.T) {
+	server := testkit.NewServer(t, mobileMFAScript())
+	clock := testkit.NewFakeClock(fakeStart())
+	registry, err := auth.NewRegistry(auth.RegistryConfig{Clock: clock})
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+	observer := &fakeAuthObserver{}
+	authenticator, err := auth.NewAuthenticator(auth.Config{
+		Hosts:     server.Hosts(protocol.DomainGlobal),
+		Transport: server.Doer(),
+		Store:     newFakeStore(),
+		Registry:  registry,
+		Clock:     clock,
+		Sleeper:   clock,
+		Metrics:   observer,
+	})
+	if err != nil {
+		t.Fatalf("NewAuthenticator: %v", err)
+	}
+
+	result, err := authenticator.Login(t.Context(), testPrincipal,
+		auth.NewCredentials(testEmail, testPassword))
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if !result.NeedsMFA() {
+		t.Fatalf("Login returned %v, want an MFA challenge", result)
+	}
+
+	observer.mu.Lock()
+	defer observer.mu.Unlock()
+	if len(observer.attempts) != 1 {
+		t.Fatalf("attempts = %v, want exactly one", observer.attempts)
+	}
+	if got := observer.attempts[0]; got != [2]string{string(auth.StrategyMobileIOS), "mfa-required"} {
+		t.Fatalf("attempt = %v, want {%q, %q}", got, auth.StrategyMobileIOS, "mfa-required")
+	}
+}
+
 func TestLoginMFAChallengeThenCompletion(t *testing.T) {
 	h := newHarness(t, mobileMFAScript())
 

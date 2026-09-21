@@ -82,13 +82,14 @@ failure would teach maintainers to ignore the gate.
 
 ## Direct requirements [NOW]
 
-This table matches the first `require` block of `go.mod` exactly: seven modules,
+This table matches the first `require` block of `go.mod` exactly: eight modules,
 no more and no fewer.
 
 | Module | Version | License | Released | Used by |
 |--------|---------|---------|----------|---------|
 | `github.com/modelcontextprotocol/go-sdk` | `v1.7.0` | Apache-2.0 with a residual MIT subset; see below | 2026-07-28 | `internal/mcpserver`, `internal/tools`, `internal/oauthserver` |
 | `github.com/muktihari/fit` | `v0.28.3` | BSD-3-Clause, plus Garmin's `LICENSE-FIT-SDK` | 2026-08-11 | `internal/garmin/api` (FIT activity decoding) |
+| `github.com/prometheus/client_golang` | `v1.24.1` | Apache-2.0 | 2026-07-24 | `internal/metrics` |
 | `github.com/spf13/cobra` | `v1.10.2` | Apache-2.0 (`LICENSE.txt`) | 2025-12-03 | `internal/cmd` |
 | `github.com/spf13/pflag` | `v1.0.10` | BSD-3-Clause | 2025-09-02 | `internal/config` |
 | `github.com/spf13/viper` | `v1.21.0` | MIT | 2025-09-08 | `internal/config` |
@@ -133,6 +134,33 @@ of them and the indirect set below gains no entry. It does move two existing
 indirect requirements up by minimal version selection: `golang.org/x/text` from
 `v0.39.0` to `v0.40.0` and `golang.org/x/sync` from `v0.21.0` to `v0.22.0`. Both
 stay above the advisory floors recorded below.
+
+### `github.com/prometheus/client_golang`
+
+**Version.** `v1.24.1`. License Apache-2.0, with a `NOTICE` file.
+
+**Rationale.** `internal/metrics` needs a Prometheus text exposition endpoint,
+correct histogram bucketing, and the standard Go and process runtime
+collectors (goroutines, heap, GC pauses, file descriptors). See
+[ADR 0010](adr/0010-prometheus-client-golang.md) for why a hand-rolled exporter
+and an OTLP push pipeline were both rejected. Only `prometheus`, its
+`collectors` subpackage, and `promhttp` are imported; the registry backing
+them is private to each `metrics.Recorder`, never the package's default
+global registerer.
+
+**License.** Apache-2.0. Compatible with distribution of this project. The
+`NOTICE` file carries no additional obligation beyond reproduction, which
+`THIRD_PARTY_NOTICES.md` already does for every linked module.
+
+**Maintenance.** Active: `v1.24.1` released 2026-07-24. It is the reference
+Go client for the project it instruments, and the module the Go and process
+collectors used here originate from.
+
+**Cost.** Four indirect modules: `github.com/prometheus/client_model`,
+`github.com/prometheus/common`, `github.com/prometheus/procfs`, and
+`google.golang.org/protobuf`. `github.com/beorn7/perks`,
+`github.com/cespare/xxhash/v2`, and `github.com/munnerz/goautoneg` are already
+indirect through `github.com/prometheus/common`.
 
 ### `github.com/spf13/cobra`
 

@@ -126,7 +126,7 @@ func TestValidateRejectsUnsafeNetworkConfigurations(t *testing.T) {
 		{
 			name:     "http bind address without a port",
 			base:     validHTTPConfig,
-			mutate:   func(c *Config) { c.BindAddress = "127.0.0.1" },
+			mutate:   func(c *Config) { c.BindAddress = hostLoopback },
 			sentinel: ErrInvalidConfig,
 			field:    keyBindAddress,
 		},
@@ -281,5 +281,86 @@ func TestValidateNeverLeaksSecrets(t *testing.T) {
 		if strings.Contains(err.Error(), secret) {
 			t.Errorf("error %q leaks %q", err.Error(), secret)
 		}
+	}
+}
+
+// TestMetricsAddressIsOptional proves an empty value is the disabled default and
+// never an error: metrics are opt-in, so a deployment that never sets the
+// setting must still validate.
+func TestMetricsAddressIsOptional(t *testing.T) {
+	t.Parallel()
+
+	cfg := validHTTPConfig()
+	cfg.MetricsAddress = ""
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("an empty metrics address must validate, got %v", err)
+	}
+}
+
+func TestMetricsAddressRejectsAMalformedValue(t *testing.T) {
+	t.Parallel()
+
+	for _, address := range []string{"9090", hostLoopback, "127.0.0.1:0", "127.0.0.1:70000"} {
+		t.Run(address, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := validHTTPConfig()
+			cfg.MetricsAddress = address
+
+			err := cfg.Validate()
+			if !errors.Is(err, ErrInvalidConfig) {
+				t.Fatalf("address %q must be rejected as invalid, got %v", address, err)
+			}
+		})
+	}
+}
+
+// TestMetricsAddressAcceptsALoopbackBind is the shape the documentation tells an
+// operator to use.
+func TestMetricsAddressAcceptsALoopbackBind(t *testing.T) {
+	t.Parallel()
+
+	cfg := validHTTPConfig()
+	cfg.MetricsAddress = metricsLoopback
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("a loopback metrics address must validate, got %v", err)
+	}
+}
+
+// TestMetricsAddressAcceptsANonLoopbackBind pins the deliberate asymmetry with
+// bind-address. The MCP listener refuses an unprotected non-loopback bind because
+// it carries tokens; the metrics listener cannot carry TLS material at all, so
+// refusing the bind a Kubernetes scrape target needs would make the feature
+// unusable in the deployment it was built for. The protection is documented as a
+// network boundary, and docs/threat-model.md states it.
+func TestMetricsAddressAcceptsANonLoopbackBind(t *testing.T) {
+	t.Parallel()
+
+	cfg := validHTTPConfig()
+	cfg.MetricsAddress = "0.0.0.0:9090"
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("a non-loopback metrics address must validate, got %v", err)
+	}
+}
+
+// TestMetricsAddressIsValidatedUnderStdioToo proves validateMetricsAddress is
+// wired into the transport-independent path: the metrics listener runs under
+// stdio as well as streamable-http, so a stdio config with a malformed metrics
+// address must be rejected too, not only a remote one.
+func TestMetricsAddressIsValidatedUnderStdioToo(t *testing.T) {
+	t.Parallel()
+
+	cfg := Default()
+	cfg.MetricsAddress = hostLoopback
+
+	err := cfg.Validate()
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("a malformed metrics address under stdio must be rejected, got %v", err)
+	}
+	if !strings.Contains(err.Error(), keyMetricsAddress) {
+		t.Errorf("error %q does not name the offending setting %q", err.Error(), keyMetricsAddress)
 	}
 }
