@@ -338,8 +338,11 @@ func (c Client) Resources() []Resource { return slices.Clone(c.resources) }
 // treat them identically: in neither case may an error be delivered by
 // redirecting to it.
 //
-// Matching tries the registered exact URIs first, byte-exact. Failing that, it
-// tries the client's registered trailing-path patterns, if any. On a pattern
+// Matching tries the registered exact URIs first, byte-exact. Failing that, a
+// registered loopback URI admits the presented one when they differ only in the
+// port, which RFC 8252 §7.3 requires for a native client holding an ephemeral
+// port. Failing that, it tries the client's registered trailing-path patterns,
+// if any. On a pattern
 // match the return value is the concrete presented URI, not the pattern: a code,
 // consent row or token binds to that exact redirect, so a previously unseen
 // concrete URI under an already-approved pattern still needs fresh consent.
@@ -352,6 +355,15 @@ func (c Client) MatchRedirectURI(presented string) (RedirectURI, error) {
 	for _, registered := range c.redirectURIs {
 		if registered.Equal(candidate) {
 			return registered, nil
+		}
+	}
+	// A loopback registration admits any port, which RFC 8252 §7.3 requires. The
+	// concrete presented URI is returned, for the same reason a pattern match
+	// returns it: the code, the consent row and the token bind to the exact
+	// redirect the client is actually listening on.
+	for _, registered := range c.redirectURIs {
+		if registered.equalIgnoringPort(candidate) {
+			return candidate, nil
 		}
 	}
 	// A pattern admits the concrete presented URI, which is what is returned: the

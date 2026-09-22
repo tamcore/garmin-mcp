@@ -21,13 +21,23 @@ const (
 	schemeHTTP  = "http"
 )
 
-// isLoopbackHost reports whether host is one of the two literal loopback
-// addresses. RFC 8252 §8.3 recommends the literal address over the name
+// isLoopbackHost reports whether host is a loopback host a native client may
+// redirect to. RFC 8252 §8.3 prefers the literal address over the name
 // "localhost", because a name resolves through a resolver an attacker may
-// influence, so "localhost" is refused here. The rule is a function rather than
-// a package-level map because this package holds no mutable package state.
+// influence, but it is a recommendation to the client rather than a rule an
+// authorization server enforces, and refusing the name here only moved the
+// failure: internal/store and internal/config both accept it at registration
+// time, so a registration succeeded and the authorize gate then refused it.
+// The three definitions agree, and they must stay in agreement.
+//
+// The rule is a function rather than a package-level map because this package
+// holds no mutable package state.
 func isLoopbackHost(host string) bool {
-	return host == "127.0.0.1" || host == "::1"
+	switch host {
+	case "127.0.0.1", "::1", "localhost":
+		return true
+	}
+	return false
 }
 
 // A RedirectURI is a redirect URI that passed every structural check this server
@@ -78,6 +88,33 @@ func (u RedirectURI) IsZero() bool { return u.raw == "" }
 // two redirect URIs.
 func (u RedirectURI) Equal(other RedirectURI) bool {
 	return u.raw != "" && u.raw == other.raw
+}
+
+// equalIgnoringPort reports whether u and other name the same loopback target,
+// differing at most in the port. RFC 8252 §7.3 makes this a MUST: a native
+// client takes an ephemeral loopback port from the operating system at request
+// time, so the port cannot be known when the redirect URI is registered.
+//
+// Everything else stays exact. The host is compared as it was written, so
+// "localhost" does not match "127.0.0.1", and a non-loopback host never reaches
+// this comparison at all.
+func (u RedirectURI) equalIgnoringPort(other RedirectURI) bool {
+	if u.raw == "" || other.raw == "" {
+		return false
+	}
+	mine, err := url.Parse(u.raw)
+	if err != nil {
+		return false
+	}
+	theirs, err := url.Parse(other.raw)
+	if err != nil {
+		return false
+	}
+	return isLoopbackHost(mine.Hostname()) &&
+		mine.Scheme == theirs.Scheme &&
+		mine.Hostname() == theirs.Hostname() &&
+		mine.EscapedPath() == theirs.EscapedPath() &&
+		mine.RawQuery == theirs.RawQuery
 }
 
 // WithParams returns the URI with params added to its query string, which is how

@@ -311,3 +311,52 @@ func TestClientRenderingsCarryNoSecretHash(t *testing.T) {
 		}
 	}
 }
+
+func TestClientMatchRedirectURIAllowsAnyLoopbackPort(t *testing.T) {
+	spec := publicClientSpec()
+	spec.RedirectURIs = []string{
+		"http://127.0.0.1/callback",
+		"http://localhost/callback",
+		"https://client.example/cb",
+	}
+	client := mustClient(t, spec)
+
+	for name, presented := range map[string]string{
+		"literal v4 ephemeral port": "http://127.0.0.1:51518/callback",
+		"localhost ephemeral port":  "http://localhost:51518/callback",
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := client.MatchRedirectURI(presented)
+			if err != nil {
+				t.Fatalf("MatchRedirectURI(%q): %v", presented, err)
+			}
+			if got.String() != presented {
+				t.Fatalf("MatchRedirectURI(%q) = %q, want the presented URI", presented, got.String())
+			}
+		})
+	}
+
+	for name, presented := range map[string]string{
+		"other loopback host": "http://[::1]:51518/callback",
+		"other path":          "http://127.0.0.1:51518/other",
+		"query appended":      "http://127.0.0.1:51518/callback?x=1",
+		"not loopback":        "https://client.example:8443/cb",
+		"loopback lookalike":  "http://127.0.0.1.evil.test:51518/callback",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := client.MatchRedirectURI(presented); !errors.Is(err, ErrRedirectURINotRegistered) {
+				t.Fatalf("MatchRedirectURI(%q) error = %v, want ErrRedirectURINotRegistered", presented, err)
+			}
+		})
+	}
+}
+
+func TestClientMatchRedirectURIAcceptsLocalhostOverPlainHTTP(t *testing.T) {
+	spec := publicClientSpec()
+	spec.RedirectURIs = []string{"http://localhost:8080/callback"}
+	client := mustClient(t, spec)
+
+	if _, err := client.MatchRedirectURI("http://localhost:8080/callback"); err != nil {
+		t.Fatalf("MatchRedirectURI: %v", err)
+	}
+}

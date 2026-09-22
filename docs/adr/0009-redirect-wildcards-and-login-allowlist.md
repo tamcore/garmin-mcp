@@ -23,7 +23,7 @@ neither is unchanged:
 client's `redirect-uris`: a trailing-path wildcard, where `*` is the final
 byte, appears exactly once, and is immediately preceded by `/`. The prefix
 before it must pass every rule an exact registration passes — absolute, a
-host, `https` (or `http` only for a literal loopback address), lower-case
+host, `https` (or `http` only for a loopback host), lower-case
 scheme, no userinfo, no fragment, no control byte, within the URI length bound
 — and carry no query. A presented candidate matches only when the remainder
 after the prefix is non-empty and is built entirely from

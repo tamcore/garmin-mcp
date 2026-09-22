@@ -441,7 +441,11 @@ URI from configuration removes it from the database at the next start. A merge
 would let a URI an operator withdrew survive, which is the exact failure a
 redirect allowlist exists to prevent.
 
-Matching at authorization time is byte-exact by default. There is no
+Matching at authorization time is byte-exact by default, with one standing
+exception: a registered loopback redirect URI (`127.0.0.1`, `::1` or
+`localhost`) admits a presented one that differs only in the port, because
+RFC 8252 §7.3 requires it for a native client holding an ephemeral port. Scheme,
+host, path and query still match exactly. Beyond that there is no
 normalization and no prefix rule, and a `redirect-uris` entry carrying `*` is
 rejected outright unless `oauth-allow-redirect-wildcards` is set — see
 "Registering a redirect wildcard" below and
