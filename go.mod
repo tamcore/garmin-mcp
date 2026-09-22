@@ -1,6 +1,6 @@
 module github.com/tamcore/garmin-mcp
 
-go 1.27.0
+go 1.27.1
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
