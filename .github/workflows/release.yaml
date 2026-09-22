@@ -20,7 +20,7 @@ concurrency:
 
 env:
   # renovate: datasource=github-releases depName=goreleaser/goreleaser
-  GORELEASER_VERSION: v2.17.1
+  GORELEASER_VERSION: v2.6.5
   # renovate: datasource=github-releases depName=sigstore/cosign
   COSIGN_VERSION: v3.1.3
 
