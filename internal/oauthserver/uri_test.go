@@ -21,6 +21,7 @@ func TestParseRedirectURIAcceptsHTTPSAndLoopback(t *testing.T) {
 		"https://client.example:8443/cb?fixed=1",
 		"http://127.0.0.1:53682/callback",
 		"http://[::1]:53682/callback",
+		"http://localhost:53682/callback",
 	} {
 		t.Run(raw, func(t *testing.T) {
 			if got := mustRedirectURI(t, raw); got.String() != raw {
@@ -41,7 +42,6 @@ func TestParseRedirectURIRejectsUnsafeForms(t *testing.T) {
 		"wildcard host":                  "https://*.client.example/cb",
 		"wildcard path":                  "https://client.example/*",
 		"plain http":                     "http://client.example/cb",
-		"http localhost":                 "http://localhost:8080/cb",
 		"custom scheme":                  "com.example.app:/oauth",
 		"javascript":                     "javascript:alert(1)",
 		"data":                           "data:text/html,hi",
@@ -52,6 +52,7 @@ func TestParseRedirectURIRejectsUnsafeForms(t *testing.T) {
 		"redirect past the length limit": "https://client.example/" + strings.Repeat("a", MaxRedirectURILen),
 		"uppercase scheme":               "HTTPS://client.example/cb",
 		"http 127 no port":               "http://127.0.0.2/cb",
+		"localhost lookalike":            "http://localhost.evil.test/cb",
 	}
 	for name, raw := range cases {
 		t.Run(name, func(t *testing.T) {

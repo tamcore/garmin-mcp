@@ -53,7 +53,7 @@ date.
 | `internal/tools` | 144 registered tools — 100 read-only, 35 write, 9 destructive — the whole pinned manifest bar one documented refusal, with contracts snapshot-tested against `compat/tools.json` | 86.2% |
 | `internal/policy` | Three tiers, explicit name lists validated against the registered set at start-up, local operator authority, the remote enablement-and-scope intersection, confirmation requirement | 95.4% |
 | `internal/identity` | Principal type, request context, and the bearer resolver that takes the principal only from a verified token | 97.7% |
-| `internal/oauthserver` | The authorization server: PKCE S256 only, exact issuer matching, redirect matching that is exact by default and admits one opt-in trailing-path wildcard per client (`RedirectPattern`), single-use bound codes, hashed opaque tokens, rotating refresh with family revocation, consent bound to the concrete presented redirect | 93.1% |
+| `internal/oauthserver` | The authorization server: PKCE S256 only, exact issuer matching, redirect matching that is exact by default, admits any port on a loopback redirect URI per RFC 8252 §7.3, and admits one opt-in trailing-path wildcard per client (`RedirectPattern`), single-use bound codes, hashed opaque tokens, rotating refresh with family revocation, consent bound to the concrete presented redirect | 92.9% |
 | `internal/oauthstore` | The adapter from the authorization server's `Store` interface onto the SQLite store, with a compile-time assertion and five contention tests | 85.0% |
 | `internal/store` | `FileStore` for stdio, plus the migration-backed SQLite backend for remote: principals, encrypted DI token sets with CAS, clients, consents, hashed transactions and codes, token families, audit events. The database file and its `-wal`/`-shm` sidecars are verified before the driver ever opens them | 83.4% |
 | `migrations` | The embedded, checksummed, monotonic SQL migrations `0001_initial.sql` and `0002_oauth_contract.sql` | 100.0% |
@@ -134,8 +134,11 @@ These boundaries stay separate at all times, and all three are enforced by code:
 | This server to Garmin | Per-principal Garmin DI token set | Never returned to the MCP client |
 | Browser to login transaction | One-time cookie plus server-side transaction state | Credentials never become MCP tool arguments |
 
-OAuth redirect URI matching is byte-exact, with one narrow, default-off
-exception: the operator setting `oauth-allow-redirect-wildcards` admits a single
+OAuth redirect URI matching is byte-exact, with two exceptions. A registered
+loopback redirect URI (`127.0.0.1`, `::1` or `localhost`) admits a presented URI
+that differs only in the port, which RFC 8252 §7.3 makes a MUST; scheme, host,
+path and query still match exactly, so `localhost` never matches `127.0.0.1`.
+The second is narrow and default-off: the operator setting `oauth-allow-redirect-wildcards` admits a single
 trailing-path wildcard per registered client, under a fixed grammar that keeps
 the scheme and host exact and refuses path traversal in the matched remainder.
 It is unsafe by design; see `docs/threat-model.md` and ADR 0009. A separate

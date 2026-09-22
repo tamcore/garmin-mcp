@@ -62,7 +62,7 @@ code and the tests that only covered it.
 | `internal/mcpserver` | 90.3% |
 | `internal/metrics` | 99.1% (measured 2026-09-21, added after this table's 2026-09-08 sweep) |
 | `internal/notices` | 92.8% |
-| `internal/oauthserver` | 93.1% |
+| `internal/oauthserver` | 92.9% |
 | `internal/oauthstore` | 85.0% |
 | `internal/policy` | 95.4% |
 | `internal/ratelimit` | 95.9% |
@@ -75,6 +75,39 @@ code and the tests that only covered it.
 
 Every package is at or above the 80% floor `AGENTS.md`'s "Testing" section
 states as universal, enforced by `ci.yaml` in both directions.
+
+## 2026-09-22: loopback redirect URIs admit any port (issue #1)
+
+`MatchRedirectURI` matched a presented redirect URI byte-exactly, port included,
+so a native MCP client that takes an ephemeral loopback port from the operating
+system at request time could not have a redirect URI registered for it. RFC 8252
+§7.3 makes allowing any port on a loopback redirect URI a MUST, so this was a
+conformance defect, not a policy choice. A registered loopback URI now admits a
+presented one that differs only in the port, and the value returned is the
+concrete presented URI, for the same reason a pattern match returns it: the
+code, the consent row and the token bind to the exact redirect the client is
+listening on.
+
+`isLoopbackHost` in `internal/oauthserver/uri.go` refused the name `localhost`
+while `internal/store/sqlite_clients.go` and `internal/config/validate_network.go`
+both accepted it. A `http://localhost:port/callback` entry therefore registered
+successfully and was then refused at the authorize gate, and the most visible
+symptom was the worst one: `/authorize` opened a transaction, set the cookie and
+redirected, and `GET /login` then rendered the generic 404 page, because
+`oauthstore`'s `redirectOf` could not parse the stored URI back. Nothing was
+logged at that point. `localhost` is now loopback in all three packages.
+
+Everything else stays byte-exact. Scheme, host, path and query still match
+exactly, so `localhost` never matches `127.0.0.1`, and a non-loopback host is
+never compared without its port.
+
+**Not landed, by design or not yet:**
+
+- No e2e coverage. `e2e/oauthflow_test.go` drives the real `/authorize` and
+  `/token` endpoints but seeds a fixed redirect URI; the port-insensitive match
+  is covered at the unit layer in `internal/oauthserver` only.
+- No folding between `localhost` and `127.0.0.1`. They remain distinct hosts, so
+  a client that presents both registers both.
 
 ## 2026-09-21: Prometheus metrics landed
 
