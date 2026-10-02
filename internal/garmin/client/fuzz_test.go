@@ -27,6 +27,8 @@ func FuzzNumberUnmarshalJSON(f *testing.F) {
 	f.Add(`""`)
 	f.Add(`"not a number"`)
 	f.Add(`1e400`)
+	f.Add(`"NAN"`)
+	f.Add(`"-Inf"`)
 	f.Fuzz(func(t *testing.T, data string) {
 		var n client.Number
 		if err := n.UnmarshalJSON([]byte(data)); err != nil {

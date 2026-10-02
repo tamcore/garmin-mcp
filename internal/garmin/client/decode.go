@@ -95,7 +95,7 @@ func (n *Number) UnmarshalJSON(data []byte) error {
 // parse stores value, or reports a payload this decoder cannot tolerate.
 func (n *Number) parse(value string) error {
 	parsed, err := strconv.ParseFloat(value, 64)
-	if err != nil {
+	if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
 		return fmt.Errorf("garmin api: numeric field is not a number: %w", ErrMalformedPayload)
 	}
 	*n = Number{value: parsed, present: true, literal: value}
