@@ -164,7 +164,9 @@ var moduleNotices = map[string]moduleNotice{
 		Note: "The driver is BSD-3-Clause. It bundles SQLite itself, which its authors " +
 			"dedicated to the public domain; `LICENSE-SQLITE` states that dedication and is " +
 			"reproduced below. Since v1.59.0 it also bundles the sqlite-vec extension, " +
-			"which is MIT and is reproduced below as `LICENSE-SQLITE_VEC`.",
-		Files: []string{fileLicense, "LICENSE-SQLITE", "LICENSE-SQLITE_VEC"},
+			"which is MIT and is reproduced below as `LICENSE-SQLITE_VEC`. Since v1.60.1 it " +
+			"also ships `LICENSE-3RD-PARTY.md`, its own inventory of every component it " +
+			"links or transpiles, reproduced below as it ships.",
+		Files: []string{fileLicense, "LICENSE-3RD-PARTY.md", "LICENSE-SQLITE", "LICENSE-SQLITE_VEC"},
 	},
 }
