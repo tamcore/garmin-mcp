@@ -101,6 +101,9 @@ layer classified it as an unexpected response and the advice blamed upstream
 drift. `adviseLocal` now names the missing or rejected session for
 `auth.ErrRefreshRejected`, `auth.ErrNoTokens` and `auth.ErrNoRefreshToken`.
 
+`client.Number` accepted `"NaN"` and `"Inf"` spellings as set, non-finite values,
+which `fuzz-smoke` found. Both are now `ErrMalformedPayload`.
+
 ## 2026-09-22: loopback redirect URIs admit any port (issue #1)
 
 `MatchRedirectURI` matched a presented redirect URI byte-exactly, port included,
