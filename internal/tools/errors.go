@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/tamcore/garmin-mcp/internal/garmin/auth"
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 	"github.com/tamcore/garmin-mcp/internal/identity"
 )
@@ -126,6 +127,12 @@ func adviseLocal(err error) (string, bool) {
 	switch {
 	case errors.Is(err, identity.ErrNoPrincipal), errors.Is(err, client.ErrMissingPrincipal):
 		return "This request could not be attributed to an account, so it was refused.", true
+	case errors.Is(err, auth.ErrRefreshRejected), errors.Is(err, auth.ErrNoTokens),
+		errors.Is(err, auth.ErrNoRefreshToken):
+		// The token layer fails inside the transport, so the request layer sees no
+		// response and would otherwise call this an unexpected one.
+		return "No usable Garmin session for this account: the stored login was " +
+			"rejected or is missing. Re-authenticate the account, then retry.", true
 	case errors.Is(err, ErrInvalidArgument), errors.Is(err, client.ErrValidation):
 		return "The arguments were rejected as invalid before they reached Garmin. " +
 			"Check the date format, the ranges and the identifier.", true
