@@ -50,6 +50,8 @@ func recordFromContext(ctx context.Context) *callRecord {
 //
 // The order is:
 //
+//	0a. resultType — outermost, so every tools/call result on 2026-07-28 and later
+//	   names its resultType, including the ones the gates below build themselves.
 //	2a. recover — immediately inside logging, so a contained panic is still
 //	   reported. Outside logging it would work, but logging emits after its inner
 //	   handler returns, so a panic unwinding past it would be recovered and then
@@ -67,6 +69,7 @@ func recordFromContext(ctx context.Context) *callRecord {
 //	   Last, so it is the final word before the handler runs.
 func (s *Server) installMiddleware() {
 	s.mcpServer.AddReceivingMiddleware(
+		resultTypeMiddleware(),
 		s.toolsListMiddleware(),
 		argumentsMiddleware(),
 		s.principalMiddleware(),

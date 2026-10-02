@@ -8,7 +8,7 @@ Every stopping point updates this file in the same commit as the work it
 describes. Never mark an item done on the strength of a placeholder or
 `not implemented` handler.
 
-Last updated: 2026-09-08.
+Last updated: 2026-10-02.
 
 ## Phase status
 
@@ -81,6 +81,25 @@ code and the tests that only covered it.
 
 Every package is at or above the 80% floor `AGENTS.md`'s "Testing" section
 states as universal, enforced by `ci.yaml` in both directions.
+
+## 2026-10-02: every tools/call result names its resultType on 2026-07-28
+
+go-sdk v1.8.0 sets `resultType` only on a result a tool handler returns. Every
+result this server's own receiving middleware builds — the destructive-tier
+confirmation request, a policy or confirmation refusal, a rate-limit answer, a
+recovered panic — bypassed that code. A client on protocol `2026-07-28` rejects
+such a result as malformed, so every destructive tool (`unschedule_workout`,
+`delete_workout`, ...) failed before the confirmation prompt and nothing was
+deleted. The SDK's own client tolerates the omission, which is why the unit
+tests stayed green. `resultTypeMiddleware` (`internal/mcpserver/resulttype.go`)
+is now the outermost middleware and stamps `complete` or `input_required` on the
+wire; `TestEveryToolCallResultCarriesResultTypeOnTheNewProtocol` checks the raw
+frame.
+
+A token the refresh step cannot renew fails inside the transport, so the request
+layer classified it as an unexpected response and the advice blamed upstream
+drift. `adviseLocal` now names the missing or rejected session for
+`auth.ErrRefreshRejected`, `auth.ErrNoTokens` and `auth.ErrNoRefreshToken`.
 
 ## 2026-09-22: loopback redirect URIs admit any port (issue #1)
 
