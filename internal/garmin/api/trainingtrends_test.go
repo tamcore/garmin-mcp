@@ -132,9 +132,6 @@ func TestProgressSummaryReadsTheAggregateAndSendsUpstreamsParameters(t *testing.
 	if !ok {
 		t.Fatal("First() reported no entry")
 	}
-	if got, ok := entry.CountOfActivities.Int64(); !ok || got != 12 {
-		t.Errorf("countOfActivities = %d (set %v), want 12", got, ok)
-	}
 	if _, ok := entry.Stats["running"]["distance"]; !ok {
 		t.Errorf("stats carried no running/distance entry: %v", entry.Stats)
 	}

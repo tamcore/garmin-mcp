@@ -11695,15 +11695,11 @@
       "additionalProperties": false,
       "properties": {
         "count_of_activities": {
-          "description": "how many activities the window held",
+          "description": "the sum of the per-type counts",
           "type": [
             "null",
             "integer"
           ]
-        },
-        "date": {
-          "description": "the day Garmin dated the summary",
-          "type": "string"
         },
         "end_date": {
           "description": "the last calendar day of the window",

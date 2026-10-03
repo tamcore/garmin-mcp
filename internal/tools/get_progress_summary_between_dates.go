@@ -6,6 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tamcore/garmin-mcp/internal/garmin/api"
+	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 	"github.com/tamcore/garmin-mcp/internal/mcpserver"
 	"github.com/tamcore/garmin-mcp/internal/policy"
 )
@@ -21,6 +22,10 @@ const ToolGetProgressSummaryBetweenDates = "get_progress_summary_between_dates"
 // an account uses. A summary that outgrows it is truncated with the flag set, never
 // silently shortened.
 const DefaultMaxProgressActivityTypes = 128
+
+// progressCaloriesFactor is the factor Garmin stores the calories metric under.
+// Upstream measured it empirically (training.py:29-35); it is not a kJ constant.
+const progressCaloriesFactor = 4.19
 
 // maxProgressMetricArgumentLen bounds the metric argument. It matches the bound the
 // domain client enforces, so the declared contract and the behaviour cannot drift.
@@ -49,9 +54,8 @@ type ProgressSummary struct {
 	StartDate string `json:"start_date" jsonschema:"the first calendar day of the window"`
 	EndDate   string `json:"end_date" jsonschema:"the last calendar day of the window"`
 
-	HasData           bool   `json:"has_data" jsonschema:"whether Garmin held a summary for the window"`
-	Date              string `json:"date,omitempty" jsonschema:"the day Garmin dated the summary"`
-	CountOfActivities *int   `json:"count_of_activities,omitempty" jsonschema:"how many activities the window held"`
+	HasData           bool `json:"has_data" jsonschema:"whether Garmin held a summary for the window"`
+	CountOfActivities *int `json:"count_of_activities,omitempty" jsonschema:"the sum of the per-type counts"`
 
 	StatsByActivityType []ProgressActivityStats `json:"stats_by_activity_type" jsonschema:"one entry per activity type"`
 	Truncated           bool                    `json:"truncated" jsonschema:"whether the list was cut at the bound"`
@@ -156,34 +160,42 @@ func newProgressSummary(
 	}
 
 	out.HasData = true
-	if entry.Date != nil {
-		out.Date = *entry.Date
-	}
-	out.CountOfActivities = optionalInt(entry.CountOfActivities)
-	out.StatsByActivityType, out.Truncated = progressStats(entry, metric)
+	stats, total := progressStats(entry, metric)
+	out.CountOfActivities = &total
+	limit := min(len(stats), DefaultMaxProgressActivityTypes)
+	out.StatsByActivityType, out.Truncated = stats[:limit], len(stats) > limit
 	return out
 }
 
-// progressStats renders the per-activity-type aggregates of the requested metric, in a
-// stable order and under the bound.
-func progressStats(entry api.ProgressSummary, metric string) ([]ProgressActivityStats, bool) {
+// progressStats renders, in a stable order, the per-activity-type aggregates of the
+// requested metric that count at least one activity, and the sum of those counts.
+func progressStats(entry api.ProgressSummary, metric string) ([]ProgressActivityStats, int) {
 	out := make([]ProgressActivityStats, 0, len(entry.Stats))
+	total := 0
 	for _, activityType := range sortedStatKeys(entry.Stats) {
 		stats, ok := entry.Stats[activityType][metric]
-		if !ok {
+		count, counted := stats.Count.Int64()
+		if !ok || !counted || count <= 0 {
 			continue
 		}
+		total += int(count)
 		out = append(out, ProgressActivityStats{
 			ActivityType: activityType,
-			Count:        optionalInt(stats.Count),
-			Sum:          optionalFloat(stats.Sum),
-			Avg:          optionalFloat(stats.Avg),
-			Min:          optionalFloat(stats.Min),
-			Max:          optionalFloat(stats.Max),
+			Count:        new(int(count)),
+			Sum:          progressValue(stats.Sum, metric),
+			Avg:          progressValue(stats.Avg, metric),
+			Min:          progressValue(stats.Min, metric),
+			Max:          progressValue(stats.Max, metric),
 		})
 	}
-	if len(out) > DefaultMaxProgressActivityTypes {
-		return out[:DefaultMaxProgressActivityTypes], true
+	return out, total
+}
+
+// progressValue renders one aggregate in its documented unit.
+func progressValue(value client.Number, metric string) *float64 {
+	out := optionalFloat(value)
+	if out != nil && metric == "calories" {
+		*out /= progressCaloriesFactor
 	}
-	return out, false
+	return out
 }
