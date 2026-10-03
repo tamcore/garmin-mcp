@@ -20,7 +20,7 @@ import (
 // source that names an individual field for this family:
 // python-garminconnect's own get_badge_challenges, get_available_badge_challenges
 // and get_non_completed_badge_challenges each forward Garmin's response
-// untouched and compat/tools.json records no field shape for the tools built on
+// untouched and the pinned upstream manifest records no field shape for the tools built on
 // them.
 //
 // It is health data and identity material together — a progress figure and an

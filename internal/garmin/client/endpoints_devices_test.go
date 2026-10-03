@@ -10,7 +10,7 @@ import (
 // TestDevicesConstantsHaveTheirPinnedValues pins every device-and-gear constant to
 // its literal value: a shape test passes a path that points at the wrong service,
 // and six tools are built on these. The values come from python-garminconnect at the
-// commit compat/tools.json records, so changing one here without changing the pin
+// pinned upstream commit, so changing one here without changing the pin
 // is the mistake this test exists to make loud.
 func TestDevicesConstantsHaveTheirPinnedValues(t *testing.T) {
 	t.Parallel()

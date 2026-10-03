@@ -7,7 +7,7 @@ package client
 // beyond query parameters, by the method the doc comment below names.
 //
 // Taxuspt/garmin_mcp's own curation module for these reads,
-// src/garmin_mcp/challenges.py at the pinned commit compat/tools.json records,
+// src/garmin_mcp/challenges.py at the pinned upstream commit,
 // is cited in api/challenges.go and
 // api/challengeslist.go for field spellings and response shapes. It never
 // constructs or overrides a path itself — every URL it reads comes from

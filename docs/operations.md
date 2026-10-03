@@ -1255,14 +1255,10 @@ concurrent sessions. To bound credential-stuffing traffic against `/token` or
 
 ### The tool contract is pinned
 
-`compat/tools.json` is the pinned manifest of the upstream tool surface: 138
-tools extracted statically at a pinned upstream commit, each with its
-implementation status. Contract tests check the registered tools against it, so a
-renamed tool, a changed schema, or a dropped argument fails the build rather than
-surfacing as a client breakage after a release.
-
-When you upgrade, the tool names and schemas a client depends on either match
-that manifest or the build did not ship.
+A golden snapshot test pins every published tool name, tier, annotation, input
+schema and output schema, so a renamed tool, a changed schema, or a dropped
+argument fails the build rather than surfacing as a client breakage after a
+release.
 
 ## 8. Metrics
 

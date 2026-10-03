@@ -284,7 +284,7 @@ func buildCustomFoodBody(facts CustomFoodFacts, id FoodID, serving ServingID) cu
 // CreateCustomFood creates a custom food in the user's Garmin nutrition
 // library.
 //
-// Its effect is EffectUnsafeWrite, not EffectIdempotentWrite: compat/tools.json
+// Its effect is EffectUnsafeWrite, not EffectIdempotentWrite: the pinned upstream manifest
 // classifies create_custom_food as non-idempotent ("repeats create
 // duplicates"), because each PUT with no target identifier creates a new
 // record rather than replacing one, so the retry layer must never replay a

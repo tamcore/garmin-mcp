@@ -2,14 +2,14 @@ package tools_test
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"testing"
+
+	"github.com/tamcore/garmin-mcp/internal/testkit"
 )
 
-const resourceManifestPath = "../../compat/resources.json"
+const resourceManifestPath = "resources.json"
 
-// manifestUpstream is the provenance block both compat manifests carry.
+// manifestUpstream is the provenance block both pinned manifests carry.
 type manifestUpstream struct {
 	Upstream struct {
 		Commit                       string `json:"commit"`
@@ -25,10 +25,10 @@ func TestUpstreamPinsAgreeBetweenBothManifests(t *testing.T) {
 	resources := loadManifestUpstream(t, resourceManifestPath)
 
 	if tools.Upstream.Commit == "" || tools.Upstream.GarminconnectReferenceCommit == "" {
-		t.Fatalf("compat/tools.json records an empty upstream commit")
+		t.Fatalf("the tool manifest records an empty upstream commit")
 	}
 	if tools.Upstream.Commit != resources.Upstream.Commit {
-		t.Fatalf("compat/tools.json pins Taxuspt %s but compat/resources.json pins %s: "+
+		t.Fatalf("the tool manifest pins Taxuspt %s but the resource manifest pins %s: "+
 			"the two manifests describe different upstream commits",
 			tools.Upstream.Commit, resources.Upstream.Commit)
 	}
@@ -39,14 +39,11 @@ func TestUpstreamPinsAgreeBetweenBothManifests(t *testing.T) {
 	}
 }
 
-// loadManifestUpstream reads just the provenance block of a compat manifest.
+// loadManifestUpstream reads just the provenance block of a pinned manifest.
 func loadManifestUpstream(t *testing.T, path string) manifestUpstream {
 	t.Helper()
 
-	raw, err := os.ReadFile(filepath.Clean(path))
-	if err != nil {
-		t.Fatalf("reading %s: %v", path, err)
-	}
+	raw := testkit.PrivateManifest(t, path)
 	var decoded manifestUpstream
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		t.Fatalf("decoding %s: %v", path, err)

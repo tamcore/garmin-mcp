@@ -18,7 +18,8 @@ in Go. It does not use Python, Garth, or a Python subprocess.
   and WAF behavior can change. Do not add CAPTCHA bypasses, browser automation,
   or credential harvesting.
 - The tool contracts come from the Taxuspt/garmin_mcp project at a pinned commit.
-  `compat/tools.json` and `compat/resources.json` record it.
+  `internal/tools/testdata/tools.golden.json` and
+  `internal/resources/testdata/resources.golden.json` pin the published surface.
 
 ### Supported platforms
 
@@ -98,7 +99,6 @@ internal/
 e2e/                     end-to-end tests over the built binary (tag: e2e)
 live/                    opt-in tests against real Garmin (tag: garminlive)
 migrations/              embedded, checksummed, monotonic SQL migrations
-compat/                  pinned tool and resource contract manifests
 charts/garmin-mcp/       Helm chart
 ```
 
@@ -124,11 +124,13 @@ charts/garmin-mcp/       Helm chart
 Copy the nearest existing tool in `internal/tools`. Do not invent a new shape.
 
 1. Take the contract (name, description, input schema, sensitivity, effect,
-   scope) from `compat/tools.json`. That file is a generated snapshot. Do not
-   edit it by hand.
-2. Write the failing contract test: registered name plus normalized schema
-   snapshot against the manifest. A tool the manifest does not carry is an
-   addition beyond the pin: add a documented-exclusion entry to
+   scope) from the pinned upstream manifest (maintainers: `AGENTS.md.local`).
+   The manifest tests skip when it is absent, as in CI.
+2. Update the golden snapshot with
+   `go test ./internal/tools -run TestToolSurfaceMatchesTheGoldenSnapshot -update`
+   and review the diff: it is the tool surface clients see. A tool the manifest
+   does not carry is an addition beyond the pin: add a documented-exclusion
+   entry to
    `additionsBeyondTheManifest()` in `internal/tools/contract_test.go`, and add
    it to `wantReadOnlyToolNames`, `wantWriteToolNames` or
    `wantDestructiveToolNames` in

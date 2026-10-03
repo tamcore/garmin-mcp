@@ -101,7 +101,7 @@ type BodyCompositionEntry struct {
 	BasalMet         *float64
 	ActiveMet        *float64
 	PhysiqueRating   *int64
-	// MetabolicAge is a number, not an integer: compat/tools.json's
+	// MetabolicAge is a number, not an integer: the pinned upstream manifest's
 	// add_body_composition types metabolic_age "number" (unlike
 	// physique_rating and visceral_fat_rating, which really are integers),
 	// and __init__.py:1186's own metabolic_age parameter is float | None too.

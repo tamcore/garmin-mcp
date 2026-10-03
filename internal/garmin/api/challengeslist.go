@@ -21,7 +21,7 @@ import (
 // python-garminconnect types every one of these dict[str, Any]
 // (__init__.py:1814-1866), but that type hint is contradicted by
 // Taxuspt/garmin_mcp's own curation, src/garmin_mcp/challenges.py at
-// the pinned commit compat/tools.json records, which is now this package's second
+// the pinned upstream commit, which is now this package's second
 // evidenced source and settles both the field spellings and the envelope
 // shape:
 //

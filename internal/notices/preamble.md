@@ -26,13 +26,11 @@ sits on its own line.
 - Pinned commit: `3610be6feed93088d85b0f35aba9d7d07c2505a7`
 - SPDX identifier: `MIT`
 
-**Why attribution is owed.** `compat/tools.json` carries the tool
-descriptions of the pinned upstream surface, and all 138 of them are
-verbatim upstream Python docstrings, taken by static extraction from
-`src/garmin_mcp/*.py` at that commit. That file therefore contains copied
-expression, not merely an extracted interface, and the MIT notice
-requirement applies to it. No upstream code is otherwise reused: the
-server is an independent Go implementation.
+**Why attribution is owed.** The tool names, input schemas and workout
+resource texts reproduce the pinned upstream surface for compatibility, and
+some resource descriptions are verbatim upstream text. The MIT notice
+requirement applies to that copied expression. No upstream code is
+otherwise reused: the server is an independent Go implementation.
 
 Licence text at the pinned commit:
 

@@ -13,7 +13,7 @@ import (
 
 // Every fixture here is a literal JSON document written directly from
 // Taxuspt/garmin_mcp's src/garmin_mcp/challenges.py reads at
-// the pinned commit compat/tools.json records, quoted beside each fixture. None is
+// the pinned upstream commit, quoted beside each fixture. None is
 // derived from this package's own struct tags or a shared fixture builder,
 // and none is a recording of a real account.
 

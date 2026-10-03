@@ -2,8 +2,6 @@ package tools
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"slices"
 	"testing"
 
@@ -18,7 +16,7 @@ import (
 
 // trendManifestPath is the pinned contract these tools take their names, arguments and
 // effects from.
-const trendManifestPath = "../../compat/tools.json"
+const trendManifestPath = "tools.json"
 
 // manifestEntry is the subset of a manifest record these tests enforce.
 type manifestEntry struct {
@@ -31,10 +29,7 @@ type manifestEntry struct {
 func loadTrendManifest(t *testing.T) map[string]manifestEntry {
 	t.Helper()
 
-	raw, err := os.ReadFile(filepath.Clean(trendManifestPath))
-	if err != nil {
-		t.Fatalf("reading %s: %v", trendManifestPath, err)
-	}
+	raw := testkit.PrivateManifest(t, trendManifestPath)
 	var decoded struct {
 		Tools []manifestEntry `json:"tools"`
 	}

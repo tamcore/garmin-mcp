@@ -21,7 +21,7 @@ const ToolUploadCourse = "upload_course"
 const maxGPXContentArgumentLen = 256 * 1024
 
 // defaultCourseActivityType is the manifest default for activity_type.
-// Source: compat/tools.json's upload_course inputSchema,
+// Source: the pinned upstream manifest's upload_course inputSchema,
 // "activity_type": {"type": "string", "default": "running"}.
 const defaultCourseActivityType = "running"
 
@@ -59,7 +59,7 @@ func (r UploadCourseResult) LogValue() slog.Value {
 
 // uploadCourseInput is the strict argument set.
 //
-// Deliberate deviation from compat/tools.json's own inputSchema: upstream's
+// Deliberate deviation from the pinned upstream manifest's own inputSchema: upstream's
 // gpx_path takes an absolute filesystem path and reads the file itself
 // (courses.py:222-238). This server accepts no caller-supplied filesystem
 // path anywhere, so gpx_content takes

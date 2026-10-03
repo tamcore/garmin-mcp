@@ -19,7 +19,7 @@ const ToolGetCourses = "get_courses"
 const maxCourses = 500
 
 // CourseSummary is one course get_courses reports, matching
-// compat/tools.json's curated shape.
+// the pinned upstream manifest's curated shape.
 type CourseSummary struct {
 	CourseID            *int64   `json:"course_id,omitempty" jsonschema:"the course identifier"`
 	Name                *string  `json:"name,omitempty" jsonschema:"the course name"`

@@ -159,8 +159,7 @@ Every setting is listed in [docs/configuration.md](docs/configuration.md).
 
 garmin-mcp is a tool-compatible server for the
 [Taxuspt/garmin_mcp](https://github.com/Taxuspt/garmin_mcp) project. Its tool
-contracts are pinned in `compat/tools.json` and checked by contract tests. It
-also serves the 5 upstream workout resources. Deliberate differences:
+surface is pinned by a golden snapshot test. It also serves the 5 upstream workout resources. Deliberate differences:
 
 - `set_fit_download_dir` is not registered: it writes to the server filesystem at
   a caller's direction.

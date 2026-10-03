@@ -2,8 +2,6 @@ package resources
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"testing"
@@ -11,6 +9,7 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/identity"
 	"github.com/tamcore/garmin-mcp/internal/mcpserver"
 	"github.com/tamcore/garmin-mcp/internal/policy"
+	"github.com/tamcore/garmin-mcp/internal/testkit"
 )
 
 // structureReferenceURI is the one document that describes the others rather than
@@ -37,10 +36,7 @@ type manifestEntry struct {
 func loadManifest(t *testing.T) map[string]manifestEntry {
 	t.Helper()
 
-	raw, err := os.ReadFile(filepath.Join("..", "..", "compat", "resources.json"))
-	if err != nil {
-		t.Fatalf("reading the manifest: %v", err)
-	}
+	raw := testkit.PrivateManifest(t, "resources.json")
 	var manifest struct {
 		Resources []manifestEntry `json:"resources"`
 	}

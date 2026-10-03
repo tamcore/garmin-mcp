@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -107,10 +105,7 @@ type womensHealthManifestEntry struct {
 func loadWomensHealthManifest(t *testing.T) map[string]womensHealthManifestEntry {
 	t.Helper()
 
-	raw, err := os.ReadFile(filepath.Join("..", "..", "compat", "tools.json"))
-	if err != nil {
-		t.Fatalf("reading the manifest: %v", err)
-	}
+	raw := testkit.PrivateManifest(t, "tools.json")
 	var manifest struct {
 		Tools []womensHealthManifestEntry `json:"tools"`
 	}
@@ -188,7 +183,7 @@ func assertWomensHealthContract(t *testing.T, contract Contract, manifest womens
 }
 
 // TestWomensHealthContractsMatchTheManifest pins the three contracts against
-// compat/tools.json now, before register.go lists them.
+// the pinned upstream manifest.
 //
 // The package contract test (contract_test.go) covers only what Contracts()
 // returns, and that is built from register.go. Until these three are wired
