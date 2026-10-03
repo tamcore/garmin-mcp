@@ -139,11 +139,9 @@ type transaction struct {
 // refused before it is hashed. It is high-entropy and opaque, so it must travel in
 // a host-only cookie or a request body, never in a path or query string.
 //
-// Documented gap (M2 OAuth transaction work): an entry is bound to a principal
-// only. It is not bound to the browser session, the OAuth client, the redirect URI,
-// the requested resource or a PKCE challenge, so a capability that leaks to another
-// client of the same principal is usable there. That binding belongs with the OAuth
-// transaction and is deliberately not attempted here.
+// An entry is bound to a principal only. The browser session, OAuth client,
+// redirect URI, resource and PKCE challenge are bound by the login transaction in
+// internal/loginweb, which holds the capability server-side.
 type Registry struct {
 	cfg RegistryConfig
 

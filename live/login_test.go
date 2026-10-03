@@ -20,8 +20,8 @@ import (
 // reached.
 var errProbeReachedTransport = errors.New("live: a write probe reached the transport")
 
-// TestLiveLoginReachesAnAuthenticatedSessionAndAValidatedAccount is the drift
-// detector AGENTS.md names as the purpose of this layer.
+// TestLiveLoginReachesAnAuthenticatedSessionAndAValidatedAccount detects drift in
+// Garmin's login flow, which no fixture can.
 //
 // It asserts four things about the one real login the suite performs: a strategy in
 // the declared fallback chain succeeded, the DI ticket exchange produced a token set

@@ -133,7 +133,7 @@ func (h Hosts) PortalMFAVerifyCodeURL() string { return join(h.sso, PathPortalMF
 func (h Hosts) WidgetVerifyMFAURL() string { return join(h.sso, PathWidgetVerifyMFA) }
 
 // WidgetRequestMFACodeURL asks Garmin to deliver an email or SMS OTP for a
-// widget session. See PathWidgetRequestMFACode for the documented gap.
+// widget session.
 func (h Hosts) WidgetRequestMFACodeURL() string { return join(h.sso, PathWidgetRequestMFACode) }
 
 // DITokenURL is the DI OAuth2 token endpoint.

@@ -20,7 +20,7 @@ import (
 // call into — live in challengecuration.go.
 //
 // Source: Taxuspt/garmin_mcp's src/garmin_mcp/challenges.py at the commit
-// docs/upstream-pins.md names. All three tools curate through the one shared
+// compat/tools.json records. All three tools curate through the one shared
 // _curate_badge_challenge (challenges.py:176-207), which this file ports as
 // curateBadgeChallenge.
 

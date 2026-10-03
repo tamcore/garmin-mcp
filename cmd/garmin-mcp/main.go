@@ -62,7 +62,7 @@ func garminCatalog() []cmd.ToolEntry {
 // is registered but untiered fails at start-up rather than at first call.
 func garminTools(deps cmd.ToolDeps) (cmd.ToolSet, error) {
 	// Read once at start-up, shared for the process lifetime, and never able to
-	// fail one: it carries its own deadline and falls back. See docs/parity.md.
+	// fail one: it carries its own deadline and falls back.
 	catalog := api.LoadExerciseCatalog(context.Background())
 
 	registrar, err := tools.New(tools.Deps{

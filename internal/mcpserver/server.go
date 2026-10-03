@@ -33,7 +33,7 @@ import (
 )
 
 // ProtocolVersion is the MCP specification version this server is built against,
-// pinned by ADR 0002 alongside SDK v1.7.0.
+// pinned alongside the SDK version in go.mod.
 //
 // The SDK negotiates older versions on its own; this constant is what the server
 // reports about itself, not a restriction on what it will speak.
@@ -218,7 +218,7 @@ func New(deps Deps) (*Server, error) {
 //
 // Capabilities is set to an empty value deliberately. The SDK's historical default
 // advertises the `logging` capability, which SEP-2577 deprecates as of protocol
-// 2026-07-28 and which ADR 0002 forbids building on. The tools capability is still
+// 2026-07-28 and which this server does not build on. The tools capability is still
 // inferred when tools are added.
 //
 // ServerOptions.Logger stays nil: the SDK would otherwise log its own activity

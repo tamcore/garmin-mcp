@@ -113,8 +113,8 @@ type BodyCompositionEntry struct {
 // bodyCompositionBounds are sanity ceilings this package rejects a reading
 // beyond, before any of it reaches a FIT message. They are not values
 // fit.py or __init__.py state — the upstream release performs no such
-// check — but AGENTS.md requires health data to be checked for an absurd
-// magnitude before dispatch, and these are generous enough to admit any real
+// check — but health data is checked for an absurd magnitude before
+// dispatch, and these are generous enough to admit any real
 // human measurement.
 const (
 	minBodyWeightKG = 1.0

@@ -161,7 +161,7 @@ func TestClassifyJSONLogin(t *testing.T) {
 			wantOutcome: OutcomeUnknown,
 		},
 		{
-			// Substring matching used to read UNLOCKED as LOCKED and stop the
+			// Substring matching would read UNLOCKED as LOCKED and stop the
 			// strategy chain on an account that is fine.
 			name:        "account unlocked is not a lockout",
 			response:    jsonResponse(`{"responseStatus":{"type":"ACCOUNT_UNLOCKED"}}`),

@@ -206,8 +206,7 @@ func TestCleanupRetainsAConsumedRowWhileItsFamilyIsLive(t *testing.T) {
 		t.Fatalf("Cleanup: %v", err)
 	}
 	// The two access tokens (generation 0 and generation 1) are unconsumed rows
-	// past their own 10-minute expiry, and this fix does not touch their
-	// retention: they are swept exactly as before.
+	// past their own 10-minute expiry: they are swept as ordinary expired rows.
 	if stats.Tokens != 2 {
 		t.Fatalf("Tokens removed = %d, want 2 (only the two expired access tokens)", stats.Tokens)
 	}
@@ -298,10 +297,9 @@ func rotateChain(t *testing.T, s *store.SQLiteStore, clock *fakeClock, seed stor
 	return secrets
 }
 
-// TestCleanupBoundsConsumedRetentionByGeneration is problem 1 of the round-two
-// review: deleteExpiredTokens used to retain a consumed row for as long as its
-// family was live, with no bound. A continuously rotating client renews family
-// liveness on every refresh, so that was unbounded growth. This proves the bound: a
+// TestCleanupBoundsConsumedRetentionByGeneration: a continuously rotating client
+// renews family liveness on every refresh, so family liveness alone is no bound
+// on consumed-row retention. This proves the generation bound: a
 // consumed, expired row that is within the family's most recent
 // retainedConsumedGenerations generations survives, and the same shape of row one
 // generation further back does not, even though the family is live in both cases.

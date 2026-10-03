@@ -185,11 +185,10 @@ func TestRevokeFamilyIsIdempotentAndReportsAnUnknownFamily(t *testing.T) {
 	}
 }
 
-// TestRevokeFamilyRefusesAnUnrecognisedReasonAndDoesNotRevoke is problem 2 of the
-// round-two review: reasonFor used to map the zero value and any future
-// RevokeReason this switch was never updated for onto familyRevocationReason,
-// which would silently file a security event under the wrong audit reason. An
-// unrecognised reason must be an error, and the family must not be revoked, so a
+// TestRevokeFamilyRefusesAnUnrecognisedReasonAndDoesNotRevoke: reasonFor must
+// not map the zero value, or a RevokeReason its switch does not name, onto
+// familyRevocationReason, which would file a security event under the wrong
+// audit reason. An unrecognised reason must be an error, and the family must not be revoked, so a
 // caller cannot end up with a successful revocation filed under a fabricated
 // reason.
 func TestRevokeFamilyRefusesAnUnrecognisedReasonAndDoesNotRevoke(t *testing.T) {
@@ -395,8 +394,7 @@ func TestConsumedRowSurvivesCleanupAndReplayStillRevokesTheLiveFamily(t *testing
 	// Generation 1's refresh token is the live anchor the whole test is about: it
 	// must now be revoked. (Its sibling access token is not asserted here: at these
 	// compressed test timescales its own 10-minute access lifetime has already
-	// elapsed by the time Cleanup ran, so Cleanup — correctly, and independently of
-	// this fix — already swept it as an ordinary expired, unconsumed row.)
+	// elapsed by the time Cleanup ran, so Cleanup — correctly — already swept it as an ordinary expired, unconsumed row.)
 	if _, err := f.adapter.RefreshToken(ctx, refresh1.Lookup); !errors.Is(err, oauthserver.ErrTokenRevoked) {
 		t.Fatalf("generation 1's refresh token survived: err = %v", err)
 	}
@@ -424,15 +422,14 @@ func TestRevokePrincipalRevokesEverythingAndIsIdempotent(t *testing.T) {
 }
 
 // TestRotateRefreshTokenPersistsTheNarrowedScopeOfTheNewAccessToken guards the
-// adapter seam where a narrowed refresh used to be silently widened again.
+// adapter seam where a narrowed refresh could be silently widened again.
 //
 // OAuth lets a refresh narrow scope. internal/oauthserver narrows it and reports
 // the narrow set in the token response, but verification reads the scopes off the
 // PERSISTED row. This adapter is the only thing that carries the narrowed set into
-// the store, and it used not to: the rotation inherited the consumed token's
-// scopes, so a client that deliberately narrowed a token to hand to a lower-trust
-// consumer was told it was read-only while the row still granted write and
-// destructive scope.
+// the store. If the rotation inherited the consumed token's scopes, a client that
+// deliberately narrowed a token to hand to a lower-trust consumer would be told it
+// was read-only while the row still granted write and destructive scope.
 //
 // The mutant this kills: dropping the Scopes field from the store.RefreshRotation
 // this adapter builds. Note that oauthserver's own fake store cannot catch it —

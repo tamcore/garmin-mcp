@@ -72,11 +72,10 @@ func TestLoadOrCreateKeyIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestLoadOrCreateKeyTightensAWidenedDirectoryOnTheExistingKeyPath is gap 4: the
-// existing-key fast path used to return the loaded key without re-checking the
-// directory's permissions, so a key directory widened externally (a
-// misconfigured deployment step, say) stayed widened until the next key
-// installation. EnsureDir's chmod is skipped only when the mode already
+// TestLoadOrCreateKeyTightensAWidenedDirectoryOnTheExistingKeyPath: the
+// existing-key path re-checks the directory's permissions, so a key directory
+// widened externally (a misconfigured deployment step, say) is tightened on the
+// next load, not only at the next key installation. EnsureDir's chmod is skipped only when the mode already
 // matches exactly, so re-running it on every load is cheap and cannot fail on
 // a directory that was already correct.
 func TestLoadOrCreateKeyTightensAWidenedDirectoryOnTheExistingKeyPath(t *testing.T) {
@@ -106,9 +105,9 @@ func TestLoadOrCreateKeyTightensAWidenedDirectoryOnTheExistingKeyPath(t *testing
 	}
 }
 
-// TestLoadKeyTightensAWidenedDirectoryOnItsOwnDirectPath is the gap the review
-// found: TestLoadOrCreateKeyTightensAWidenedDirectoryOnTheExistingKeyPath only
-// proved the fast path inside LoadOrCreateKey re-verified the directory. A
+// TestLoadKeyTightensAWidenedDirectoryOnItsOwnDirectPath complements
+// TestLoadOrCreateKeyTightensAWidenedDirectoryOnTheExistingKeyPath, which covers
+// only the path inside LoadOrCreateKey. A
 // rotated deployment's retired keys, and any diagnostic, load material through
 // LoadKey directly rather than through LoadOrCreateKey — internal/cmd's
 // loadRetiredKeys and doctor's checkKey both do — so LoadKey itself, not just

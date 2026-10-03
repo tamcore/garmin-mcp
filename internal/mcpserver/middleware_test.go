@@ -13,7 +13,7 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/policy"
 )
 
-// grantAll is the M2 OAuth seam standing in for a token that carries both tier
+// grantAll is the OAuth scope source standing in for a token that carries both tier
 // scopes, so the intersection gate can be opened in a test.
 type grantAll struct{}
 

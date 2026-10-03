@@ -6,8 +6,7 @@
 // It exists because a fixture cannot detect a wrong derivation: a fixture built
 // from a test's own declared values agrees with any derivation of those values, so
 // a session window that collapses to one sample and an ascent that comes out at
-// roughly twice the device's own figure both pass a complete synthetic suite. See
-// docs/adr/0007-fit-decoding-library.md.
+// roughly twice the device's own figure both pass a complete synthetic suite.
 //
 // The suite therefore asserts **cross-source consistency**, never a golden value.
 // Every check compares two sources Garmin itself provides — the decoded device

@@ -230,7 +230,7 @@ func newService(deps Deps) (*service, error) {
 	return built, nil
 }
 
-// buildClients constructs the domain clients this slice reads and writes through.
+// buildClients constructs the domain clients the tools read and write through.
 func (s *service) buildClients(rc *client.Client) error {
 	if err := s.buildReadClients(rc); err != nil {
 		return err

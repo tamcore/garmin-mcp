@@ -10,9 +10,9 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/store"
 )
 
-// Item 4 of the fix list: reconcilePrincipalIdentityKeyVersion,
+// Tests for reconcilePrincipalIdentityKeyVersion,
 // reconcileAuthTransactionStateKeyVersion and resealIndexRoot's own inline
-// reconcile had no test at all, unlike garmin_token_sets'
+// reconcile, matching garmin_token_sets'
 // TestResealReconcilesAStaleKeyVersionColumnWithoutLoopingForever. A broken
 // reconcile leaves the batch loop spinning with zero progress forever (the
 // principal and auth-transaction cases) or leaves RemainingToReseal

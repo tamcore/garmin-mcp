@@ -202,8 +202,8 @@ func isSyntacticHostSource(src string) bool {
 
 // TestIsSyntacticHostSourceRejectsWhatCSPRejects proves the test helper itself
 // would have caught the IPv6-literal defect: a bracketed IPv6 host fails this
-// check even though it is byte-for-byte what redirectOrigin used to emit for
-// such a redirect URI, and a plain hostname or IPv4 origin still passes.
+// check even though it is byte-for-byte what a naive redirectOrigin would emit
+// for such a redirect URI, and a plain hostname or IPv4 origin still passes.
 func TestIsSyntacticHostSourceRejectsWhatCSPRejects(t *testing.T) {
 	t.Parallel()
 

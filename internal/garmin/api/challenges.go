@@ -17,8 +17,8 @@ import (
 // Source: python-garminconnect 0.3.10's get_earned_badges, get_goals and
 // get_race_predictions, and the badge-service, goal-service and metrics-service
 // URLs their constructor assigns. Field spellings additionally cite
-// Taxuspt/garmin_mcp's src/garmin_mcp/challenges.py at the commit
-// docs/upstream-pins.md names, which curates these same three reads and is
+// Taxuspt/garmin_mcp's src/garmin_mcp/challenges.py at
+// the pinned commit compat/tools.json records, which curates these same three reads and is
 // the only one of the two pinned sources that names an individual field.
 //
 // Every document here ties a badge, a goal or a predicted race time to the

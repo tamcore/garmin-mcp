@@ -149,7 +149,7 @@ func registerAddBodyComposition(registry *mcpserver.Registry, svc *service) erro
 // upstream's own bug: an account whose real timezone is not UTC can still
 // see the reading attributed to the adjacent calendar day. There is no
 // timestamp or timezone argument on this tool's own manifest to resolve that
-// correctly; see docs/parity.md's deliberate-deviations list.
+// correctly.
 func (s *service) addBodyComposition(
 	ctx context.Context, in addBodyCompositionInput,
 ) (AddBodyCompositionResult, error) {

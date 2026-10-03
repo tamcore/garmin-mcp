@@ -17,8 +17,7 @@ import (
 // renderers no longer apply and fmt reflects over the fields instead. The
 // material each of these models retains — the raw Garmin response — sits behind
 // client.Payload, which seals it one pointer deeper than fmt's badVerb path can
-// dereference. These aliases exist to prove that still holds for the write
-// models this slice adds.
+// dereference. These aliases prove that holds for the write models.
 type (
 	strippedWriteResult  api.WriteResult
 	strippedSavedWorkout api.SavedWorkout
@@ -33,7 +32,7 @@ const (
 )
 
 // TestMethodStrippingAliasCannotRevealARetainedWritePayload is the leak test for
-// the models this slice adds.
+// the write models.
 func TestMethodStrippingAliasCannotRevealARetainedWritePayload(t *testing.T) {
 	t.Parallel()
 

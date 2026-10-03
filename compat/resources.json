@@ -15,9 +15,7 @@
   },
   "extraction": {
     "method": "static AST analysis of the pinned upstream sources with Python's ast module; upstream code was never executed",
-    "script": "scratchpad extract.py + gen.py (development-time only; Python is not a runtime or build dependency of this project)",
-    "matchedRegistrations": "decorators of the form @app.tool() / @app.resource(<uri>) on functions under src/garmin_mcp",
-    "regenerate": "see docs/parity.md"
+    "matchedRegistrations": "decorators of the form @app.tool() / @app.resource(<uri>) on functions under src/garmin_mcp"
   },
   "fieldDefinitions": {
     "authRequired": "Garmin axis. true when invoking this record performs at least one Garmin-authenticated HTTP call, so a valid Garmin session or credential must exist server-side. false means no Garmin call happens at all; it does NOT mean the record is unauthenticated at the MCP layer. Derived statically from whether any garminconnect facade method or raw client call is reachable.",
@@ -28,8 +26,6 @@
   },
   "enums": {
     "status": [
-      "not-implemented",
-      "in-progress",
       "implemented",
       "intentionally-omitted"
     ],

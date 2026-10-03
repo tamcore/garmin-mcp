@@ -49,7 +49,7 @@ type TypedSplit struct {
 
 // TypedSplits is the typed-split collection.
 //
-// It is the union-decoded endpoint of this slice. Garmin answers with an object keyed
+// It is a union-decoded endpoint. Garmin answers with an object keyed
 // "splits", an object keyed "lapDTOs", a bare array, or — for an activity with a
 // single interval — one bare object. All four decode to the same list, and an
 // unrecognized object decodes to no splits rather than failing, so a shape change

@@ -257,15 +257,15 @@ func TestBindGarminAccountRefusesAZeroAccount(t *testing.T) {
 // TestBindGarminAccountRefusesToRebindAPrincipalToAnotherAccount pins the mirror of
 // the one-principal-one-account rule.
 //
-// The linkage check used to run in one direction only: it refused an account already
-// owned by a different principal, then rebound the principal unconditionally. A
-// principal is reached by its EMAIL whenever the normalized handle is already
+// The linkage check runs in both directions. Refusing only an account already owned
+// by a different principal, then rebinding the principal unconditionally, is unsafe.
+// A principal is reached by its EMAIL whenever the normalized handle is already
 // registered, and Garmin frees an email when an account is deleted and lets an
 // account change its address. So a second Garmin account presenting a handle that
-// normalizes to the same string took over an existing principal — keeping that
+// normalizes to the same string would take over an existing principal — keeping that
 // principal's MCP token families and consents attached, so unchanged client tokens
-// began reading and writing a different person's Garmin account, and a client
-// completing a fresh flow inherited the previous owner's consent row.
+// would read and write a different person's Garmin account, and a client completing
+// a fresh flow would inherit the previous owner's consent row.
 //
 // The mutant this kills: dropping the current-linkage check, or the UPDATE's
 // "garmin_account_hash IS NULL OR = ?" predicate.

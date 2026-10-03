@@ -107,8 +107,8 @@ func redeemForToken(t *testing.T, server remoteServer, form url.Values) tokenSuc
 //
 // n must cover every redemption the caller will go on to make, including
 // every concurrent one: every code is minted here, before the server process
-// starts, because seeding a code after launch reopens the two-writer defect
-// this package no longer has (see the note at the top of seed_test.go). A
+// starts, because seeding a code after launch would make two writers on one
+// SQLite file (see the note at the top of seed_test.go). A
 // caller that needs more codes than it first estimated is undercounting, not
 // hitting a real limit — raise n.
 func setUpOAuthFlow(t *testing.T, n int) oauthFlowFixture {

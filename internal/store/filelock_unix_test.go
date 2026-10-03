@@ -13,8 +13,7 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/securefile"
 )
 
-// TestLockRecordRefusesASymlinkedLockFile is the hardening property item 2
-// requires: lockRecord must never follow a symlink planted at the lock path.
+// TestLockRecordRefusesASymlinkedLockFile: lockRecord must never follow a symlink planted at the lock path.
 // Following it would let a planted symlink aimed at the record file itself
 // split the lock domain across two inodes once the record is atomically
 // replaced, so two processes could each believe they hold the lock and write
@@ -38,8 +37,8 @@ func TestLockRecordRefusesASymlinkedLockFile(t *testing.T) {
 	}
 }
 
-// TestLockRecordReturnsPromptlyForAnAlreadyCancelledContext is half of the
-// MEDIUM item: flock must honour the caller's context rather than blocking
+// TestLockRecordReturnsPromptlyForAnAlreadyCancelledContext: flock must honour the
+// caller's context rather than blocking
 // indefinitely on unix.LOCK_EX. A context that is already done must be
 // refused up front, before ever touching the kernel lock call.
 func TestLockRecordReturnsPromptlyForAnAlreadyCancelledContext(t *testing.T) {

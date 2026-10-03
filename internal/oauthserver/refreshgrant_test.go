@@ -224,11 +224,10 @@ func TestRefreshRefusesAnExpiredToken(t *testing.T) {
 	}
 }
 
-// TestRefreshReplayOfAConsumedAndExpiredTokenRevokesTheFamily is the defect this
-// pass fixes: a presented refresh token that was already rotated away AND is now
-// past its own expiry used to be refused with "expired" before ever reaching the
-// in-transaction reuse check, so the replay was reported but the family was never
-// revoked. It must be treated exactly like any other reuse: the whole family dies,
+// TestRefreshReplayOfAConsumedAndExpiredTokenRevokesTheFamily: a presented refresh
+// token that was already rotated away AND is now past its own expiry must not be
+// refused as merely "expired" without revoking the family. It must be treated exactly
+// like any other reuse: the whole family dies,
 // through the very same RevokeFamily storage call the rest of this package uses,
 // and the client sees nothing more informative than any other invalid refresh
 // token.
@@ -278,16 +277,15 @@ func TestRefreshReplayOfAConsumedAndExpiredTokenRevokesTheFamily(t *testing.T) {
 		t.Fatalf("store recorded %d rotations, want 1 (only the earlier legitimate refresh)",
 			h.store.rotations)
 	}
-	// Problem 3 of the round-two review: nothing previously asserted that the
-	// pre-check passes RevokeReasonReplay rather than the generic
-	// RevokeReasonClient, so mutating that argument passed every existing test.
+	// The pre-check must pass RevokeReasonReplay, not the generic
+	// RevokeReasonClient.
 	if h.store.lastRevokeReason != RevokeReasonReplay {
 		t.Fatalf("lastRevokeReason = %v, want RevokeReasonReplay", h.store.lastRevokeReason)
 	}
 }
 
-// TestRefreshRevocationFailureStillReportsInvalidGrantButIsRecoverable is problem 2
-// of the review: the client answer for a consumed-and-expired replay must never
+// TestRefreshRevocationFailureStillReportsInvalidGrantButIsRecoverable: the client
+// answer for a consumed-and-expired replay must never
 // change depending on whether the family's revocation itself succeeded — telling a
 // caller that revocation failed would be telling an attacker their replay worked —
 // but the failure must not become invisible to anything upstream that inspects the
@@ -309,10 +307,8 @@ func TestRefreshRevocationFailureStillReportsInvalidGrantButIsRecoverable(t *tes
 	if got := tokenErr.Code(); got != ErrorInvalidGrant {
 		t.Fatalf("Code() = %q, want %q even when revocation failed", got, ErrorInvalidGrant)
 	}
-	// Problem 4 of the round-two review: nothing pinned the HTTP status, so a
-	// mutant that returned the same code and description with a 500 survived —
-	// and a 500 here is exactly how a caller could detect that its replay failed
-	// to take effect, which invalid_grant is supposed to never disclose.
+	// The status must be 400: a 500 here would let a caller detect that its
+	// replay failed to take effect, which invalid_grant must never disclose.
 	if got := tokenErr.Status(); got != http.StatusBadRequest {
 		t.Fatalf("Status() = %d, want %d even when revocation failed", got, http.StatusBadRequest)
 	}
@@ -324,14 +320,11 @@ func TestRefreshRevocationFailureStillReportsInvalidGrantButIsRecoverable(t *tes
 	}
 }
 
-// TestRefreshGrantJudgesBothChecksAgainstOneReadOfTheClock is problem 3 of the
-// review: refreshGrant used to call s.now() twice, once for the consumed-and-expired
-// pre-check and again for the plain expiry check. A token that was live at the first
-// read and expired by the second took the plain-expiry path — which never revokes
-// anything — even though it had already been consumed. Capturing now once at the top
-// of the function and reusing it for both checks closes that window; this test moves
-// the clock between what used to be the two reads and asserts the outcome is still
-// reuse, not a plain expiry.
+// TestRefreshGrantJudgesBothChecksAgainstOneReadOfTheClock: refreshGrant reads the
+// clock once for both the consumed-and-expired pre-check and the plain expiry check.
+// With two reads, a token live at the first and expired by the second would take the
+// plain-expiry path, which never revokes anything. This test moves the clock after
+// the read and asserts the outcome is still reuse, not a plain expiry.
 func TestRefreshGrantJudgesBothChecksAgainstOneReadOfTheClock(t *testing.T) {
 	h := newHarness(t)
 	first := h.firstTokens(t)
@@ -347,8 +340,8 @@ func TestRefreshGrantJudgesBothChecksAgainstOneReadOfTheClock(t *testing.T) {
 	h.afterRead = func(reads int, hh *harness) {
 		if reads == baseline+1 && !advanced {
 			advanced = true
-			// Push the clock past the token's own expiry between what used to be
-			// refreshGrant's two separate s.now() calls.
+			// Push the clock past the token's own expiry right after refreshGrant's
+			// one read of the clock.
 			hh.advance(hh.srv.RefreshTokenTTL() + time.Minute)
 		}
 	}

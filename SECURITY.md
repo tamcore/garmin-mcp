@@ -53,11 +53,8 @@ disclosure window. There is no bounty.
 
 ## Supported versions
 
-No release has been tagged yet. Until the first release, the supported version is
-the current default branch, and nothing is backported.
-
-Once releases exist, the most recent release receives security fixes. Older
-releases do not. Upgrade before reporting a problem you cannot reproduce on the
+The most recent release receives security fixes. Older releases do not, and
+nothing is backported. Upgrade before reporting a problem you cannot reproduce on the
 latest.
 
 Dependency and base-image updates are part of a security fix: the container base
@@ -100,7 +97,7 @@ The state directory holds the key as above. The SQLite database at
 | `schema_meta` | The encryption key version and the sealed index root every lookup key derives from |
 | `principals` | An internal random id, a normalized email (display and login handle only), a keyed HMAC of the Garmin account id, and the AEAD-sealed Garmin identity |
 | `garmin_token_sets` | The AEAD-sealed Garmin DI token set, one per principal, with a compare-and-set version |
-| `oauth_clients`, `oauth_client_redirect_uris` | Client identity, display name, public flag, and the redirect URIs — exact by default, or one trailing-path wildcard pattern per client under the operator acknowledgement ADR 0009 describes |
+| `oauth_clients`, `oauth_client_redirect_uris` | Client identity, display name, public flag, and the redirect URIs — exact by default, or one trailing-path wildcard pattern per client under an explicit operator acknowledgement |
 | `consents` | Which principal granted which client which scopes, for which redirect URI and resource, and when it was revoked |
 | `auth_transactions`, `auth_codes` | In-flight authorization state: handle and code as keyed HMACs, the S256 PKCE challenge, and the sealed client state |
 | `token_families`, `mcp_tokens` | Token lineage and revocation, with every token as a keyed HMAC |
@@ -199,7 +196,7 @@ server enforces it or whether it is yours to keep.
 - [ ] `garmin-mcp doctor` reports no `unsafe` state.
 - [ ] Log level and format are set deliberately, and logs go somewhere with
       access control.
-- [ ] Database growth is monitored, because no cleanup is scheduled today.
-- [ ] There is a plan for out-of-band revocation, given that no `revoke` and no
-      `unlink` command exists yet — and an understanding that revoking here never
-      revokes anything at Garmin.
+- [ ] Database growth is monitored. A remote deployment sweeps expired
+      authorization state every 15 minutes; consents are never swept.
+- [ ] Operators know `garmin-mcp revoke` and `garmin-mcp unlink`, and that
+      revoking here never revokes anything at Garmin.

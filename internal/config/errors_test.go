@@ -53,7 +53,7 @@ func chainTextsAt(err error, depth int) []string {
 	return out
 }
 
-// TestConfigFileErrorNeverRendersTheParserCause is the MEDIUM finding: the raw
+// TestConfigFileErrorNeverRendersTheParserCause: the raw
 // parser error quotes the malformed line, which may hold an inline secret, so it
 // must not be reachable through the public error chain.
 func TestConfigFileErrorNeverRendersTheParserCause(t *testing.T) {

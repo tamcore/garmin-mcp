@@ -31,13 +31,9 @@ const womensHealthTestDate = "2026-01-31"
 
 // womensHealthRegistrar registers exactly the three women's-health tools.
 //
-// It exists because these tools are not yet listed in register.go, so the shared
-// harness (newToolHarness) cannot reach them: wiring register.go is out of scope
-// for this slice. It drives the real registration functions through the real
-// server, which is what the shared harness does for the tools that are listed,
-// following the same pattern get_hill_score_test.go's scoresRegistrar and
-// badgechallengelists_test.go's challengesRegistrar already establish for tools
-// ahead of their own wiring.
+// It drives the real registration functions through the real server for these
+// tools alone, the same pattern as get_hill_score_test.go's scoresRegistrar and
+// badgechallengelists_test.go's challengesRegistrar.
 type womensHealthRegistrar struct {
 	svc *service
 }

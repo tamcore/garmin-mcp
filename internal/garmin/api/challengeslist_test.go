@@ -224,9 +224,8 @@ func TestChallengesBareArrayFamiliesToleratesNullAndEmptyObject(t *testing.T) {
 	}
 }
 
-// TestChallengesBareArrayFamiliesRejectsANonEmptyObject is the regression test
-// for the defect a review found: the decoder used to treat any object it
-// could not place — including a non-empty one — as an empty page, masking a
+// TestChallengesBareArrayFamiliesRejectsANonEmptyObject: the decoder must not
+// treat a non-empty object it cannot place as an empty page, which would mask a
 // real shape mismatch behind an indistinguishable "no challenges" result.
 //
 // A non-empty object is not a shape challenges.py's own curation tolerates

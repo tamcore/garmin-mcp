@@ -169,8 +169,8 @@ func TestTheSpanBoundsKeepTheAnalysisAffordable(t *testing.T) {
 // rather than merely stated.
 //
 // The analysis is the one stage of the FIT path whose cost the file sets rather than the
-// request. It used to run to completion whatever the caller did, so a deadline bounded
-// the download and then waited out tens of millions of record visits. Cancellation is
+// request. It must stop when the caller gives up, or a deadline would bound the
+// download and then wait out tens of millions of record visits. Cancellation is
 // reported as itself, so a cancelled caller is never told its file was malformed.
 func TestAnalyzeFITStopsWhenTheCallerGivesUp(t *testing.T) {
 	t.Parallel()

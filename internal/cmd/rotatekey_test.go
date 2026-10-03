@@ -99,13 +99,12 @@ func TestRotateKeyRefusesWhenNoActiveKeyExistsYet(t *testing.T) {
 	}
 }
 
-// TestRotateKeyRefusesTargetVersionOneOnAMarkerLessDeployment is item 8(a) of
-// the fix list: a marker-less deployment resolves active=1 with present=false
-// (see resolveActiveKeyVersion). --target-version=1 there used to be
-// misclassified as a resume (target == active), which then failed deep inside
-// loadRotationKeys with the opaque "invalid key version 0" (retiringVersion =
-// target-1 = 0), instead of naming the real problem: there is nothing to
-// rotate from at version 1 on a deployment that has never rotated.
+// TestRotateKeyRefusesTargetVersionOneOnAMarkerLessDeployment: a marker-less
+// deployment resolves active=1 with present=false (see resolveActiveKeyVersion).
+// --target-version=1 there is not a resume (target == active); the refusal must
+// name the real problem — there is nothing to rotate from at version 1 on a
+// deployment that has never rotated — rather than an opaque "invalid key
+// version 0" from loadRotationKeys.
 func TestRotateKeyRefusesTargetVersionOneOnAMarkerLessDeployment(t *testing.T) {
 	clearGarminEnv(t)
 	stateDir := rotateStateDir(t)
@@ -401,13 +400,11 @@ func TestRotateKeyResumingRefusesWhenTheTargetKeyIsMissing(t *testing.T) {
 }
 
 // TestRotateKeyResumingReportsCompletionWhenTheRetiringKeyIsAlreadyGoneAndNothingRemains
-// is item 7 of the fix list. docs/operations.md documents this exact sequence:
-// rotate, confirm every record resealed, retire the OLD key, then re-run
-// rotate-key with the SAME --target-version to double-check. Before this fix
-// that re-run failed with "opening the active key to rotate from: ... key not
-// found", which reads like data loss on the documented happy path. It must
-// instead report completion, because nothing is left that needs the retiring
-// key at all.
+// covers the documented sequence in docs/operations.md: rotate, confirm every
+// record resealed, retire the OLD key, then re-run rotate-key with the SAME
+// --target-version to double-check. That re-run must report completion, because
+// nothing is left that needs the retiring key, and not a "key not found" error
+// that reads like data loss.
 func TestRotateKeyResumingReportsCompletionWhenTheRetiringKeyIsAlreadyGoneAndNothingRemains(t *testing.T) {
 	clearGarminEnv(t)
 	stateDir := rotateStateDir(t)

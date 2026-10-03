@@ -76,7 +76,7 @@ func TestEmailAllowlistPermitsOnlyListedAddressesAndFoldsCase(t *testing.T) {
 //     checkAllowedEmail; the second collides with the first's folded value in
 //     NewEmailAllowlist's own duplicate check. Deliberate double coverage of
 //     that one branch under two input shapes (differing only in the first
-//     entry's case), left as is per review.
+//     entry's case).
 //
 // "blank entry" ({"   "}) is deliberately absent: TrimSpace runs before
 // checkAllowedEmail is ever called, so a whitespace-only entry collapses to ""

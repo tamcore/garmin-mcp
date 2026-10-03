@@ -19,7 +19,7 @@
 //
 // The MCP `logging` protocol capability is deliberately unused: SEP-2577
 // deprecates it as of protocol version 2026-07-28, and this package is the local
-// replacement named by ADR 0002.
+// replacement.
 package mcplog
 
 import (

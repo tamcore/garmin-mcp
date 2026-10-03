@@ -87,7 +87,7 @@ type FITTemperatureView struct {
 }
 
 // A FITDriftView is the aerobic decoupling of one ride. Percent is positive when the
-// ratio fell; upstream reports the opposite sign. See docs/parity.md.
+// ratio fell; upstream reports the opposite sign.
 type FITDriftView struct {
 	Seconds     float64 `json:"paired_seconds" jsonschema:"the seconds with both power and heart rate"`
 	FirstRatio  float64 `json:"first_half_power_per_beat" jsonschema:"the first half's power over heart rate"`

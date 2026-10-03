@@ -31,9 +31,9 @@ var errNoStagedTokens = errors.New("cmd: the login staged no token set")
 // A remote login discovers its account from the credentials, so the principal is
 // not known until Garmin has accepted them. The authenticator, however, persists
 // the DI token set as the last step of the login, and the SQLite store refuses a
-// record for a principal that does not exist. Resolving that by creating the
-// principal first is what the deployment used to do, and it means anyone who can
-// reach the login page can write principal rows for an email they do not own.
+// record for a principal that does not exist. Creating the principal first would
+// let anyone who can reach the login page write principal rows for an email they
+// do not own.
 //
 // So a login runs against a staging key instead. Everything the authenticator does
 // is unchanged; the token set it produces is held here, in memory, until the caller

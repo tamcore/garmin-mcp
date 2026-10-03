@@ -60,8 +60,8 @@ type FITRecord struct {
 // The summary figures are read from the FIT profile rather than derived from the
 // record stream. A device knows its own elapsed time, its own barometric ascent and
 // descent and its own averages; a reader that recomputes them from a one-second sample series
-// gets a different and worse answer, which is what the record-derived ascent used to
-// demonstrate. Every one of these fields is optional: a file that omits one leaves
+// gets a different and worse answer, ascent above all. Every one of these fields is
+// optional: a file that omits one leaves
 // the analysis to fall back on the derived value.
 type FITSpan struct {
 	Start time.Time

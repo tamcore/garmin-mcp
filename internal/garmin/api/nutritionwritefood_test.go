@@ -180,8 +180,8 @@ func TestCustomFoodFactsRefuseInvalidInput(t *testing.T) {
 }
 
 // TestCreateCustomFoodEffectIsNeverRepeated proves create's effect is
-// EffectUnsafeWrite, not the EffectIdempotentWrite create and update used to
-// share: compat/tools.json classifies create_custom_food as non-idempotent
+// EffectUnsafeWrite, not update's EffectIdempotentWrite: compat/tools.json classifies
+// create_custom_food as non-idempotent
 // ("repeats create duplicates"), so a lost response must never be replayed by
 // the retry layer, unlike update.
 func TestCreateCustomFoodEffectIsNeverRepeated(t *testing.T) {

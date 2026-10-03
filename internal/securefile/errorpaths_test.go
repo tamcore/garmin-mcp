@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// This file closes real, previously-untested error branches in RestrictExistingDir
+// This file covers real error branches in RestrictExistingDir
 // and the package's shared internals: an owner-unreadable file (OpenFile refused
 // after Lstat already accepted it), an over-long name (a genuine Lstat failure that
 // is neither ErrNotExist nor ErrExist, so pathError's final fallback branch is

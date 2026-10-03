@@ -73,8 +73,8 @@ func licenseOnly(spdx string) moduleNotice {
 // moduleNotices is the curated registry, keyed by module path. Versions are
 // deliberately absent: a patch bump must not require a second edit here, and the
 // generator reads the version from the module graph. The consequence is that a
-// bump which *changes* a module's terms needs a human to notice, which is why
-// docs/dependencies.md makes re-reading the licence part of a dependency bump.
+// bump which *changes* a module's terms needs a human to notice, so re-reading
+// the licence is part of every dependency bump.
 var moduleNotices = map[string]moduleNotice{
 	"github.com/dustin/go-humanize":       licenseOnly(spdxMIT),
 	"github.com/fsnotify/fsnotify":        licenseOnly(spdxBSD3),

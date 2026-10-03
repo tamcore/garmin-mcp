@@ -369,12 +369,11 @@ func TestCheckStatOwnerAcceptsMatchingOwner(t *testing.T) {
 	}
 }
 
-// TestReadFileAcceptsAHardLinkedFile is the deliberate-scope-narrowing
-// regression test for removing the hard-link check: creating a second link to
-// a file this process owns needs the same uid (or root) that already controls
-// it — Linux's protected_hardlinks (default on) blocks anyone else — so the
-// check bought little and cost the install layer a great deal of complexity
-// (see AGENTS.md). A second link to a file this process owns is therefore
+// TestReadFileAcceptsAHardLinkedFile pins a deliberate scope limit: creating a
+// second link to a file this process owns needs the same uid (or root) that
+// already controls it — Linux's protected_hardlinks (default on) blocks anyone
+// else — so a hard-link check would buy little and cost the install layer a
+// great deal of complexity. A second link to a file this process owns is therefore
 // accepted, not refused.
 func TestReadFileAcceptsAHardLinkedFile(t *testing.T) {
 	dir := tempDir(t)

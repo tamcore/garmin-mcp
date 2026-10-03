@@ -14,8 +14,8 @@ import (
 const ToolGetCourses = "get_courses"
 
 // maxCourses bounds the returned course listing. Not one of deps.go's Bounds
-// fields: this is the one tool in this slice that reads a list, and a local
-// bound keeps deps.go's shared Bounds struct untouched.
+// fields: this is the one course tool that reads a list, so the bound stays
+// local to it.
 const maxCourses = 500
 
 // CourseSummary is one course get_courses reports, matching

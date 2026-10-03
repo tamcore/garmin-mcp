@@ -10,10 +10,9 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/testkit"
 )
 
-// stressRegistrations names the stress, body-battery and readiness slice. The tools
-// are registered for these tests by the shared harness, which builds the real
-// registrar from register.go; this list stays because the slice's contract tests
-// assert over a named group rather than over the whole registered surface.
+// stressRegistrations names the stress, body-battery and readiness tools. The shared
+// harness registers them from register.go; this list exists because their contract
+// tests assert over a named group rather than over the whole registered surface.
 func stressRegistrations() []registration {
 	return []registration{
 		{getStressDataContract, registerGetStressData},

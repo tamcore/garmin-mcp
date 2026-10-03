@@ -38,7 +38,7 @@ func boundChallengePage[T any](items []T, limit int) ([]T, bool) {
 // challenges.py shares across those five tools.
 //
 // Source: Taxuspt/garmin_mcp's src/garmin_mcp/challenges.py at the commit
-// docs/upstream-pins.md names.
+// compat/tools.json records.
 
 // maxChallengePageSize is the page-size ceiling every challenge-list tool applies.
 // Source: each tool's own `min(limit, 100)` (challenges.py:374, 423, 456, 491, 565).

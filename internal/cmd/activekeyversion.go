@@ -42,7 +42,7 @@ const maxActiveVersionBytes = 1 << 10
 // cryptostore.MaxKeyVersion alone (1<<32-1) bounds only what the envelope
 // format can represent, not what is a plausible number of lookups to run on
 // every start-up and every rotation. Rotation is manual and one version at a
-// time (see AGENTS.md): an operator rotating once a day would need over 270
+// time: an operator rotating once a day would need over 270
 // years to reach this bound, so a marker naming a version above it is not a
 // plausible operator state — it is corruption or an attempt to force an
 // unbounded filesystem scan — and is refused the same way any other

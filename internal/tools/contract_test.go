@@ -53,7 +53,7 @@ func loadManifest(t *testing.T) map[string]manifestTool {
 	return byName
 }
 
-// additionsBeyondTheManifest are the tools this slice registers that the pinned
+// additionsBeyondTheManifest are the tools this package registers that the pinned
 // manifest does not describe, each with the reason it exists.
 //
 // The manifest is a snapshot of one upstream commit. Some additions come from
@@ -264,7 +264,7 @@ func TestEveryRegisteredToolsTierMatchesTheManifestEffect(t *testing.T) {
 			continue
 		}
 		if want := effects[contract.Spec.Tier]; !slices.Contains(want, entry.Effect) {
-			t.Errorf("%s: manifest effect = %q, but this slice registers it in the %v tier, "+
+			t.Errorf("%s: manifest effect = %q, but it is registered in the %v tier, "+
 				"which requires one of %v", name, entry.Effect, contract.Spec.Tier, want)
 		}
 	}
@@ -308,8 +308,8 @@ func TestEveryRegisteredToolLogsTheManifestSensitivityDomain(t *testing.T) {
 	}
 }
 
-// TestNoManifestToolIsRegisteredWithoutTheEndpointItNeeds pins the tools this slice
-// deliberately leaves unregistered, so the parity manifest keeps telling the truth.
+// TestNoManifestToolIsRegisteredWithoutTheEndpointItNeeds pins the tools this package
+// deliberately leaves unregistered, so the manifest keeps telling the truth.
 func TestNoManifestToolIsRegisteredWithoutTheEndpointItNeeds(t *testing.T) {
 	t.Parallel()
 

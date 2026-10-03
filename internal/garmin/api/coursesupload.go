@@ -63,8 +63,7 @@ const courseCoordinateSystem = "WGS84"
 // Garmin's own /import response names the course. Upstream's own fallback
 // (courses.py:257, `os.path.splitext(os.path.basename(gpx_path))[0]`) is the
 // GPX file's own filename stem, which does not exist here: this package
-// never takes a caller-supplied filesystem path (see AGENTS.md's file
-// discipline and docs/parity.md on download_activity_file), so there is no
+// never takes a caller-supplied filesystem path, so there is no
 // filename to fall back to. This literal is the deliberate, documented
 // replacement.
 const defaultUploadedCourseName = "Uploaded course"

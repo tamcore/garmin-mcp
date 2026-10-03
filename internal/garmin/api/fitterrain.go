@@ -294,7 +294,7 @@ func summarizeTemperature(records []FITRecord) temperatureSlice {
 
 // A FITDrift is the aerobic decoupling of one ride. Percent is
 // (first - second) / first * 100, positive when the ratio fell; upstream computes the
-// inverse under the same name, so do not flip the sign. See docs/parity.md.
+// inverse under the same name, so do not flip the sign.
 type FITDrift struct {
 	OK          bool
 	Seconds     float64

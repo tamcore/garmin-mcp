@@ -145,7 +145,7 @@ func TestOverallSpanCountsASessionWithoutAnElapsedTime(t *testing.T) {
 
 // TestMixedSessionCaloriesStayVisiblePerSession pins the one folded field with no
 // derived route: absence is final at the whole-activity level, and each session keeps
-// its own figure. See docs/parity.md.
+// its own figure.
 func TestMixedSessionCaloriesStayVisiblePerSession(t *testing.T) {
 	t.Parallel()
 

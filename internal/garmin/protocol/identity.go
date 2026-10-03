@@ -21,8 +21,8 @@ const (
 	LoginLocale = "en-US"
 )
 
-// Documented gaps in the identity surface, all unchanged between 0.3.8 and
-// 0.3.10 and all outside the login strategies this package models:
+// Parts of the upstream identity surface not modeled here, all unchanged between
+// 0.3.8 and 0.3.10 and all outside the login strategies this package models:
 //
 //   - MOBILE_SSO_CLIENT_ID ("GCM_ANDROID_DARK"), MOBILE_SSO_SERVICE_URL
 //     (mobile.integration/gcm/android) and MOBILE_SSO_USER_AGENT are upstream

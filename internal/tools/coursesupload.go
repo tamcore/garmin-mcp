@@ -62,8 +62,7 @@ func (r UploadCourseResult) LogValue() slog.Value {
 // Deliberate deviation from compat/tools.json's own inputSchema: upstream's
 // gpx_path takes an absolute filesystem path and reads the file itself
 // (courses.py:222-238). This server accepts no caller-supplied filesystem
-// path anywhere (see AGENTS.md's file discipline and docs/parity.md on
-// download_activity_file and set_fit_download_dir), so gpx_content takes
+// path anywhere, so gpx_content takes
 // the file's own bytes as a UTF-8 string instead. That part of upstream
 // does not port; the caller supplies content, never a path.
 type uploadCourseInput struct {

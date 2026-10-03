@@ -61,7 +61,7 @@ func loadManifestStatuses(t *testing.T) manifestStatusDocument {
 // directions.
 //
 // A record marked implemented that this package does not register is a manifest that
-// overstates the surface; a registered manifest tool still marked not-implemented is a
+// overstates the surface; a registered manifest tool not marked implemented is a
 // manifest that has fallen behind the code. Both failures name the drifted tools,
 // because a bare count would leave the next reader to diff 138 records by hand.
 func TestManifestStatusMatchesTheRegisteredSurface(t *testing.T) {

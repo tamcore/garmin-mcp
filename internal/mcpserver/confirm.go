@@ -203,8 +203,8 @@ func classifyElicitError(ctx context.Context, err error) error {
 // property is present AND it is the boolean true. Everything else is a refusal,
 // including an accepted form that carries no content at all.
 //
-// That last case used to be read as consent, on the reasoning that accepting the
-// prompt is itself consent to what the prompt described. It is not safe: a client
+// That last case is not consent, although accepting the prompt might look like
+// consent to what the prompt described. Reading it as consent is not safe: a client
 // that answers "accept" with an empty object — because its user tapped the dialog
 // away, because it does not render the checkbox, or because it fills nothing it was
 // not asked to fill — would have had a destructive operation executed. AGENTS.md

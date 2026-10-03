@@ -16,12 +16,10 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/testkit"
 )
 
-// This file also carries the shared test harness for all six device and gear tools
-// this slice adds (get_device_last_used, get_device_settings,
-// get_primary_training_device, get_device_solar_data, get_device_alarms and
-// get_gear): a standalone registrar, server and session, so each tool can be driven
-// end to end before register.go carries it. It follows the same pattern
-// garmincoach_internal_test.go established for a tool ahead of its own wiring.
+// This file also carries the shared test harness for the six device and gear tools
+// (get_device_last_used, get_device_settings, get_primary_training_device,
+// get_device_solar_data, get_device_alarms and get_gear): a standalone registrar,
+// server and session, so each tool can be driven end to end in isolation.
 //
 // Every identifier and name in the fixtures below is synthetic. No fixture in this
 // package is a recording of a real account.
@@ -43,7 +41,7 @@ func (c deviceToolsCaller) Do(
 	return c.doer.Do(req.WithContext(ctx))
 }
 
-// deviceToolsRegistrar registers exactly the six tools this slice adds.
+// deviceToolsRegistrar registers exactly the six device and gear tools.
 type deviceToolsRegistrar struct {
 	svc *service
 }

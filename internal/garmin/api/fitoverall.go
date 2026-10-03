@@ -9,7 +9,7 @@ import "time"
 //
 // A figure folds only when every session carried it; otherwise it is absent and
 // analyzeSegment's record-derived value stands. Calories is the one field with no
-// such fallback, so there absence is final. See docs/parity.md.
+// such fallback, so there absence is final.
 func overallSpan(sessions []FITSpan) FITSpan {
 	if len(sessions) == 0 {
 		return FITSpan{}

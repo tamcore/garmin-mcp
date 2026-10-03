@@ -16,8 +16,8 @@ import (
 // document nothing here can create, so there is no owned object to bind the write
 // to. What stands in for ownership is the exact date the running test declares
 // before the write leaves this process. nutritionsettingswrite_test.go is the only
-// caller of allowSettingsDate, and it also carries the fifth acknowledgement gate
-// this endpoint needs beyond the four AGENTS.md names — see its own doc comment for
+// caller of allowSettingsDate, and it also carries the acknowledgement gate this
+// endpoint needs beyond GARMIN_LIVE_WRITE_ACK — see its own doc comment for
 // why a value restored is not a shape restored.
 
 // allowSettingsDate declares the one date the running test is about to write

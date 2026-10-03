@@ -62,7 +62,7 @@ func TestNewAcceptsANilLoggerAndNilLimiter(t *testing.T) {
 	}
 }
 
-// No Garmin tool belongs to this slice. Exactly one built-in tool is registered.
+// Without a tool registrar, exactly one built-in tool is registered.
 func TestOnlyTheBuiltInToolIsRegistered(t *testing.T) {
 	t.Parallel()
 

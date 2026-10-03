@@ -51,8 +51,7 @@ import (
 // against each other, but a reader on one connection still is not guaranteed
 // to see a writer's commit on another promptly, and this harness's own
 // symptoms were reads, not lock contention. Single-writer — seed fully, then
-// launch, then never write again — is the fix; see docs/implementation-status.md
-// for what was measured.
+// launch, then never write again — is the fix.
 
 // seedDatabasePath is where startRemoteServerSeeded's config points the binary,
 // and where this file must open the same store.
@@ -97,10 +96,10 @@ const remoteClientName = "End-to-end client"
 // install for remoteClientID, so an authorization code naming that client can
 // be seeded before the server process ever starts.
 //
-// This is the piece that used to force codes to be seeded after launch: the
-// FK auth_codes.client_id -> oauth_clients.id (migrations/0001_initial.sql)
-// only had a target once the running process reconciled its configured
-// client into the database. store.SQLiteStore.ReconcileClient
+// It lets codes be seeded before launch: the FK auth_codes.client_id ->
+// oauth_clients.id (migrations/0001_initial.sql) needs a target, which the
+// running process would otherwise create only when it reconciles its
+// configured client into the database. store.SQLiteStore.ReconcileClient
 // (internal/store/sqlite_clientreconcile.go) is keyed on the caller-chosen
 // ID rather than minting one the way RegisterClient does, and it is
 // idempotent: the server's own reconciliation at start-up finds this row

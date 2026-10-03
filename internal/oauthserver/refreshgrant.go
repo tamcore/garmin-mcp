@@ -33,9 +33,9 @@ func (s *Server) refreshGrant(
 	}
 	// Captured once: the consumed-and-expired pre-check below and the plain
 	// expiry check after it must judge the same instant. Two separate s.now()
-	// calls here used to let a token that was live at the first read and expired
-	// by the second slip onto the plain-expiry path, which never revokes
-	// anything, instead of being caught as reuse.
+	// calls would let a token that was live at the first read and expired by the
+	// second slip onto the plain-expiry path, which never revokes anything,
+	// instead of being caught as reuse.
 	now := s.now()
 	// Reuse must be caught regardless of the presented token's own expiry. The
 	// ordinary path relies on RotateRefreshToken noticing a consumed row inside its
