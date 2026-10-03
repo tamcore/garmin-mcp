@@ -199,20 +199,25 @@ type GoalResult struct {
 // headroom over any real account's goal list.
 const maxGoalWalkItems = 5000
 
-// connectUIGoalsStart is goal-service's first page index for the Connect UI
-// read; start=0 returns [] even when goals exist.
-const connectUIGoalsStart = 1
+// The first page index of each goal walk: the Connect UI read is 1-based and
+// returns [] for start=0; the legacy get_goals call starts at 0.
+const (
+	connectUIGoalsStart = 1
+	legacyGoalsStart    = 0
+)
 
 // Goals reads every goal matching status, walking pages until Garmin returns an
 // empty page.
 //
-// Source: upstream c99194b (challenges.py:288-295,340-358). The first walk
+// Source: upstream (challenges.py:288-295,340-358). The first walk
 // reads the way Connect's Goals page does — 1-based start and Sec-Fetch-Site:
 // same-origin — because goal-service omits goals created in the current
 // Connect Goals UI otherwise. When that walk finds nothing, one fallback walk
 // repeats python-garminconnect's get_goals call: start 0, no extra header.
 // Upstream also falls back when the first walk errors; this port returns the
-// error instead of hiding it.
+// error instead of hiding it. A walk stops when a page adds no goal it has not
+// already seen (challenges.py:322-337), because goal-service can ignore start
+// and answer the same page again.
 //
 // Both walks follow get_goals's own loop, which pages at its default limit of
 // 30 and stops on the first empty page — not a short one, unlike
@@ -239,37 +244,41 @@ func (c *Challenges) Goals(
 		return GoalResult{}, invalid(req, fmt.Errorf("%w: a goal status is required", client.ErrValidation))
 	}
 
-	limits := c.req.limits()
-	result, err := c.walkGoals(ctx, session, status, connectUIGoalsStart, true, limits)
+	connectUI := req
+	connectUI.SameOrigin = true
+	result, err := c.walkGoals(ctx, session, connectUI, status, connectUIGoalsStart)
 	if err != nil || len(result.Goals) > 0 {
 		return result, err
 	}
-	return c.walkGoals(ctx, session, status, 0, false, limits)
+	return c.walkGoals(ctx, session, req, status, legacyGoalsStart)
 }
 
-// walkGoals fetches successive goal pages from start until one is empty, the
-// page bound is reached, or maxGoalWalkItems is reached.
+// walkGoals fetches successive goal pages from start, each built on base, until
+// one adds no unseen goal, the page bound is reached, or maxGoalWalkItems is
+// reached.
 func (c *Challenges) walkGoals(
-	ctx context.Context, session client.Session, status GoalStatus, start int, sameOrigin bool, limits client.Limits,
+	ctx context.Context, session client.Session, base client.Request, status GoalStatus, start int,
 ) (GoalResult, error) {
+	limits := c.req.limits()
 	page, err := client.NewPage(start, limits.MaxPageSize)
-	if err == nil {
-		err = limits.ValidatePage(page)
-	}
 	if err != nil {
-		return GoalResult{}, invalid(readRequest(client.OpGetGoals, client.EndpointGoals, client.PathGoals, nil), err)
+		return GoalResult{}, invalid(base, err)
+	}
+	if err := limits.ValidatePage(page); err != nil {
+		return GoalResult{}, invalid(base, err)
 	}
 	var all []Goal
+	seen := map[string]bool{}
 
 	for range limits.MaxPages {
-		req := readRequest(client.OpGetGoals, client.EndpointGoals, client.PathGoals, goalQuery(status, page))
-		req.SameOrigin = sameOrigin
+		req := base
+		req.Query = goalQuery(status, page)
 
 		var goals client.List[Goal]
 		if _, err := c.req.read(ctx, session, req, &goals); err != nil {
 			return GoalResult{}, err
 		}
-		items := goals.Items()
+		items := unseenGoals(goals.Items(), seen)
 		if len(items) == 0 {
 			return GoalResult{Goals: all}, nil
 		}
@@ -286,8 +295,33 @@ func (c *Challenges) walkGoals(
 		page = page.Next()
 	}
 
-	req := readRequest(client.OpGetGoals, client.EndpointGoals, client.PathGoals, nil)
-	return GoalResult{}, unexpected(req, fmt.Errorf("%w after %d pages", client.ErrPaginationExhausted, limits.MaxPages))
+	return GoalResult{}, unexpected(base, fmt.Errorf("%w after %d pages", client.ErrPaginationExhausted, limits.MaxPages))
+}
+
+// unseenGoals returns the goals of items whose key is not yet in seen, and
+// records them there.
+func unseenGoals(items []Goal, seen map[string]bool) []Goal {
+	var fresh []Goal
+	for _, item := range items {
+		key := goalKey(item)
+		if !seen[key] {
+			seen[key] = true
+			fresh = append(fresh, item)
+		}
+	}
+	return fresh
+}
+
+// goalKey identifies a goal by its id, or by the whole document when it has
+// none, as challenges.py:325-327 does.
+func goalKey(goal Goal) string {
+	var probe struct {
+		ID json.RawMessage `json:"id"`
+	}
+	if json.Unmarshal(goal, &probe) == nil && len(probe.ID) > 0 && string(probe.ID) != "null" {
+		return "id:" + string(probe.ID)
+	}
+	return "doc:" + string(goal)
 }
 
 // goalQuery builds the query parameters get_goals sends: status, start, limit
