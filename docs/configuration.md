@@ -277,7 +277,7 @@ paths instead.
 | Key | Flag | Default | Applies to | Validation |
 |-----|------|---------|-----------|-----------|
 | `max-request-bytes` | `--max-request-bytes` | `1048576` (1 MiB) | remote | 1 to 8388608 (8 MiB). It bounds a decoded MCP request body. The browser login forms use their own fixed 8 KiB bound. |
-| `max-response-bytes` | `--max-response-bytes` | `8388608` (8 MiB) | none today | 1 to 67108864 (64 MiB). It is validated but not yet passed to the Garmin request layer, which applies its own default of 8 MiB. Changing this setting has no effect. |
+| `max-response-bytes` | `--max-response-bytes` | `8388608` (8 MiB) | both | 1 to 67108864 (64 MiB). It bounds one Garmin response body on the wire. The decompressed bound is four times this value, capped at 128 MiB. |
 | `request-timeout` | `--request-timeout` | `30s` | both | Between 1s and 10m. It bounds one outbound Garmin call. |
 | `read-rate-limit` | `--read-rate-limit` | `120` | both | 1 to 100000 read tool calls per principal per minute. |
 | `write-rate-limit` | `--write-rate-limit` | `30` | both | 1 to 100000 write tool calls per principal per minute. |

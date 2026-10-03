@@ -1,30 +1,18 @@
 # Threat model
 
-**Read this first.** The MCP server, the OAuth authorization server, the browser
-login pages, the logger, the SQLite store and 154 tools all exist now, and most of
-the controls below have landed. Sections marked **[TARGET]** are requirements
-written with `must` and `will`; a `must` sentence is a requirement, never a claim
-that the code exists. The section
-[Mitigations that have landed](#mitigations-that-have-landed-now), marked
-**[NOW]**, is the list of controls that exist and are covered by tests, each with
-the file that proves it.
-
-Never cite a **[TARGET]** paragraph as evidence that a control is in place.
-`docs/implementation-status.md` is the authoritative gap list.
-
-The model covers assets, trust boundaries, attacker capabilities, and one
-mitigation set per threat category. The threat coverage is complete on purpose:
-the point of the split below is honesty about status, not a shorter analysis.
+This model covers assets, trust boundaries, attacker capabilities, and one
+mitigation set per threat category. Each category states the control and then
+any known limit. The table under
+[Implemented controls](#implemented-controls) names the file that proves each
+control.
 
 The operator of a remote deployment occupies a sensitive trust position: users
 type their Garmin credentials into a page that the operator serves. Self-hosting
 or a trusted operator is the recommended deployment.
 
-## Mitigations that have landed [NOW]
+## Implemented controls
 
-Each item below is implemented and tested in this repository today, with the
-file that proves it. A control that appears only in a **[TARGET]** section below
-is still a requirement.
+Each item below is implemented and tested, with the file that proves it.
 
 | Mitigation | Where | Threat category |
 |------------|-------|-----------------|
@@ -70,19 +58,17 @@ is still a requirement.
 | Start-up refusal on bad key material. The composition root opens the key before it serves, and `doctor` branches on `ErrKeyNotFound` and `ErrInsecureKeyPermissions` | `internal/cmd/components.go`, `internal/cmd/remote.go`, `internal/cmd/doctor.go` | 10 |
 | Mode isolation inside one process: the stdio and remote shapes share no token gate, token store, policy, limiter, principal resolver or file store | `internal/cmd/remote_test.go` (`TestRemoteAndStdioShareNoState`) | 4 |
 
-Six limits on the list above, stated so it cannot be over-read:
+Limits on the list above, stated so it cannot be over-read:
 
-- The file store's read-modify-write is now serialized across processes.
+- The file store's read-modify-write is serialized across processes.
   `FileStore.Save`, `Delete` and `Reseal` hold an `flock(2)` advisory lock on a
   sibling `.lock` file for the whole critical section, on top of the per-principal
-  in-process mutex, which covers goroutines inside one `*FileStore` only. This
-  changed with key rotation: `rotate-key` is a separate process from `serve` by
-  necessity, and a Go-level re-read-then-write is two operations, so a
-  content-equality check narrows that window without closing it the way a SQL
-  `UPDATE ... WHERE` does at the engine. The lock is advisory and host-local, so
-  the store must not sit on a network filesystem — which `docs/operations.md`
-  already requires. Both deployments remain single-active-instance by design;
-  what changed is that a second process can no longer silently destroy a write.
+  in-process mutex, which covers goroutines inside one `*FileStore` only.
+  `rotate-key` is a separate process from `serve`, and a Go-level
+  re-read-then-write is two operations, so the lock is what closes that window.
+  The lock is advisory and host-local, so the store must not sit on a network
+  filesystem (see `docs/operations.md`). Both deployments are
+  single-active-instance by design.
 - `mcpserver.Revocation` has no resource selector, so revoking one consent closes
   slightly more sessions than that grant covered. The direction is fail-safe.
 - A revocation event dropped under buffer pressure costs the affected session its
@@ -91,58 +77,51 @@ Six limits on the list above, stated so it cannot be over-read:
 - Consent scopes are compared by containment, not held in the consent key. That
   is what makes scope widening need fresh consent while narrowing does not; it is
   a deliberate design, not an approximation.
-- Five MCP resources exist and are registered: four workout templates and the
-  structure reference. They are compile-time constants, rendered once at
-  registration and served with no request and no principal, so they carry no
-  per-principal data and no caller input reaches them.
+- Five MCP resources are registered: four workout templates and the structure
+  reference. They are compile-time constants, rendered once at registration and
+  served with no request and no principal, so they carry no per-principal data
+  and no caller input reaches them.
 
-## Assets [TARGET]
+## Assets
 
-Every row now has a real placement. The remote rows depend on the SQLite
-backend, which the stdio deployment does not open.
+The remote rows depend on the SQLite backend, which the stdio deployment does
+not open.
 
 | Asset | Sensitivity | Where it lives |
 |-------|-------------|----------------|
 | Garmin email, password, MFA code | Highest. Never persisted | Transient request memory during one login attempt |
 | Garmin DI token set (`di_token`, `di_refresh_token`, `di_client_id`) | Highest | Encrypted at rest in the store; decrypted only in the per-principal client |
-| Master encryption key | Highest | Owner-only key file, or a secret manager / KMS adapter |
+| Master encryption key | Highest | Owner-only key file |
 | MCP access and refresh tokens | High | Only SHA-256/HMAC lookup values are stored |
 | Authorization codes and login transactions | High | Hashed, or in a bounded in-memory registry with a short TTL |
 | Consent records and registered clients | Medium | Store |
 | Principal identity and Garmin account linkage | High (personal data) | Store, with the Garmin account identifier keyed-HMAC'd or encrypted |
-| Garmin health, nutrition, menstrual, location, and device data | Highest (special category) | Passed to the calling principal only; not persisted or shared-cached by default |
+| Garmin health, nutrition, menstrual, location, and device data | Highest (special category) | Passed to the calling principal only; not persisted or shared-cached |
 | Audit and application logs | Medium | Pseudonymous IDs and coarse categories only |
 | Database file and its backups | Highest in aggregate | Operator-controlled volume |
 
-## Trust boundaries [TARGET]
-
-All six boundaries exist now. Boundaries 1, 2 and 5 arrived with the transports
-and the HTTP handlers, and boundary 4 covers the SQLite backend as well as the
-file store and the key file. The `must` wording below is kept as the standing
-requirement for each one.
+## Trust boundaries
 
 1. **MCP client to server.** Crossed by Streamable HTTP requests and stdio
-   frames. The principal will come only from a verified bearer token in the
+   frames. The principal comes only from a verified bearer token in the
    `Authorization` header. Tool arguments are untrusted.
 2. **Browser to server.** Crossed by the login, MFA, and consent forms. Requests
-   are untrusted and will need the transaction cookie plus the form CSRF token.
+   are untrusted and need the transaction cookie plus the form CSRF token.
 3. **Server to Garmin.** Crossed by outbound HTTPS. Garmin responses are
    untrusted input.
 4. **Server to store and key material.** Crossed by local file and SQLite
    access. Protected by owner-only modes and envelope encryption.
 5. **Reverse proxy to server.** Crossed by forwarded headers. Untrusted unless
    the peer is in a configured proxy CIDR.
-6. **Between principals.** Crossed by nothing. Isolation must be enforced by
-   per-principal keying of every client, token, cookie jar, cache entry, and
-   result.
+6. **Between principals.** Crossed by nothing. Isolation is enforced by
+   per-principal keying of every client, token, cookie jar, and result.
 
 ## Attacker capabilities assumed
 
 - **Remote unauthenticated network attacker**: reaches every public route,
   replays captured requests, forges headers, and enumerates URLs.
 - **Malicious or compromised MCP client**: holds a valid token for one
-  principal, can register itself where registration is open, and sends arbitrary
-  tool arguments.
+  principal and sends arbitrary tool arguments.
 - **Malicious end user**: drives the browser flow, submits arbitrary form values,
   and tries to link an account that is not theirs.
 - **Prompt-injection content author**: controls text inside Garmin data that a
@@ -154,179 +133,140 @@ requirement for each one.
 - **Hostile local process**: runs as another local user and probes file modes,
   symlinks, and umask behavior.
 
-Every attacker in this list now has a surface to be tested against, because the
-network-facing code exists. The remote unauthenticated attacker and the
-malicious MCP client are covered by the OAuth negative matrix, the transport
-tests and `e2e/remote_test.go`.
+The remote unauthenticated attacker and the malicious MCP client are covered by
+the OAuth negative matrix, the transport tests and `e2e/remote_test.go`.
 
 Out of scope: full compromise of the running host, a malicious operator, and
 compromise of Garmin itself. A key colocated with the database protects backups
 and file disclosure, not a compromised running host.
 
-## Threat categories and mitigations [TARGET]
-
-Every requirement below is normative for the target system. Where a part of it
-has landed, the landed part is in the table above and is named again here.
+## Threat categories and mitigations
 
 ### 1. Credential and token theft, log leakage
 
-Passwords and MFA codes must exist only for the duration of one Garmin login
-attempt, in mutable buffers where practical, with references dropped immediately
-after. They must never be persisted, never a tool argument, never a CLI flag, and
-never an environment variable. DI tokens must be encrypted with versioned AEAD
-before storage and never returned to an MCP client. Only hashed MCP token
-material may be stored. Secret-bearing structs must not print their fields
-through `String`, `MarshalJSON`, error, or debug paths.
+Passwords and MFA codes exist only for the duration of one Garmin login attempt,
+with references dropped immediately after. They are never persisted, never a
+tool argument, never a CLI flag, and never an environment variable. DI tokens are
+encrypted with versioned AEAD before storage and never returned to an MCP client.
+Only hashed MCP token material is stored. Secret-bearing structs do not print
+their fields through `String`, `MarshalJSON`, error, or debug paths, including
+the method-stripping alias case.
 
-Landed: transient credential handling, the encrypted DI token set, the redaction
-suite including the method-stripping alias case, hashed-only MCP token material,
-and the logger. `internal/mcplog` is structured `slog` with an allowlisted field
-set on stderr, and `internal/tools` and `internal/mcpserver` carry their own
-redaction tests over the tool result, error and HTTP paths. Bodies are not
-logged.
+`internal/mcplog` is structured `slog` with an allowlisted field set on stderr,
+and `internal/tools` and `internal/mcpserver` carry their own redaction tests
+over the tool result, error and HTTP paths. Bodies are not logged. The exact tool
+name is logged only behind `log-tool-names`, off by default.
 
-Target: the safe-debugging policy for exact tool names, and a stated retention
-period. Neither exists as a written policy.
+Known limit: this server states no log retention period. Retention belongs to
+the operator's log pipeline.
 
 ### 2. Authorization-code, state, PKCE, CSRF, redirect, and refresh-token replay
 
-Landed in full, in `internal/oauthserver` with `internal/oauthstore` and the
-`migrations` schema behind it, and the negative OAuth matrix passes. The named
-files are in the landed table above. One deliberate difference from the wording
-below: the code TTL is 60 seconds by default under a 5-minute ceiling, which is
-stricter than the requirement.
+PKCE S256 is mandatory; implicit and resource-owner-password grants do not
+exist. Authorization codes carry 256 bits of entropy, live 60 seconds by default
+under a 5-minute ceiling, are single-use, and are bound to client ID, exact
+redirect URI, PKCE challenge, resource, scopes, and principal; token exchange
+revalidates every binding. The client's `state` is preserved byte for byte and
+never reused as the server's CSRF or session state; the server generates an
+independent transaction capability, browser cookie, and form CSRF token. Issuer
+and audience (RFC 8707 `resource`) always use exact matching, with no wildcard
+admitted under any setting. Redirect URI matching is exact, except that a
+loopback redirect URI admits any port per RFC 8252 §7.3, and except where the
+operator sets `oauth-allow-redirect-wildcards`; with it set, one trailing-path
+wildcard per registration is admitted under the parse and normalization rules in
+`internal/oauthserver/redirectpattern.go`, and every other wildcard shape — a
+host wildcard, a mid-path wildcard, more than one `*` — stays refused.
+Fragments, userinfo, and non-HTTPS redirects are rejected except
+standards-compliant loopback. Duplicate or conflicting security parameters are
+rejected. Refresh tokens rotate on every use, are bound to principal, client,
+resource, and family, never expand scope or change resource, and reuse triggers
+family revocation. Errors redirect only after the client and exact redirect URI
+are validated; otherwise a local sanitized error page is rendered. The negative
+OAuth matrix is a required test class.
 
-PKCE S256 must be mandatory; implicit and resource-owner-password grants must not
-exist. Authorization codes must carry at least 256 bits of entropy, live at most
-five minutes, be single-use, and be bound to client ID, exact redirect URI, PKCE
-challenge, resource, scopes, and principal; token exchange must revalidate every
-binding. The client's `state` must be preserved byte for byte and never reused as
-the server's CSRF or session state; the server must generate an independent
-transaction capability, browser cookie, and form CSRF token. Issuer and audience
-(RFC 8707 `resource`) must always use exact matching, with no wildcard admitted
-under any setting. Redirect URI matching must use exact matching, and that stays
-the only rule unless the operator sets `oauth-allow-redirect-wildcards`; with it
-set, one trailing-path wildcard per registration is admitted under the parse and
-normalization rules in `internal/oauthserver/redirectpattern.go`, and every other
-wildcard shape — a host wildcard, a mid-path wildcard, more than one `*` — stays
-refused. Fragments, userinfo, and non-HTTPS redirects must be rejected except
-standards-compliant loopback. Duplicate or conflicting security parameters must be
-rejected. Refresh tokens must rotate on every use, be bound to principal, client,
-resource, and family, never expand scope or change resource, and reuse must
-trigger transactional family revocation. Errors may redirect only after the client
-and exact redirect URI are validated; otherwise a local sanitized error page must
-be rendered. The negative OAuth matrix is a required test class.
-
-A trailing-path redirect wildcard is weaker than exact matching, and it is off
-by default for that reason. Where it is enabled, any open redirector or any
-endpoint serving attacker-influenced content **under the wildcarded prefix**
-lets an attacker craft an authorization request whose redirect the pattern
-admits and receive the victim's authorization code. PKCE does not mitigate
-this: the attacker generates their own challenge. `login-allowed-emails` does
-not mitigate it either, because the victim is an allowlisted user logging in
-with their own credentials. The mitigations that remain are the operator's
-choice of prefix and the consent page, which names the redirect host. The
-widest prefix the grammar admits, `https://host/*`, matches every path on that
-host: scheme, host, and the absence of userinfo or fragment stay exact, but this
-is the widest form the feature can express, and an operator who registers it is
-trusting every path that host ever serves.
+The wildcard setting exists because a hosted MCP client can carry a
+per-installation or per-conversation redirect path that the operator cannot know
+in advance, and dynamic client registration is refused. A trailing-path redirect
+wildcard is weaker than exact matching, and it is off by default for that
+reason. Where it is enabled, any open redirector or any endpoint serving
+attacker-influenced content **under the wildcarded prefix** lets an attacker
+craft an authorization request whose redirect the pattern admits and receive the
+victim's authorization code. PKCE does not mitigate this: the attacker generates
+their own challenge. `login-allowed-emails` does not mitigate it either, because
+the victim is an allowlisted user logging in with their own credentials. The
+mitigations that remain are the operator's choice of prefix and the consent
+page, which names the redirect host. The widest prefix the grammar admits,
+`https://host/*`, matches every path on that host: scheme, host, and the absence
+of userinfo or fragment stay exact, but this is the widest form the feature can
+express, and an operator who registers it is trusting every path that host ever
+serves.
 
 ### 3. Confused deputy and token passthrough
 
-The MCP access token must never be forwarded to Garmin, and a Garmin DI token
-must never be accepted or emitted as an MCP bearer token. The server must never
-authorize from a decoded-but-unverified JWT; MCP tokens must be opaque, random,
-hashed, and server-stored. Consent must be bound to
-`(principal, client_id, exact redirect_uri, exact scopes, resource)`, so a
-dynamically registered client cannot inherit another client's sticky consent.
-Scope expansion or a redirect change must require fresh consent.
-
-Landed in full. The unverified-JWT reader is quarantined by naming and
-documentation to scheduling and diagnostics and rejects `alg:none` and unsigned
-payloads; MCP tokens are opaque, random, hashed and server-stored; the MCP token
-is never forwarded to Garmin and a Garmin DI token is never accepted as an MCP
-bearer; and consent is bound to the full tuple with scopes compared by
-containment, so a dynamically registered client cannot inherit sticky consent.
+The MCP access token is never forwarded to Garmin, and a Garmin DI token is never
+accepted or emitted as an MCP bearer token. The server never authorizes from a
+decoded-but-unverified JWT: the unverified-JWT reader is restricted to scheduling
+and diagnostics and rejects `alg:none` and unsigned payloads. MCP tokens are
+opaque, random, hashed, and server-stored. Consent is bound to
+`(principal, client_id, exact redirect_uri, resource)` with scopes compared by
+containment, so a client cannot inherit another client's consent, and scope
+expansion or a redirect change requires fresh consent.
 
 ### 4. Cross-tenant object and handle access
 
-Landed, with two exceptions named at the end. Sessions, the principal key, the
-tool surface and the isolation tests all exist. There is still **no client
-cache** and **no download handle**: a download returns a bounded embedded
-resource in the same response, so there is no handle to bind or expire.
+The primary principal key is a random internal UUID. No tool accepts `user_id`,
+email, token path, or an account selector. `Mcp-Session-Id` and `Last-Event-ID`
+are never authentication: every session is bound to the verified principal,
+client, resource, and scopes, with the session id stored only as a hash, and
+cross-principal resume, read, or delete attempts are rejected. Each login and
+continuation builds its own session and cookie jar. Race-detector tests,
+including `TestRemoteAndStdioShareNoState`, prove concurrent principals share no
+clients, tokens, cookies, results, or errors.
 
-The primary principal key must be a random internal UUID. No tool may accept
-`user_id`, email, token path, or an account selector. Garmin clients must be
-cached by internal principal only, with a bounded size and idle lifetime, and each
-entry must own its cookies, token view, and refresh lock. `Mcp-Session-Id` and
-`Last-Event-ID` must never be authentication: every session and event buffer must
-be bound to the verified principal, client, resource, and scopes, and
-cross-principal resume, read, or delete attempts must be rejected. Download
-handles must be short-lived and principal-bound. Race-detector tests must prove
-concurrent principals cannot share clients, tokens, cookies, results, or errors.
+There is no per-principal Garmin client cache and no download handle: a download
+returns a bounded embedded resource in the same response, so there is no handle
+to bind or expire.
 
-Landed: the random internal UUID principal key, the absence of any account
-selector on the tool surface, a session bound to principal, client, resource and
-scopes with the session id stored only as a hash, transactional revocation
-cascades, and the race-detector isolation tests including
-`TestRemoteAndStdioShareNoState`. Each login and continuation builds its own
-session and cookie jar.
-
-**Not landed:** the bounded, idle-expiring per-principal Garmin client cache. No
-cache exists at all, which is safe but means the requirement is unmet rather than
-satisfied. `mcpserver.Revocation` also carries no resource selector, so a
-revocation closes slightly more sessions than the grant covered.
+Known limit: `mcpserver.Revocation` carries no resource selector, so a revocation
+closes slightly more sessions than the grant covered.
 
 ### 5. Malicious dynamic registration, client metadata, SSRF, and DNS rebinding
 
-Pre-registered operator clients must be the default, and no vendor client ID may
-be hardcoded. Unrestricted anonymous production registration is prohibited. If
-RFC 7591 registration is enabled, it must require an initial-access token or an
-explicit production policy, plus quotas, strict redirect schemes and hosts,
-metadata size limits, rate limits, audit events, and operator revocation.
-Conformance testing must use a separate constrained profile. If Client ID
-Metadata Documents are selected, retrieval must be SSRF-safe under an explicit
-trust policy. The server must never fetch a user-controlled URL for uploads. Any
-future fetcher must be a dedicated SSRF-safe component with a scheme allowlist,
-DNS and IP controls, redirect revalidation, and egress policy.
+Registration is preregistration only: `internal/config/oauthclient.go` takes
+operator-written clients with exact redirect URIs and a secret digest supplied
+through a file, and there is no RFC 7591 endpoint. No vendor client ID is
+hardcoded. Only `garmin.com` and `garmin.cn` parse into a `ValidatedDomain`,
+every URL is built from a `Hosts` derived from one, and
+`internal/garmin/auth/hostguard.go` refuses a caller-supplied request whose host
+is not a validated Garmin host, on the first attempt and on the post-`401`
+replay. No user-controlled URL is ever fetched. The one anonymous read outside
+the API tier — Garmin's published exercise catalog — uses one compiled-in URL, a
+dedicated client with no cookie jar, and no redirect following.
 
-Landed: the domain allowlist and the request-time host check.
-Only `garmin.com` and `garmin.cn` parse into a `ValidatedDomain`, every URL is
-built from a `Hosts` derived from one, and `internal/garmin/auth/hostguard.go`
-refuses a caller-supplied request whose host is not a validated Garmin host, on
-the first attempt and on the post-`401` replay. Registration is preregistration
-only: `internal/config/oauthclient.go` takes operator-written clients with exact
-redirect URIs and a secret digest supplied through a file, and there is no RFC
-7591 endpoint. No user-controlled URL is ever fetched.
+Any future fetcher, and any future dynamic registration, must be a dedicated
+component with a scheme allowlist, DNS and IP controls, redirect revalidation,
+quotas, metadata size limits, rate limits, audit events, and operator revocation.
 
 ### 6. Session fixation, login CSRF, clickjacking, brute force, account enumeration
 
-The login route must be transaction-gated: without a valid transaction cookie and
-a matching form CSRF value it must return a generic 404 or expired page with no
-account disclosure. The transaction capability must carry at least 256 bits, be
-stored only as a SHA-256/HMAC lookup value, be delivered as a short-lived
-host-only cookie, and never appear in a path or query. It must be bound to the
-original authorization request, browser session, client ID, redirect URI,
-resource, and PKCE challenge, have a short absolute TTL, a bounded attempt count,
-and a single-use terminal transition; cross-user, cross-client, expired, replayed,
-and out-of-order transitions must be rejected. Remote cookies must use a
-`__Host-` name with `Secure`, `HttpOnly`, `Path=/`, no `Domain`, and an
-appropriate `SameSite`; the one-shot loopback profile must use a per-run host-only
-`HttpOnly` cookie and be tested separately. Responses must set a restrictive CSP
-with `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`,
+The login route is transaction-gated: without a valid transaction cookie and a
+matching form CSRF value it returns a generic 404 or expired page with no account
+disclosure. The transaction capability carries 256 bits, is stored only as a
+SHA-256 lookup value, is compared in constant time, is delivered as a
+short-lived host-only cookie, and never appears in a path or query. It is bound
+to the original authorization request, client ID, exact redirect URI, resource,
+and PKCE challenge, with a 5-minute non-extendable TTL, a 5-attempt budget, a
+completion lease, and a single-use terminal transition; cross-user,
+cross-client, expired, replayed, and out-of-order transitions are rejected.
+Remote cookies use a `__Host-` name with `Secure`, `HttpOnly`, `Path=/`, no
+`Domain`, and `SameSite=Lax`; the one-shot loopback profile uses a per-run
+host-only `HttpOnly` cookie and is tested separately. The form CSRF token is
+independent, constant-time compared, and rotated. Responses set a restrictive
+CSP with `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`,
 `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, and HSTS on public
-HTTPS. Login attempts must be limited per IP and MFA attempts per transaction.
-Error text must not distinguish an unknown account from a wrong password.
-
-Landed: the capability entropy, its SHA-256-only storage, the constant-time
-comparison, the 5-minute non-extendable TTL, the 5-attempt budget, the single-use
-terminal transition, the completion lease, and now the whole browser surface —
-the transaction-gated route, the `__Host-` cookie with `Secure`, `HttpOnly`,
-`Path=/`, no `Domain` and `SameSite=Lax`, the independent form CSRF token that is
-constant-time compared and rotated, the security headers with HSTS, and the
-authorization transaction that binds the capability to the client, the exact
-redirect URI, the resource and the PKCE challenge. The loopback profile is
-separate and separately tested.
+HTTPS. MFA attempts are limited per transaction. Error text does not
+distinguish an unknown account from a wrong password, and an address the login
+allowlist refuses gets the same generic message.
 
 Every page's `form-action` is `'self'` only, with one narrow, load-bearing
 exception: the response that **renders the consent form** — `GET
@@ -339,250 +279,171 @@ against that same document's policy. The form's action is same-origin, so
 `'self'` on the GET response permits the `POST`: it is sent, and the server
 processes it and mints the authorization code. Only then does the browser
 check the redirect hop to the client's origin against that same GET-response
-policy, and — without the addition — blocks it there. The `POST
-/login/consent` response's own headers are never consulted for this check at
-all, whatever they say: a header set on a response can never govern that
-response's own redirect. The consequence is user-visible: the code is minted
-and then discarded, so a user who hits this has consumed that authorization
-transaction and must start a fresh one — retrying the blocked navigation
-cannot work. The `/authorize` refusal redirect needs no such addition at all:
-the browser arrives there by the client's own top-level navigation, with no
-form of this server's anywhere in that chain, so `form-action` never governs
-it regardless of what its response headers say.
+policy, and — without the addition — blocks it there, which discards a minted
+code and consumes the transaction. The `POST /login/consent` response's own
+headers are never consulted for this check. The `/authorize` refusal redirect
+needs no addition: the browser arrives there by the client's own top-level
+navigation, with no form of this server's in that chain.
+`TestConsentFormCSPNamesTheRedirectOrigin` and its siblings in
+`internal/loginweb/consentcsp_test.go` pin this arrangement.
 
 The added origin is read only from the transaction's already-validated,
 registered redirect URI, never from a request-supplied value, so the addition
 never widens the policy beyond the one client the browser is already being
 sent to. Every other response keeps the unmodified `form-action 'self'`.
 
-A v0.0.6 revision added this origin to the `POST /login/consent` response and
-to the `/authorize` refusal redirect instead of the GET response, on the
-mistaken premise that the redirecting response's own headers govern its own
-redirect. Verified against a released build in Chrome, that arrangement was a
-no-op that still cost a transaction: the `POST` reached the server and the
-authorization code was minted, and only the following redirect hop was
-blocked, discarding it. The fix moved the addition to the GET response above;
-a regression test
-(`TestConsentFormCSPNamesTheRedirectOrigin` and siblings in
-`internal/loginweb/consentcsp_test.go`) reverts the GET-side addition and
-confirms the old POST-side-only arrangement fails it.
-
 **`SameSite=Lax`, not `Strict`, is deliberate**: `Strict` is not sent on the
 cross-site top-level navigation that starts the flow, so the flow would break.
 
 ### 7. Untrusted Garmin JSON and files, oversized or compressed payloads, path traversal
 
-Garmin responses are untrusted. Reads must use tolerant decoding, so unknown
-fields cannot fail an otherwise useful response, with bounded response sizes and
-safe connect, header, and body timeouts. Uploads and downloads must cap raw and
-decompressed sizes, parse defensively, reject traversal, and sanitize filenames
-and content types. Fuzz tests must cover Garmin union and positional JSON, date
-and range parsing, filenames, FIT and GPX input, OAuth parameters, URLs, and
-token JSON. A remote tool must never be able to write an arbitrary server
-filesystem path; downloads must return a bounded MCP resource or blob, or a
-short-lived principal-bound handle.
+Garmin responses are untrusted. Reads use tolerant decoding, so unknown fields
+cannot fail an otherwise useful response, with bounded wire and decompressed
+response sizes, bounded page size, page start and date windows, and bounded
+token and segment sizes in the JWT reader and the token document. Store and key
+paths are resolved component by component. A remote tool cannot write an
+arbitrary server filesystem path: the download path takes no caller-supplied
+filename and returns a bounded embedded resource, refusing an oversized payload
+rather than truncating it.
 
-Landed: tolerant decoding on every Garmin read, bounded wire and decompressed
-response sizes, bounded page size, page start and date windows, bounded token and
-segment sizes in the JWT reader and the token document, and
-component-by-component path resolution for the store and key paths. The download
-path takes no caller-supplied filename at all and returns a bounded embedded
-resource, refusing an oversized payload rather than truncating it.
-
-**Landed since:** eight fuzz targets exist — `internal/tools`
+Eight fuzz targets cover the untrusted parsers — `internal/tools`
 (`FuzzSanitizeUntyped`), `internal/garmin/protocol` (`FuzzClassifyJSONLogin`,
 `FuzzClassifyWidgetPages`, `FuzzParseWidgetMFAVars`), `internal/garmin/api`
 (`FuzzParseFITActivity`) and `internal/garmin/client` (`FuzzNumberUnmarshalJSON`,
-`FuzzTextUnmarshalJSON`, `FuzzParseDate`) — with a committed corpus and a
+`FuzzTextUnmarshalJSON`, `FuzzParseDate`) — with seeded corpora (one committed
+under `testdata/fuzz`) and a
 `fuzz-smoke` CI job that discovers every target and fails loudly if it finds none.
-That job has already caught a real defect: `ParseDate` accepted `0001-01-01`, the
-zero `time.Time` this package uses as its unset sentinel, so a successfully parsed
-date reported itself unset and a date-window filter dropped the day instead of
-placing it.
 
 ### 8. Reverse-proxy host and header spoofing
 
-An explicit canonical public URL is required. Issuer, callback, and resource URLs
-must never be derived from `Host` or `X-Forwarded-*`. Forwarded headers may be
-trusted only from configured proxy CIDRs. Browser form requests must require the
-expected Origin and CSRF protections; Streamable HTTP requests that carry
-`Origin` must match the configured allowlist, while standards-compliant
-non-browser token requests may omit it. CORS must default to deny. Production
-remote mode must refuse cleartext public binding unless an explicit development
-override is set.
-
-Landed. `internal/config` requires an explicit bind address and public URL,
-validates the TLS pair and the proxy-trust CIDRs, and refuses an unprotected
-non-loopback listener; `internal/mcpserver` then enforces the runtime half. The
-issuer, callback and resource URLs come from the configured public URL and never
-from `Host` or `X-Forwarded-*`, forwarded headers are trusted only from the
-configured proxy CIDRs, CORS defaults to deny, and a cleartext public bind is
-refused unless an explicit development override is set.
+`internal/config` requires an explicit bind address and public URL, validates the
+TLS pair and the proxy-trust CIDRs, and refuses an unprotected non-loopback
+listener; `internal/mcpserver` enforces the runtime half. The issuer, callback
+and resource URLs come from the configured public URL and never from `Host` or
+`X-Forwarded-*`. Forwarded headers are trusted only from the configured proxy
+CIDRs. Streamable HTTP requests that carry `Origin` must match the configured
+allowlist, while non-browser token requests may omit it. CORS defaults to deny,
+and a cleartext public bind is refused unless an explicit development override
+is set.
 
 ### 9. Concurrent refresh races and stale-token overwrite
 
-Refresh must be serialized per principal. Persistence must use optimistic version
-or CAS semantics, so a rotated token cannot be overwritten by a concurrent
-writer, and writes must be atomic. Refresh must happen before expiry with a
-configurable safety window whose default is 15 minutes. After a `401` the client
-must retry at most once, only after a successful refresh, and only for safe or
-idempotent calls. Concurrent linking of the same Garmin account through two
-browser flows must have a defined and tested transactional outcome.
+Refresh is serialized per principal by collapsing concurrent refreshes over a
+`sync.Mutex` and an in-flight map with a done channel. Persistence uses
+compare-and-set, so a rotated token cannot be overwritten by a concurrent writer,
+and writes are atomic. Refresh happens 15 minutes before expiry. After a `401` the client retries at most
+once, only after a successful refresh, and never replays a `POST` or `PATCH`. One
+shared `auth.TokenGate` is wired by the composition root and asserted by test,
+so a login cannot overwrite a rotated token set. The SQLite backend gives
+cross-connection CAS with `ErrVersionConflict`; the file store serializes across
+processes with an advisory lock and stays single-active-instance.
 
-Landed: per-principal collapsing of concurrent refreshes over a `sync.Mutex` and
-an in-flight map with a done channel — there is no `singleflight` package
-involved — CAS save, atomic writes, the 15-minute default window, and the
-single bounded retry after a `401` that never replays a `POST` or `PATCH`.
-Also landed: one shared `auth.TokenGate` is wired by the composition root and
-asserted by test, so a login cannot overwrite a rotated token set, and the SQLite
-backend gives real cross-connection CAS with `ErrVersionConflict`.
-
-**Not landed:** cross-process CAS for the **file** store, which stays
-single-active-instance; and a test for concurrent linking of the same Garmin
-account through two browser flows.
+Known limit: concurrent linking of the same Garmin account through two browser
+flows has no dedicated test.
 
 ### 10. Database and file theft, master-key rotation
 
-Garmin tokens and sensitive identity fields must use versioned AEAD envelope
-encryption with `crypto/rand` nonces and authenticated additional data binding the
-principal ID and record type, so a record cannot be moved between principals or
-record types. The shipped backend must be an owner-only file holding a versioned
-key ID and a base64 32-byte master key; remote mode must refuse to start on
-missing, malformed, or overly permissive key material. The key must never be
-logged or printed. Staged key rotation and a tested migration path are required.
-Local token files must use `0700` directories and `0600` files, reject symlinks,
-write atomically, and be tested against a hostile umask in isolated subprocesses
-on Unix. Windows is not a supported platform, so there is no ACL requirement here:
-`internal/securefile` compiles on unix only, which is the honest outcome for a
-package whose purpose is refusing to hold a secret under permissions it cannot
-verify. Inline token JSON
-is an explicitly insecure compatibility override and must be rejected in remote
-production mode. Deleting local tokens is unlinking, not remote revocation, and
-the documentation must state the difference. Encrypted-store tamper and wrong-key
-tests are required. Backup and restore are **deliberately not tested here**: the
-database lives on an operator-controlled volume and backing it up is the
-operator's responsibility. `docs/operations.md` documents the procedure, including
-that the database and the master key are two halves of one backup and that a
-restore rolls consents back to the backup's moment.
+Garmin tokens and sensitive identity fields use versioned AEAD envelope
+encryption with `crypto/rand` nonces and additional data binding the principal
+ID, the record type, and the wrapper's schema and CAS version, so a record cannot
+be moved between principals or record types. The key is an owner-only file
+holding a versioned key ID and a base64 32-byte master key, installed
+exclusively by hard link. Start-up refuses missing, malformed, or overly
+permissive key material, and `doctor` names the reason. The key is never logged
+or printed. Local token files use `0700` directories and `0600` files re-checked
+on read, reject symlinks and `~user` paths across the full ancestry, write
+atomically, and are tested against a hostile umask in isolated subprocesses.
+Tamper, wrong-key, wrong-principal and wrong-record-type tests exist. Inline
+token JSON (`garmin-tokens`) is refused in remote mode; on stdio it is accepted
+as an explicitly insecure compatibility override. Deleting local tokens is unlinking, not remote
+revocation.
 
-Landed: the envelope format, the AAD binding including the schema and CAS
-version, the owner-only key file with exclusive link-based install, the `0600` in
-`0700` modes re-checked on read, symlink and `~user` refusal across the full
-ancestry, atomic writes, the hostile-umask subprocess test, tamper, wrong-key,
-wrong-principal and wrong-record-type tests, staged rotation proven inside
-`internal/cryptostore`, the migration-backed SQLite backend with its pragmas
-asserted by query, and start-up refusal on bad key material now that the
-composition root opens the key and `doctor` branches on the sentinels. Inline
-token JSON is refused unless explicitly enabled, and it now has exactly one
-caller.
+Windows is not a supported platform, so there is no ACL requirement here:
+`internal/securefile` compiles on unix only, because its purpose is refusing to
+hold a secret under permissions it cannot verify.
 
-**Landed since:** `garmin-mcp rotate-key` is a real operator procedure. It re-seals
-every sealed record in both backends — the index root, Garmin identities, Garmin
-token sets, OAuth client state, and the FileStore record — reads through the
-retired key while any record still needs it, fails closed on an unknown key
-version, and is resumable because each record's own envelope is the progress
-marker. `docs/operations.md` §4 documents the procedure. Backup and restore remain
-out of scope by decision — see above.
+`garmin-mcp rotate-key` re-seals every sealed record in both backends — the
+index root, Garmin identities, Garmin token sets, OAuth client state, and the
+FileStore record — reads through the retired key while any record still needs
+it, fails closed on an unknown key version, and is resumable because each
+record's own envelope is the progress marker. `docs/operations.md` documents
+the procedure and its limits: rotation is offline, the retiring key is never
+deleted automatically, and a FileStore run can only speak for the principal the
+configuration binds.
 
-The residual limits are stated there rather than here: rotation is offline, the
-retiring key is never deleted automatically, and a FileStore run can only speak for
-the principal the configuration binds.
-
-This section previously said no store re-sealed anything and that rotation should
-be treated as unavailable rather than attempted. That was true when written and is
-no longer; it is noted because an operator who read the old text would skip a
-rotation they should perform.
+Backup and restore are **deliberately not tested here**: the database lives on
+an operator-controlled volume and backing it up is the operator's
+responsibility. `docs/operations.md` documents the procedure, including that the
+database and the master key are two halves of one backup and that a restore
+rolls consents back to the backup's moment.
 
 ### 11. Malicious tool arguments and accidental destructive actions
 
-Landed for the 154 registered tools — 108 read-only, 37 write, 9 destructive. Each declares all four annotation hints and a
-strict schema, scope and operator policy are enforced before any Garmin call, the
-three tier name lists are validated against the registered set in both directions
-at start-up, allowlist and denylist are intersected with the tiers, and
-destructive confirmation fails closed. The optional safety delay has landed as
-`safety-delay`, default `0`: it pauses write and destructive calls after every gate
-and before the handler, and the wait is interruptible, so a caller that cancels
-during it stops the call before anything reaches Garmin. **Not landed:** the
-progress notifications that were to accompany that delay. A paused call is
-indistinguishable from a slow one to the client, which blunts the delay for a human
-watching, and is part of why the setting is off by default.
+Every registered tool declares all four annotation hints and a strict JSON schema with ranges, formats, and
+defaults. Operator policy and scope are enforced before any Garmin call. Local
+stdio higher tiers require explicit operator enablement; remote higher tiers
+require its intersection with the caller's granted scope and default to
+read-only. The write and destructive tiers come from `writeRegistrations()` and
+`destructiveRegistrations()` in `internal/tools/register.go` (exported as
+`WriteTools()` and `DestructiveTools()`), and `validateTierLists` checks them
+against the registered set in both directions at start-up. Allowlists and denylists reject unknown names at start-up and only narrow
+authorization. Destructive operations request MCP elicitation confirmation with
+a bounded timeout and **fail closed**: without confirmation the operation is
+refused and the refusal names the reason.
 
-Every tool must have a strict JSON schema with ranges, formats, and defaults, and
-must declare all four annotation hints. Operator policy must be enforced before
-any Garmin call. Local stdio higher tiers require explicit operator enablement;
-remote higher tiers require its intersection with the caller's granted scope and
-must default to read-only. Explicit `writeTools` and `destructiveTools` name lists must
-be validated against the registered set at startup, so a typo fails fast.
-Allowlists and denylists must reject unknown names at startup and only narrow
-transport-specific authorization. Destructive operations must request MCP
-elicitation confirmation with a bounded timeout and **fail closed**: without
-confirmation the operation is refused and the refusal names the reason. An
-optional safety delay must precede write and destructive execution, must be
-interruptible — a pause nothing can interrupt is latency rather than safety — and
-must sit after every gate so a refused call never waits. The progress notifications
-during that pause are still required and still missing. This is also the control against prompt injection in
-Garmin-sourced text: no model-authored argument may reach a destructive path
-without local operator authority or remote scope, tier enablement, and human
-confirmation.
+The optional `safety-delay`, default `0`, pauses write and destructive calls
+after every gate and before the handler. The wait is interruptible, so a caller
+that cancels during it stops the call before anything reaches Garmin, and a
+refused call never waits.
+
+This is also the control against prompt injection in Garmin-sourced text: no
+model-authored argument reaches a destructive path without local operator
+authority or remote scope, tier enablement, and human confirmation.
+
+Known limit: the delay sends no progress notification, so a paused call is
+indistinguishable from a slow one to the client. That blunts the delay for a
+human watching, and is part of why it is off by default.
 
 ### 12. Denial of service and Garmin account rate limiting
 
-Landed in large part; the remaining gaps are named after the requirement.
+Rate limiting is per-principal handler middleware that returns a
+caller-actionable error result instead of a transport error. MFA attempts are
+budgeted per transaction in a bounded registry with an entry cap and TTL.
+Garmin rate limiting is classified distinctly in `internal/garmin/protocol`,
+is never reported as a bad password, and stops DI ticket exchange early. The
+only automatic retry is the single bounded post-`401` retry, which never replays
+a `POST` or `PATCH`; password and MFA submissions are never retried. Request
+bodies and responses are byte-capped, and expired transactions, codes, and
+tokens are cleaned by bounded expiry in the SQLite store and by on-access
+checks.
 
-Layered limits must apply: global concurrency, per-IP login attempts,
-per-transaction MFA attempts, per-client authorization attempts, per-principal
-Garmin calls, per-tool cost, body and response byte caps, and timeouts. Rate
-limiting must be handler middleware that returns a caller-actionable error result
-instead of a transport error. Garmin `429` must be classified distinctly, must
-never be reported as a bad password, and must honor `Retry-After` with bounded
-jitter and an account-level cooldown. Only transport failures and selected `5xx`
-responses may be retried, with bounded exponential backoff and full jitter;
-non-idempotent mutations, deletes, ordinary `4xx` responses, and password or MFA
-submissions must never be retried automatically. Expired transactions, codes, and
-tokens must be cleaned by a bounded periodic job and by on-access checks.
-Graceful shutdown must stop accepting requests, cancel or expire login
-transactions, finish bounded in-flight calls, flush safe telemetry, and close
-stores.
+Known limits: there is no global concurrency limit and no per-tool cost
+accounting.
 
-Landed: the per-transaction MFA attempt budget, the bounded registry with its
-entry cap and TTL, distinct rate-limit classification in
-`internal/garmin/protocol` with an early stop on rate limiting during DI ticket
-exchange, the single bounded post-`401` retry that never replays a `POST` or
-`PATCH`, the per-principal limiter as handler middleware returning a
-caller-actionable error result, the request-body cap, the response byte caps, and
-bounded expiry cleanup in the SQLite store.
+## Revocation and unlink
 
-**Not landed:** global concurrency limiting, per-tool cost accounting, and a
-documented graceful-shutdown sequence.
-
-## Revocation and unlink [TARGET]
-
-Landed. Consent records, token families, transport sessions and the unlink path
-all exist, revocation is transactional and idempotent, and the cascades are
-proven under contention in `internal/oauthstore/race_test.go`. The one accepted
-imprecision is that `mcpserver.Revocation` carries no resource selector, so a
-consent revocation closes slightly more sessions than the grant covered.
-
-Revocation must be transactional and idempotent. Revoking a client consent must
-revoke that client's token families for the principal and close its active
-transport sessions. Unlinking a Garmin account must revoke every MCP token family
-for the principal, delete the encrypted Garmin tokens and pending transactions,
-stop background refresh, and evict clients and caches. Partial deletion must fail
-closed and emit only a redacted audit event.
+Revocation is transactional and idempotent. Revoking a client consent revokes
+that client's token families for the principal and closes its active transport
+sessions. Unlinking a Garmin account revokes every MCP token family for the
+principal and deletes the encrypted Garmin tokens and pending transactions.
+Partial deletion fails closed and emits only a redacted audit event. The
+cascades are proven under contention in `internal/oauthstore/race_test.go`. The
+one accepted imprecision is that `mcpserver.Revocation` carries no resource
+selector, so a consent revocation closes slightly more sessions than the grant
+covered.
 
 ## Operational exposure
 
-Audit events exist: the SQLite store writes them with no credentials and no
-health or location payloads. `/livez` and `/readyz` exist too
-(`internal/mcpserver/httpprobe.go`): the paths are constants rather than
-operator-renameable options, the bodies are a fixed `ok` / `not ready`, and the
-readiness check is injected and bounded by a two-second timeout, so a wedged
-store answers honestly instead of hanging. A real MCP route published on either
-path still wins, so a probe cannot shadow the server's own surface.
+Audit events contain no credentials and no health or location payloads.
+`/livez` and `/readyz` (`internal/mcpserver/httpprobe.go`) use constant paths,
+return a fixed `ok` / `not ready` body, and run an injected readiness check
+bounded by a two-second timeout, so a wedged store answers honestly instead of
+hanging. A real MCP route published on either path still wins, so a probe cannot
+shadow the server's own surface.
 
-Metrics exist now (`internal/metrics`), served on their own `http.Server` bound
-to `metrics-address` (empty, the default, disables the listener) and reachable
-under both transports. There is still **no** separate administration listener.
+Metrics (`internal/metrics`) are served on their own `http.Server` bound to
+`metrics-address` (empty, the default, disables the listener) under both
+transports. There is no separate administration listener.
 
 The metrics port is unauthenticated, plain HTTP, and carries labels including
 the pseudonymous principal ID and the exact tool name. An attacker who reaches
@@ -591,15 +452,11 @@ itself name a medical domain (`get_sleep_data`, `get_blood_pressure`,
 `get_menstrual_calendar_data`). The mitigation is the network boundary alone —
 the port must stay off any Ingress, HTTPRoute, or LoadBalancer, and both the
 listener setting and the chart's `ServiceMonitor`/`PrometheusRule` default off —
-with no authentication layered on top. This is a deliberate decision, not an
-oversight: the per-tool failure-rate alert is the feature's purpose, and a
-principal or tool label with reduced cardinality could not drive it. See
-`docs/operations.md` for the exposure rule and the full metric table.
+with no authentication layered on top. This is a deliberate decision: the
+per-tool failure-rate alert is the feature's purpose, and a principal or tool
+label with reduced cardinality could not drive it. See `docs/operations.md` for
+the exposure rule and the full metric table.
 
-`/livez` and `/readyz` must expose no secret detail. Metrics use
-bounded-cardinality labels only; raw user IDs, emails, activity IDs, and tool
-arguments must never appear in labels — landed, not merely required: neither
-`ToolEvent.Arguments` nor `ToolEvent.Reason` is ever rendered as a label, and
-`TestToolCallNeverRendersArgumentsOrReason` pins it. Administration and metrics
-endpoints must run on a separate listener or be explicitly protected. Audit
-events must contain no credentials and no health or location payloads.
+Metric labels never carry raw user IDs, emails, activity IDs, or tool
+arguments: neither `ToolEvent.Arguments` nor `ToolEvent.Reason` is ever rendered
+as a label, and `TestToolCallNeverRendersArgumentsOrReason` pins it.

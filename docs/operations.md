@@ -94,14 +94,13 @@ network, the header is walked from the **right**, skipping entries that are
 themselves inside a listed network, and the first entry outside them is used;
 otherwise the peer address is used.
 
-The direction matters, and this section previously described the opposite. A proxy
+The direction matters. A proxy
 **appends** to `X-Forwarded-For` and preserves whatever the client sent, so reading
 the client-most entry returns a value the caller chose. Walking from the right
 skips what your proxies added and stops at the nearest address this deployment has
 any reason to believe.
 
-The forwarded address is **not** only a log label, which this section also
-previously claimed. It keys the per-address budget of the rate limiter in front of
+The forwarded address is **not** only a log label. It keys the per-address budget of the rate limiter in front of
 the token, revocation and metadata endpoints — the only limit on the
 unauthenticated OAuth surface — so a caller who could choose it could mint a fresh
 budget per request. Authorization still comes from the bearer token, and the
@@ -257,11 +256,11 @@ already owns passes exactly as before**, and an object found merely widened
 same self-healing chmod `EnsureDir`/`RestrictExisting` always did, whether
 that object is a file or a directory.
 
-One case now refuses where it previously did not:
+One case is refused explicitly:
 
 - **A file or directory owned by a different local account.** This was never
   a supported shape — an unprivileged process cannot even open a foreign-owned
-  `0600` file — but it is now refused explicitly, with a message naming the
+  `0600` file — but it is refused explicitly, with a message naming the
   path and the mismatched uids, rather than failing later with an opaque I/O
   error or a decrypt failure. Remedy: `chown` the object back to the uid the
   server runs as, or point `state-dir`/`master-key-file`/`database-path` at a
@@ -661,7 +660,7 @@ credentials, and this setting only decides who may attempt a login at all.
 principal is created; it does not touch a principal that already exists. To
 revoke a user who has been removed from `login-allowed-emails` but already holds
 a principal, use the commands in
-["What an operator can actually do today"](#what-an-operator-can-actually-do-today):
+["What an operator can do"](#what-an-operator-can-do):
 `garmin-mcp revoke --principal <id>` for the OAuth authorization, or
 `garmin-mcp unlink --principal <id>` to also remove their local Garmin token
 link. Removing the address from configuration only stops a *future* login by
@@ -766,7 +765,7 @@ What horizontal scaling would need, and what does not exist: a shared database
 with real multi-writer semantics, leader election or a distributed lock for
 migrations, cleanup coordination so instances do not each pay a full scan, and
 cross-instance invalidation for the in-memory client registry and the live
-session table — a revocation is delivered in-process today, so a second instance
+session table — a revocation is delivered in-process, so a second instance
 would not close the streams the first one revoked.
 
 ## 4. Key management
@@ -794,9 +793,8 @@ Which key version is **active** — the one every new write is sealed under — 
 recorded in a small marker file next to the key files,
 `<master-key-file directory>/active-key-version.json`. This is key *selection*
 metadata only, never a record of rotation progress: it answers "which key file
-does a write use today" and nothing else depends on it. A deployment that has
-never rotated has no marker at all and resolves to version 1, which is what
-every deployment before this file existed already used.
+does a write use" and nothing else depends on it. A deployment that has
+never rotated has no marker at all and resolves to version 1.
 
 ### What refuses to start
 
@@ -959,7 +957,7 @@ revocation. If it overflows, the affected session loses its early termination,
 not its revocation: the database is authoritative, and that session's next
 request fails token verification.
 
-### What an operator can actually do today
+### What an operator can do
 
 - **The `/revoke` endpoint** (RFC 7009) is the wired path. A client posts a token
   there; the whole token family behind it is revoked. Unknown, already-dead, and
@@ -1038,8 +1036,7 @@ removes the local copy and revokes nothing at Garmin.
 ### Token and session lifetimes
 
 These are the authorization server's defaults. The remote composition root sets
-no overrides, so a deployment always runs them; they are not operator-tunable
-today.
+no overrides, so a deployment always runs them; they are not operator-tunable.
 
 | Item | Lifetime |
 |------|----------|
@@ -1265,8 +1262,7 @@ renamed tool, a changed schema, or a dropped argument fails the build rather tha
 surfacing as a client breakage after a release.
 
 When you upgrade, the tool names and schemas a client depends on either match
-that manifest or the build did not ship. See `docs/parity.md` for what each
-release covers.
+that manifest or the build did not ship.
 
 ## 8. Metrics
 
@@ -1319,9 +1315,8 @@ separately rather than as a success. Every other counter's `outcome` is `ok` or
 `error` only.
 
 `registered_tools{tier="read-only"}` counts every registered read-only tool,
-including the built-in `server_info`, so it reads one higher than the
-upstream-manifest tool count in `docs/parity.md`. The two counts measure
-different things: the gauge is what this server actually registered.
+including the built-in `server_info`. It counts what this server actually
+registered, not the upstream manifest.
 
 `principal` appears only on `tool_calls_total`, never on a histogram — a
 per-principal label on a multi-bucket histogram multiplies series for a number
