@@ -3,6 +3,7 @@ package api_test
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -147,11 +148,91 @@ func TestChallengesGoalsWalksUntilAnEmptyPage(t *testing.T) {
 	if got := requests[0].Query.Get(client.QuerySortOrder); got != client.GoalSortAscending {
 		t.Errorf("sortOrder = %q, want %q", got, client.GoalSortAscending)
 	}
-	if got := requests[0].Query.Get(client.QueryStart); got != "0" {
-		t.Errorf("first request start = %q, want 0", got)
+	// Source: challenges.py:288-295 — start is 1-based and the
+	// Connect UI goals need Sec-Fetch-Site: same-origin.
+	if got := requests[0].Query.Get(client.QueryStart); got != "1" {
+		t.Errorf("first request start = %q, want 1", got)
 	}
-	if got := requests[1].Query.Get(client.QueryStart); got != "20" {
-		t.Errorf("second request start = %q, want 20", got)
+	if got := requests[1].Query.Get(client.QueryStart); got != "21" {
+		t.Errorf("second request start = %q, want 21", got)
+	}
+	for i, req := range requests {
+		if got := req.Header.Get("Sec-Fetch-Site"); got != "same-origin" {
+			t.Errorf("request %d Sec-Fetch-Site = %q, want same-origin", i, got)
+		}
+	}
+}
+
+func TestChallengesGoalsFallsBackToTheLegacyWalkWhenEmpty(t *testing.T) {
+	t.Parallel()
+
+	// Source: challenges.py:340-358 — an empty Connect UI read falls
+	// back once to python-garminconnect's get_goals: start=0, no extra header.
+	script := testkit.NewScript().With(client.PathGoals,
+		testkit.JSON(http.StatusOK, "[]"),
+		testkit.JSON(http.StatusOK, goalPageOneBody),
+		testkit.JSON(http.StatusOK, "[]"))
+	h := newHarness(t, script, client.Limits{})
+
+	result, err := newChallenges(t, h).Goals(t.Context(), h.session, api.GoalStatusActive)
+	if err != nil {
+		t.Fatalf("Goals() = %v", err)
+	}
+	if len(result.Goals) != 1 {
+		t.Fatalf("Goals() returned %d goals, want 1 from the fallback", len(result.Goals))
+	}
+
+	requests := h.server.Requests()
+	if len(requests) != 3 {
+		t.Fatalf("the fake received %d requests, want 3", len(requests))
+	}
+	wantStart := []string{"1", "0", "20"}
+	wantSite := []string{"same-origin", "", ""}
+	for i, req := range requests {
+		if got := req.Query.Get(client.QueryStart); got != wantStart[i] {
+			t.Errorf("request %d start = %q, want %q", i, got, wantStart[i])
+		}
+		if got := req.Header.Get("Sec-Fetch-Site"); got != wantSite[i] {
+			t.Errorf("request %d Sec-Fetch-Site = %q, want %q", i, got, wantSite[i])
+		}
+	}
+}
+
+func TestChallengesGoalsDoesNotFallBackOnAnError(t *testing.T) {
+	t.Parallel()
+
+	script := testkit.NewScript().With(client.PathGoals, testkit.JSON(http.StatusBadRequest, "{}"))
+	h := newHarness(t, script, client.Limits{})
+
+	if _, err := newChallenges(t, h).Goals(t.Context(), h.session, api.GoalStatusActive); err == nil {
+		t.Fatal("Goals() = nil, want the Connect UI read's error")
+	}
+	requests := h.server.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("the fake received %d requests, want only the start=1 read", len(requests))
+	}
+	if got := requests[0].Query.Get(client.QueryStart); got != "1" {
+		t.Errorf("start = %q, want 1", got)
+	}
+}
+
+func TestChallengesGoalsStopsWhenAPageAddsNoUnseenGoal(t *testing.T) {
+	t.Parallel()
+
+	// Source: challenges.py:322-337 — goal-service can ignore start
+	// and answer the same page again; the walk stops instead of exhausting.
+	script := testkit.NewScript().With(client.PathGoals, testkit.JSON(http.StatusOK, goalPageOneBody))
+	h := newHarness(t, script, client.Limits{MaxPages: 3})
+
+	result, err := newChallenges(t, h).Goals(t.Context(), h.session, api.GoalStatusActive)
+	if err != nil {
+		t.Fatalf("Goals() = %v, want the goals without an error", err)
+	}
+	if len(result.Goals) != 1 {
+		t.Errorf("Goals() returned %d goals, want 1", len(result.Goals))
+	}
+	if got := len(h.server.Requests()); got != 2 {
+		t.Errorf("the fake received %d requests, want 2", got)
 	}
 }
 
@@ -160,7 +241,10 @@ func TestChallengesGoalsFailsLoudlyOnEndlessPagination(t *testing.T) {
 
 	// Source: the MAX_PAGINATED_REQUESTS guard get_goals itself uses, ported here
 	// as the configured Limits.MaxPages bound instead.
-	script := testkit.NewScript().With(client.PathGoals, testkit.JSON(http.StatusOK, goalPageOneBody))
+	script := testkit.NewScript().With(client.PathGoals,
+		testkit.JSON(http.StatusOK, buildGoalArray(t, 0, 1)),
+		testkit.JSON(http.StatusOK, buildGoalArray(t, 1, 1)),
+		testkit.JSON(http.StatusOK, buildGoalArray(t, 2, 1)))
 	h := newHarness(t, script, client.Limits{MaxPages: 3})
 
 	_, err := newChallenges(t, h).Goals(t.Context(), h.session, api.GoalStatusActive)
@@ -183,12 +267,12 @@ func TestChallengesGoalsFailsLoudlyOnEndlessPagination(t *testing.T) {
 func TestChallengesGoalsBoundsTheAccumulatedTotal(t *testing.T) {
 	t.Parallel()
 
-	// One oversized page of 4000 goal objects, repeated on every request: a
-	// server that never returns a short or empty page and ignores limit.
+	// Oversized pages of 4000 distinct goal objects: a server that never
+	// returns a short or empty page and ignores limit.
 	const oversizedPageSize = 4000
-	oversizedPage := buildGoalArray(t, oversizedPageSize)
-
-	script := testkit.NewScript().With(client.PathGoals, testkit.JSON(http.StatusOK, oversizedPage))
+	script := testkit.NewScript().With(client.PathGoals,
+		testkit.JSON(http.StatusOK, buildGoalArray(t, 0, oversizedPageSize)),
+		testkit.JSON(http.StatusOK, buildGoalArray(t, oversizedPageSize, oversizedPageSize)))
 	h := newHarness(t, script, client.Limits{MaxPages: 100})
 
 	result, err := newChallenges(t, h).Goals(t.Context(), h.session, api.GoalStatusActive)
@@ -212,8 +296,9 @@ func TestChallengesGoalsBoundsTheAccumulatedTotal(t *testing.T) {
 	}
 }
 
-// buildGoalArray writes a literal JSON array of n minimal goal objects.
-func buildGoalArray(t *testing.T, n int) string {
+// buildGoalArray writes a literal JSON array of n minimal goal objects with
+// distinct goalId values from first.
+func buildGoalArray(t *testing.T, first, n int) string {
 	t.Helper()
 
 	var body strings.Builder
@@ -222,7 +307,7 @@ func buildGoalArray(t *testing.T, n int) string {
 		if i > 0 {
 			body.WriteString(",")
 		}
-		body.WriteString(`{"goalId":1}`)
+		body.WriteString(`{"goalId":` + strconv.Itoa(first+i) + `}`)
 	}
 	body.WriteString("]")
 	return body.String()

@@ -226,6 +226,8 @@ const (
 	headerAccept          = "Accept"
 	headerAcceptEncoding  = "Accept-Encoding"
 	encodingGzip          = "gzip"
+	headerSecFetchSite    = "Sec-Fetch-Site"
+	fetchSiteSameOrigin   = "same-origin"
 )
 
 // newHTTPRequest builds the outbound request. It sets GetBody so the caller can
@@ -257,6 +259,9 @@ func (c *Client) newHTTPRequest(ctx context.Context, req Request) (*http.Request
 	}
 	httpReq.Header.Set(headerAccept, req.accept())
 	httpReq.Header.Set(headerAcceptEncoding, encodingGzip)
+	if req.SameOrigin {
+		httpReq.Header.Set(headerSecFetchSite, fetchSiteSameOrigin)
+	}
 	return httpReq, nil
 }
 

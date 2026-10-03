@@ -101,3 +101,32 @@ func TestNewRejectsAnUnusableConfiguration(t *testing.T) {
 		t.Errorf("New() = %v, want ErrInvalidLimits", err)
 	}
 }
+
+func TestDoSendsSecFetchSiteOnlyForASameOriginRequest(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		sameOrigin bool
+		want       string
+	}{
+		{name: "default", sameOrigin: false, want: ""},
+		{name: "same origin", sameOrigin: true, want: "same-origin"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ok := stubOutcome{status: http.StatusOK, header: jsonHeader(), body: []byte(profileBody)}
+			caller := &stubCaller{outcomes: []stubOutcome{ok}}
+			req := profileRequest()
+			req.SameOrigin = tc.sameOrigin
+			if _, err := newTestClient(t, client.Limits{}).Do(t.Context(), mustSession(t, caller), req); err != nil {
+				t.Fatalf("Do() = %v", err)
+			}
+			if got := caller.lastRequest(t).Header.Get("Sec-Fetch-Site"); got != tc.want {
+				t.Errorf("Sec-Fetch-Site = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

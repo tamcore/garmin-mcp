@@ -63,8 +63,8 @@ func TestGetGoalsSendsTheRequestedStatus(t *testing.T) {
 	h.call(t, ToolGetGoals, map[string]any{argGoalType: valueFuture})
 
 	requests := h.fake.Requests()
-	if len(requests) != 1 {
-		t.Fatalf("the fake received %d requests, want one", len(requests))
+	if len(requests) < 1 {
+		t.Fatal("the fake received no request")
 	}
 	if got := requests[0].Query.Get(client.QueryStatus); got != valueFuture {
 		t.Errorf("status = %q, want future", got)
