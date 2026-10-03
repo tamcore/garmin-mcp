@@ -55,6 +55,7 @@ var wantReadOnlyToolNames = []string{
 	tools.ToolGetBodyComposition,
 	tools.ToolGetStepsData,
 	tools.ToolGetDailySteps,
+	tools.ToolGetStatsRange,
 	tools.ToolGetWeeklySteps,
 	tools.ToolGetFloors,
 	tools.ToolGetWeeklyIntensityMinutes,
@@ -66,6 +67,7 @@ var wantReadOnlyToolNames = []string{
 	tools.ToolGetBodyBatteryEvents,
 	tools.ToolGetTrainingReadiness,
 	tools.ToolGetMorningTrainingReadiness,
+	tools.ToolGetRecoveryTimeRemaining,
 	tools.ToolGetAllDayEvents,
 	tools.ToolGetHeartRates,
 	tools.ToolGetHeartRatesSummary,
@@ -100,6 +102,7 @@ var wantReadOnlyToolNames = []string{
 
 	// Nutrition reads and the challenge surface.
 	tools.ToolGetNutritionDailyFoodLog,
+	tools.ToolGetNutritionSummaryBetweenDates,
 	tools.ToolGetNutritionDailyMeals,
 	tools.ToolGetNutritionDailySettings,
 	tools.ToolSearchFoods,
@@ -167,6 +170,7 @@ var wantWriteToolNames = []string{
 	tools.ToolScheduleWeek,
 	"create_walk_run_workout",
 	"create_run_workout",
+	tools.ToolCreateRunIntervalWorkout,
 	"create_z2_walk_workout",
 	"create_strength_workout",
 	"download_activity_file",
@@ -205,6 +209,7 @@ var nonIdempotentTools = []string{
 	tools.ToolScheduleWeek,
 	"create_walk_run_workout",
 	"create_run_workout",
+	tools.ToolCreateRunIntervalWorkout,
 	"create_z2_walk_workout",
 	"create_strength_workout",
 	// Nutrition: a create and the three log writes. The manifest classifies each

@@ -174,5 +174,10 @@ func recoveryHours(entry api.Readiness) *float64 {
 	if !ok {
 		return nil
 	}
-	return new(math.Round(value/minutesPerHour*10) / 10)
+	return new(roundedHours(value))
+}
+
+// roundedHours converts minutes to hours rounded to one decimal.
+func roundedHours(minutes float64) float64 {
+	return math.Round(minutes/minutesPerHour*10) / 10
 }

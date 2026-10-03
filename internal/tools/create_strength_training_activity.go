@@ -215,21 +215,14 @@ func plannedStart(value string) (*time.Time, error) {
 
 // validatePlannedMeasurements checks one planned set's numeric arguments.
 func validatePlannedMeasurements(entry plannedSetInput) error {
-	checks := []struct {
-		field     string
-		value     float64
-		low, high float64
-	}{
+	if err := checkBounds([]boundCheck{
 		{"repeat", float64(entry.Repeat), 0, api.MaxSetRepeat},
 		{argNameRepetitions, float64(entry.Repetitions), 0, maxRepetitions},
 		{argNameWeightGrams, entry.WeightGrams, 0, maxWeightGrams},
 		{argNameDurationSeconds, entry.DurationSeconds, 0, api.MaxSetDurationSeconds},
 		{argNameRestSeconds, entry.RestSeconds, 0, api.MaxSetDurationSeconds},
-	}
-	for _, check := range checks {
-		if err := inRange(check.field, check.value, check.low, check.high); err != nil {
-			return err
-		}
+	}); err != nil {
+		return err
 	}
 	if entry.OffsetSeconds != nil {
 		return inRange("offset_seconds", *entry.OffsetSeconds, 0, api.MaxSetDurationSeconds)

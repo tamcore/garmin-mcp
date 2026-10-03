@@ -22,8 +22,14 @@ const (
 	builderRestSeconds = 60
 )
 
-// TestLiveRemainingWorkoutBuildersUpload drives the three builders the workout
-// lifecycle does not.
+// The bpm-range argument names the builders share.
+const (
+	keyHRMin = "hr_min"
+	keyHRMax = "hr_max"
+)
+
+// TestLiveRemainingWorkoutBuildersUpload drives the builders the workout lifecycle
+// does not.
 //
 // Each one composes a different document shape and uploads it, so a Garmin change
 // that rejects one shape while accepting another is caught. Each workout is read back
@@ -67,10 +73,19 @@ func remainingBuilders() []builderCall {
 			keyWarmupMin:   workoutWarmupMin,
 			keyCooldownMin: workoutCooldownMin,
 		}},
+		{tools.ToolCreateRunIntervalWorkout, labelNameRunInterval, map[string]any{
+			"repeats":          builderRepeats,
+			"rep_seconds":      workoutRunSeconds,
+			"recovery_seconds": builderWalkSeconds,
+			keyWarmupMin:       workoutWarmupMin,
+			keyCooldownMin:     workoutCooldownMin,
+			keyHRMin:           builderHRMin,
+			keyHRMax:           builderHRMax,
+		}},
 		{tools.ToolCreateZ2WalkWorkout, labelNameZ2Walk, map[string]any{
 			"duration_min": builderDurationMin,
-			"hr_min":       builderHRMin,
-			"hr_max":       builderHRMax,
+			keyHRMin:       builderHRMin,
+			keyHRMax:       builderHRMax,
 		}},
 		{tools.ToolCreateStrengthWorkout, labelNameStrengthWorkout, map[string]any{
 			"exercises": []map[string]any{{
@@ -261,6 +276,7 @@ func exercisedWrites() []string {
 		tools.ToolDeleteActivity,
 		tools.ToolCreateRunWorkout,
 		tools.ToolCreateWalkRunWorkout,
+		tools.ToolCreateRunIntervalWorkout,
 		tools.ToolCreateZ2WalkWorkout,
 		tools.ToolCreateStrengthWorkout,
 		tools.ToolUploadWorkouts,

@@ -325,6 +325,7 @@ func (v ReadinessView) op() (client.Op, bool) {
 type Readiness struct {
 	CalendarDate               *string       `json:"calendarDate"`
 	TimestampLocal             client.Text   `json:"timestampLocal"`
+	Timestamp                  client.Text   `json:"timestamp"`
 	InputContext               client.Text   `json:"inputContext"`
 	Level                      client.Text   `json:"level"`
 	Score                      client.Number `json:"score"`

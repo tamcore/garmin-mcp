@@ -23,6 +23,9 @@ const (
 	// Source: nutrition.py:704, log_food's
 	// url = "/nutrition-service/food/logs/quickAdd".
 	PathNutritionFoodLogQuickAdd = "/nutrition-service/food/logs/quickAdd"
+	// PathNutritionFoodLogRange is the per-day nutrition summary over a window,
+	// filtered by startDate and endDate. Source: nutrition.py:135.
+	PathNutritionFoodLogRange = "/nutrition-service/food/logs/range"
 	// PathNutritionMealsPrefix precedes a calendar date in the daily meals path.
 	// Source: garmin_connect_nutrition_daily_meals (f"{garmin_nutrition}/meals"),
 	// read by get_nutrition_daily_meals.
@@ -107,6 +110,7 @@ const (
 const (
 	EndpointNutritionFoodLog                = Endpoint("connectapi.nutrition.food_log")
 	EndpointNutritionFoodLogQuickAdd        = Endpoint("connectapi.nutrition.food_log_quick_add")
+	EndpointNutritionFoodLogRange           = Endpoint("connectapi.nutrition.food_log_range")
 	EndpointNutritionMeals                  = Endpoint("connectapi.nutrition.meals")
 	EndpointNutritionSettings               = Endpoint("connectapi.nutrition.settings")
 	EndpointNutritionFoodSearch             = Endpoint("connectapi.nutrition.food_search")
@@ -121,6 +125,7 @@ func nutritionEndpoints() []Endpoint {
 	return []Endpoint{
 		EndpointNutritionFoodLog,
 		EndpointNutritionFoodLogQuickAdd,
+		EndpointNutritionFoodLogRange,
 		EndpointNutritionMeals,
 		EndpointNutritionSettings,
 		EndpointNutritionFoodSearch,
@@ -139,6 +144,7 @@ func nutritionEndpoints() []Endpoint {
 // package does not already have a label for.
 const (
 	OpGetNutritionDailyFoodLog  = Op("get_nutrition_daily_food_log")
+	OpGetNutritionSummaryRange  = Op("get_nutrition_summary_between_dates")
 	OpGetNutritionDailyMeals    = Op("get_nutrition_daily_meals")
 	OpGetNutritionDailySettings = Op("get_nutrition_daily_settings")
 	OpSetNutritionDailySettings = Op("set_nutrition_daily_settings")
@@ -158,6 +164,7 @@ const (
 func nutritionOps() []Op {
 	return []Op{
 		OpGetNutritionDailyFoodLog,
+		OpGetNutritionSummaryRange,
 		OpGetNutritionDailyMeals,
 		OpGetNutritionDailySettings,
 		OpSetNutritionDailySettings,

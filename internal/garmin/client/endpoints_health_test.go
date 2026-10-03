@@ -32,6 +32,7 @@ func TestHealthConstantsHaveTheirPinnedValues(t *testing.T) {
 		{client.PathBodyBatteryEventsPrefix, "/wellness-service/wellness/bodyBattery/events"},
 		{client.PathDailyHydrationPrefix, "/usersummary-service/usersummary/hydration/daily"},
 		{client.PathDailyStepsStatsPrefix, "/usersummary-service/stats/steps/daily"},
+		{client.PathDailyStatsPrefix, "/usersummary-service/stats/daily"},
 		{client.PathWeeklyStepsStatsPrefix, "/usersummary-service/stats/steps/weekly"},
 		{client.PathWeeklyStressStatsPrefix, "/usersummary-service/stats/stress/weekly"},
 		{client.PathWeeklyIntensityMinutesStatsPrefix, "/usersummary-service/stats/im/weekly"},
@@ -62,6 +63,7 @@ func TestHealthConstantsHaveTheirPinnedValues(t *testing.T) {
 		{client.EndpointBodyBatteryEvents, "connectapi.wellness.body_battery_events"},
 		{client.EndpointDailyHydration, "connectapi.usersummary.hydration_daily"},
 		{client.EndpointDailyStepsStats, "connectapi.usersummary.steps_daily"},
+		{client.EndpointDailyStats, "connectapi.usersummary.stats_daily"},
 		{client.EndpointWeeklyStepsStats, "connectapi.usersummary.steps_weekly"},
 		{client.EndpointWeeklyStressStats, "connectapi.usersummary.stress_weekly"},
 		{client.EndpointWeeklyIntensityMinutesStats, "connectapi.usersummary.intensity_minutes_weekly"},
@@ -86,6 +88,7 @@ func TestHealthConstantsHaveTheirPinnedValues(t *testing.T) {
 		{client.OpGetBodyComposition, "get_body_composition"},
 		{client.OpGetStepsData, "get_steps_data"},
 		{client.OpGetDailySteps, "get_daily_steps"},
+		{client.OpGetStatsRange, "get_stats_range"},
 		{client.OpGetWeeklySteps, "get_weekly_steps"},
 		{client.OpGetWeeklyStress, "get_weekly_stress"},
 		{client.OpGetWeeklyIntensityMinutes, "get_weekly_intensity_minutes"},
@@ -123,6 +126,9 @@ func TestHealthConstantsHaveTheirPinnedValues(t *testing.T) {
 		{client.QueryUntilDate, "untilDate"},
 		{client.QueryMetricID, "metricId"},
 		{client.QueryIncludeAll, "includeAll"},
+		{client.QueryStatsType, "statsType"},
+		{string(client.StatsTypeCalories), "CALORIES"},
+		{string(client.StatsTypeSteps), "STEPS"},
 	}
 	for _, tc := range queries {
 		if tc.got != tc.want {
@@ -157,6 +163,7 @@ func TestEveryHealthEndpointAndOpIsInTheAllowlist(t *testing.T) {
 		client.EndpointBodyBatteryEvents,
 		client.EndpointDailyHydration,
 		client.EndpointDailyStepsStats,
+		client.EndpointDailyStats,
 		client.EndpointWeeklyStepsStats,
 		client.EndpointWeeklyStressStats,
 		client.EndpointWeeklyIntensityMinutesStats,
@@ -171,7 +178,7 @@ func TestEveryHealthEndpointAndOpIsInTheAllowlist(t *testing.T) {
 			t.Errorf("endpoint %q is not in the allowlist, so Request.Validate refuses it", endpoint)
 		}
 	}
-	if got, want := len(endpoints), 19; got != want {
+	if got, want := len(endpoints), 20; got != want {
 		t.Errorf("%d health endpoints asserted, want %d", got, want)
 	}
 
@@ -181,6 +188,7 @@ func TestEveryHealthEndpointAndOpIsInTheAllowlist(t *testing.T) {
 		client.OpGetBodyComposition,
 		client.OpGetStepsData,
 		client.OpGetDailySteps,
+		client.OpGetStatsRange,
 		client.OpGetWeeklySteps,
 		client.OpGetWeeklyStress,
 		client.OpGetWeeklyIntensityMinutes,
@@ -209,7 +217,7 @@ func TestEveryHealthEndpointAndOpIsInTheAllowlist(t *testing.T) {
 			t.Errorf("op %q is not in the allowlist, so Request.Validate refuses it", op)
 		}
 	}
-	if got, want := len(operations), 27; got != want {
+	if got, want := len(operations), 28; got != want {
 		t.Errorf("%d health ops asserted, want %d", got, want)
 	}
 }

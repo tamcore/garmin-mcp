@@ -104,7 +104,7 @@ func getVO2MaxTrendContract() Contract {
 			Category:    categoryHealth,
 			Annotations: readOnlyAnnotations(),
 		},
-		Schema: NewSchema(trendWindowProperties(MaxVO2MaxTrendDays)...),
+		Schema: NewSchema(trendWindowProperties(MaxVO2MaxTrendDays, reasonReadsPerDay)...),
 	}
 }
 

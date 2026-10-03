@@ -49,6 +49,10 @@ const (
 	// own segment, in the daily step aggregate path. Garmin caps the window at 28
 	// days. Source: garmin_connect_daily_stats_steps_url.
 	PathDailyStepsStatsPrefix = "/usersummary-service/stats/steps/daily"
+	// PathDailyStatsPrefix precedes a start date and an end date, each its own
+	// segment, in the per-day stats aggregate path; statsType picks the series.
+	// Source: health_wellness.py:527.
+	PathDailyStatsPrefix = "/usersummary-service/stats/daily"
 	// PathWeeklyStepsStatsPrefix precedes an end date and a week count, each its
 	// own segment. Source: garmin_connect_weekly_stats_steps_url.
 	PathWeeklyStepsStatsPrefix = "/usersummary-service/stats/steps/weekly"
@@ -88,6 +92,16 @@ const (
 	QueryUntilDate  = "untilDate"
 	QueryMetricID   = "metricId"
 	QueryIncludeAll = "includeAll"
+	QueryStatsType  = "statsType"
+)
+
+// StatsType selects the series the per-day stats aggregate is read for.
+type StatsType string
+
+// The two series. Source: health_wellness.py:529-530.
+const (
+	StatsTypeCalories StatsType = "CALORIES"
+	StatsTypeSteps    StatsType = "STEPS"
 )
 
 // MetricIDRestingHeartRate selects the resting heart-rate series from the
@@ -109,6 +123,7 @@ const (
 	EndpointBodyBatteryEvents           = Endpoint("connectapi.wellness.body_battery_events")
 	EndpointDailyHydration              = Endpoint("connectapi.usersummary.hydration_daily")
 	EndpointDailyStepsStats             = Endpoint("connectapi.usersummary.steps_daily")
+	EndpointDailyStats                  = Endpoint("connectapi.usersummary.stats_daily")
 	EndpointWeeklyStepsStats            = Endpoint("connectapi.usersummary.steps_weekly")
 	EndpointWeeklyStressStats           = Endpoint("connectapi.usersummary.stress_weekly")
 	EndpointWeeklyIntensityMinutesStats = Endpoint("connectapi.usersummary.intensity_minutes_weekly")
@@ -134,6 +149,7 @@ func healthEndpoints() []Endpoint {
 		EndpointBodyBatteryEvents,
 		EndpointDailyHydration,
 		EndpointDailyStepsStats,
+		EndpointDailyStats,
 		EndpointWeeklyStepsStats,
 		EndpointWeeklyStressStats,
 		EndpointWeeklyIntensityMinutesStats,
@@ -155,6 +171,7 @@ const (
 	OpGetBodyComposition          = Op("get_body_composition")
 	OpGetStepsData                = Op("get_steps_data")
 	OpGetDailySteps               = Op("get_daily_steps")
+	OpGetStatsRange               = Op("get_stats_range")
 	OpGetWeeklySteps              = Op("get_weekly_steps")
 	OpGetWeeklyStress             = Op("get_weekly_stress")
 	OpGetWeeklyIntensityMinutes   = Op("get_weekly_intensity_minutes")
@@ -187,6 +204,7 @@ func healthOps() []Op {
 		OpGetBodyComposition,
 		OpGetStepsData,
 		OpGetDailySteps,
+		OpGetStatsRange,
 		OpGetWeeklySteps,
 		OpGetWeeklyStress,
 		OpGetWeeklyIntensityMinutes,

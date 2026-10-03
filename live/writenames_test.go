@@ -24,6 +24,7 @@ const (
 	labelNameCustomFood      nameLabel = "customfood"
 	labelNameDescription     nameLabel = "description"
 	labelNameGear            nameLabel = "gear"
+	labelNameRunInterval     nameLabel = "runinterval"
 	labelNameStrength        nameLabel = "strength"
 	labelNameStrengthWorkout nameLabel = "strengthworkout"
 	labelNameTemplate        nameLabel = "template"
@@ -38,7 +39,8 @@ const (
 func suiteLabels() []nameLabel {
 	return []nameLabel{
 		labelNameActivity, labelNameActivityRenamed, labelNameBatch, labelNameCourse,
-		labelNameCustomFood, labelNameDescription, labelNameGear, labelNameStrength,
+		labelNameCustomFood, labelNameDescription, labelNameGear, labelNameRunInterval,
+		labelNameStrength,
 		labelNameStrengthWorkout, labelNameTemplate, labelNameWalkRun, labelNameWorkout,
 		labelNameWorkoutUpdated, labelNameZ2Walk,
 	}

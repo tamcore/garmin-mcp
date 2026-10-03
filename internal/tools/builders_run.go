@@ -55,8 +55,23 @@ func intervalSeconds(name, description string) Property {
 	}
 }
 
-// heartRateZoneProperty declares the optional named-zone target.
-func heartRateZoneProperty() Property {
+// argNameRepeats is the repeat-count argument of the interval builders.
+const argNameRepeats = "repeats"
+
+// repeatsProperty declares the iteration count of a built repeat group.
+func repeatsProperty(description string) Property {
+	return Property{
+		Name:        argNameRepeats,
+		Types:       []string{typeInteger},
+		Description: description,
+		Minimum:     bound(1),
+		Maximum:     bound(maxRepeats),
+		Required:    true,
+	}
+}
+
+// heartRateZoneProperty declares the optional named-zone target and its default.
+func heartRateZoneProperty(fallback string) Property {
 	zoneKeyLen := 2
 	return Property{
 		Name:        "hr_zone",
@@ -64,7 +79,7 @@ func heartRateZoneProperty() Property {
 		Description: "the target heart-rate zone",
 		Enum:        heartRateZoneEnum(),
 		MaxLength:   &zoneKeyLen,
-		Default:     defaultHeartRateZone,
+		Default:     fallback,
 	}
 }
 
@@ -107,17 +122,10 @@ func createWalkRunWorkoutContract() Contract {
 			builderName(),
 			intervalSeconds(argNameRunSeconds, "the duration of each run interval in seconds"),
 			intervalSeconds("walk_seconds", "the duration of each walk interval in seconds"),
-			Property{
-				Name:        "repeats",
-				Types:       []string{typeInteger},
-				Description: "how many run and walk pairs the workout repeats",
-				Minimum:     bound(1),
-				Maximum:     bound(maxRepeats),
-				Required:    true,
-			},
+			repeatsProperty("how many run and walk pairs the workout repeats"),
 			blockMinutes(argNameWarmupMin, "the warmup duration in minutes"),
 			blockMinutes(argNameCooldownMin, "the cooldown duration in minutes"),
-			heartRateZoneProperty(),
+			heartRateZoneProperty(defaultHeartRateZone),
 		),
 	}
 }
@@ -144,7 +152,7 @@ func buildWalkRunWorkout(in createWalkRunWorkoutInput) (api.WorkoutDocument, err
 	if err := validateWalkRunBounds(in); err != nil {
 		return api.WorkoutDocument{}, err
 	}
-	zone, err := parseHeartRateZone(in.HRZone)
+	zone, err := parseHeartRateZone(in.HRZone, defaultHeartRateZone)
 	if err != nil {
 		return api.WorkoutDocument{}, err
 	}
@@ -161,23 +169,13 @@ func buildWalkRunWorkout(in createWalkRunWorkoutInput) (api.WorkoutDocument, err
 
 // validateWalkRunBounds checks every numeric argument against its declared bound.
 func validateWalkRunBounds(in createWalkRunWorkoutInput) error {
-	checks := []struct {
-		field     string
-		value     float64
-		low, high float64
-	}{
+	return checkBounds([]boundCheck{
 		{argNameRunSeconds, float64(in.RunSeconds), 1, maxIntervalSeconds},
 		{"walk_seconds", float64(in.WalkSeconds), 1, maxIntervalSeconds},
-		{"repeats", float64(in.Repeats), 1, maxRepeats},
+		{argNameRepeats, float64(in.Repeats), 1, maxRepeats},
 		{argNameWarmupMin, float64(in.WarmupMin), 0, maxBlockMinutes},
 		{argNameCooldownMin, float64(in.CooldownMin), 0, maxBlockMinutes},
-	}
-	for _, check := range checks {
-		if err := inRange(check.field, check.value, check.low, check.high); err != nil {
-			return err
-		}
-	}
-	return nil
+	})
 }
 
 // addBlock appends a warmup or cooldown block, skipping a zero-length one rather than
@@ -218,7 +216,7 @@ func createRunWorkoutContract() Contract {
 			intervalSeconds(argNameRunSeconds, "the duration of the run in seconds"),
 			blockMinutes(argNameWarmupMin, "the warmup walk duration in minutes"),
 			blockMinutes(argNameCooldownMin, "the cooldown walk duration in minutes"),
-			heartRateZoneProperty(),
+			heartRateZoneProperty(defaultHeartRateZone),
 			heartRateBoundProperty(argNameHRMin,
 				"the lower bpm bound; it must be given with hr_max", false),
 			heartRateBoundProperty(argNameHRMax,
@@ -249,7 +247,8 @@ func buildRunWorkout(in createRunWorkoutInput) (api.WorkoutDocument, error) {
 	if err := validateRunBounds(in); err != nil {
 		return api.WorkoutDocument{}, err
 	}
-	run, err := runTargetStep(in)
+	run, err := heartRateStep(float64(in.RunSeconds), in.HRZone, defaultHeartRateZone,
+		in.HRMin, in.HRMax)
 	if err != nil {
 		return api.WorkoutDocument{}, err
 	}
@@ -270,24 +269,6 @@ func validateRunBounds(in createRunWorkoutInput) error {
 		return err
 	}
 	return inRange(argNameCooldownMin, float64(in.CooldownMin), 0, maxBlockMinutes)
-}
-
-// runTargetStep picks the explicit bpm range when both bounds are given, and the
-// named zone otherwise. Garmin discards a range that arrives beside a zone, so only
-// one of the two is ever written.
-func runTargetStep(in createRunWorkoutInput) (executableStep, error) {
-	low, high, explicit, err := parseHeartRateRange(in.HRMin, in.HRMax)
-	if err != nil {
-		return executableStep{}, err
-	}
-	if explicit {
-		return rangedStep(intervalStep(), float64(in.RunSeconds), low, high), nil
-	}
-	zone, err := parseHeartRateZone(in.HRZone)
-	if err != nil {
-		return executableStep{}, err
-	}
-	return zonedStep(intervalStep(), float64(in.RunSeconds), zone), nil
 }
 
 // createZ2WalkWorkoutInput is the steady-walk builder argument set.
@@ -340,7 +321,7 @@ func buildZ2WalkWorkout(in createZ2WalkWorkoutInput) (api.WorkoutDocument, error
 	if err := inRange("duration_min", float64(in.DurationMin), 1, maxBlockMinutes); err != nil {
 		return api.WorkoutDocument{}, err
 	}
-	low, high, _, err := parseHeartRateRange(&in.HRMin, &in.HRMax)
+	low, high, _, err := parseHeartRateRange("", &in.HRMin, &in.HRMax)
 	if err != nil {
 		return api.WorkoutDocument{}, err
 	}

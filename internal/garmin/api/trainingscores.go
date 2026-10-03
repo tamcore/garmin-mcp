@@ -245,11 +245,8 @@ func (t *TrainingScores) readWindow(
 	ctx context.Context, session client.Session, req client.Request,
 	span client.DateRange, out any,
 ) error {
-	if span.IsZero() {
-		return invalid(req, client.ErrValidation)
-	}
-	if err := t.req.limits().ValidateDateRange(span); err != nil {
-		return invalid(req, err)
+	if err := requireWindow(req, t.req.limits(), span); err != nil {
+		return err
 	}
 	_, err := t.req.read(ctx, session, req, out)
 	return err

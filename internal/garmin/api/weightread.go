@@ -135,7 +135,7 @@ func (w *Weight) GetWeighIns(
 	path := client.PathWeightRangePrefix + "/" + span.Start().String() + "/" + span.End().String()
 	req := readRequest(client.OpGetWeighIns, client.EndpointWeightRange, path, query)
 
-	if err := w.requireWindow(req, span); err != nil {
+	if err := requireWindow(req, w.req.limits(), span); err != nil {
 		return WeighInRange{}, err
 	}
 
@@ -171,16 +171,4 @@ func (w *Weight) GetDailyWeighIns(
 	}
 	day.raw = payload
 	return day, nil
-}
-
-// requireWindow refuses an unset or oversized window before anything is
-// dispatched, matching WellnessDaily.requireWindow.
-func (w *Weight) requireWindow(req client.Request, span client.DateRange) error {
-	if span.IsZero() {
-		return invalid(req, client.ErrValidation)
-	}
-	if err := w.req.limits().ValidateDateRange(span); err != nil {
-		return invalid(req, err)
-	}
-	return nil
 }

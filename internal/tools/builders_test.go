@@ -43,7 +43,7 @@ func TestCreateWalkRunWorkoutBuildsAWarmupARepeatAndACooldown(t *testing.T) {
 		argName:        "W3 two by two",
 		argRunSeconds:  120,
 		argWalkSeconds: 120,
-		"repeats":      6,
+		argRepeats:     6,
 		argWarmupMin:   5,
 		argCooldownMin: 5,
 	})
@@ -72,7 +72,7 @@ func TestCreateWalkRunWorkoutTargetsTheNamedZoneByDefault(t *testing.T) {
 		argName:        "Default zone",
 		argRunSeconds:  120,
 		argWalkSeconds: 60,
-		"repeats":      2,
+		argRepeats:     2,
 		argWarmupMin:   5,
 		argCooldownMin: 5,
 	})

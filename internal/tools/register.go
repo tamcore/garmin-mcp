@@ -106,6 +106,7 @@ func readOnlyRegistrations() []registration {
 		{getBodyCompositionContract, registerGetBodyComposition},
 		{getStepsDataContract, registerGetStepsData},
 		{getDailyStepsContract, registerGetDailySteps},
+		{getStatsRangeContract, registerGetStatsRange},
 		{getWeeklyStepsContract, registerGetWeeklySteps},
 		{getFloorsContract, registerGetFloors},
 		{getWeeklyIntensityMinutesContract, registerGetWeeklyIntensityMinutes},
@@ -119,6 +120,7 @@ func readOnlyRegistrations() []registration {
 		{getBodyBatteryEventsContract, registerGetBodyBatteryEvents},
 		{getTrainingReadinessContract, registerGetTrainingReadiness},
 		{getMorningTrainingReadinessContract, registerGetMorningTrainingReadiness},
+		{getRecoveryTimeRemainingContract, registerGetRecoveryTimeRemaining},
 		{getAllDayEventsContract, registerGetAllDayEvents},
 
 		// Health and wellness: cardio, respiration and the logged reads.
@@ -179,6 +181,7 @@ func readOnlyRegistrations() []registration {
 
 		// Nutrition: the reads.
 		{getNutritionDailyFoodLogContract, registerGetNutritionDailyFoodLog},
+		{getNutritionSummaryBetweenDatesContract, registerGetNutritionSummaryBetweenDates},
 		{getNutritionDailyMealsContract, registerGetNutritionDailyMeals},
 		{getNutritionDailySettingsContract, registerGetNutritionDailySettings},
 		{searchFoodsContract, registerSearchFoods},
@@ -270,6 +273,7 @@ func writeRegistrations() []registration {
 		{scheduleWeekContract, registerScheduleWeek},
 		{createWalkRunWorkoutContract, registerCreateWalkRunWorkout},
 		{createRunWorkoutContract, registerCreateRunWorkout},
+		{createRunIntervalWorkoutContract, registerCreateRunIntervalWorkout},
 		{createZ2WalkWorkoutContract, registerCreateZ2WalkWorkout},
 		{createStrengthWorkoutContract, registerCreateStrengthWorkout},
 		{downloadActivityFileContract, registerDownloadActivityFile},

@@ -80,7 +80,7 @@ func getTrainingLoadTrendContract() Contract {
 			Category:    categoryHealth,
 			Annotations: readOnlyAnnotations(),
 		},
-		Schema: NewSchema(trendWindowProperties(MaxTrainingLoadTrendDays)...),
+		Schema: NewSchema(trendWindowProperties(MaxTrainingLoadTrendDays, reasonReadsPerDay)...),
 	}
 }
 

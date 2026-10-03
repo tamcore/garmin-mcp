@@ -264,3 +264,52 @@ func (n *Nutrition) CustomFoods(
 	result.raw = payload
 	return result, nil
 }
+
+// NutritionDaySummary is one day of the per-day nutrition summary. It is health
+// data: never log it.
+//
+// Source: the dailyNutritionSummaries entries get_nutrition_summary_between_dates
+// reads, and the mealDate, dailyNutritionContent and mealDetails[].loggedFoods
+// fields it takes from each (nutrition.py:141-158).
+type NutritionDaySummary struct {
+	MealDate    client.Text             `json:"mealDate"`
+	Content     NutritionContent        `json:"dailyNutritionContent"`
+	MealDetails client.List[MealDetail] `json:"mealDetails"`
+}
+
+// MealDetail is one meal of a day's summary. Only its logged foods are counted.
+type MealDetail struct {
+	LoggedFoods client.List[json.RawMessage] `json:"loggedFoods"`
+}
+
+// ItemCount is how many food items the day logged across its meals.
+func (d NutritionDaySummary) ItemCount() int {
+	count := 0
+	for _, meal := range d.MealDetails.Items() {
+		count += meal.LoggedFoods.Len()
+	}
+	return count
+}
+
+// SummaryRange reads the per-day nutrition totals for an inclusive window.
+//
+// Source: get_nutrition_summary_between_dates, GET
+// "/nutrition-service/food/logs/range" with startDate and endDate
+// (nutrition.py:134-137).
+func (n *Nutrition) SummaryRange(
+	ctx context.Context, session client.Session, span client.DateRange,
+) ([]NutritionDaySummary, error) {
+	req := readRequest(client.OpGetNutritionSummaryRange, client.EndpointNutritionFoodLogRange,
+		client.PathNutritionFoodLogRange, windowQuery(span))
+	if err := requireWindow(req, n.req.limits(), span); err != nil {
+		return nil, err
+	}
+
+	var out struct {
+		Days client.List[NutritionDaySummary] `json:"dailyNutritionSummaries"`
+	}
+	if _, err := n.req.read(ctx, session, req, &out); err != nil {
+		return nil, err
+	}
+	return out.Days.Items(), nil
+}

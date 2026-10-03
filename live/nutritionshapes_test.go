@@ -16,11 +16,12 @@ import "github.com/tamcore/garmin-mcp/internal/tools"
 // pin this suite to that account's own configuration.
 func nutritionShapes() map[string][]string {
 	return map[string][]string{
-		tools.ToolGetNutritionDailyFoodLog:  {argDate, keyEntries, keyCount, keyTruncated},
-		tools.ToolGetNutritionDailyMeals:    {argDate, "meals", keyCount, keyTruncated},
-		tools.ToolGetNutritionDailySettings: {argDate},
-		tools.ToolSearchFoods:               {keyCount, "has_more", "results"},
-		tools.ToolGetCustomFoods:            {"results", keyCount, "start", "limit"},
-		tools.ToolGetCustomFoodServingUnits: {"units", keyCount},
+		tools.ToolGetNutritionDailyFoodLog:        {argDate, keyEntries, keyCount, keyTruncated},
+		tools.ToolGetNutritionSummaryBetweenDates: {argStartDate, argEndDate, keyDays, keyCount, keyTruncated},
+		tools.ToolGetNutritionDailyMeals:          {argDate, "meals", keyCount, keyTruncated},
+		tools.ToolGetNutritionDailySettings:       {argDate},
+		tools.ToolSearchFoods:                     {keyCount, "has_more", "results"},
+		tools.ToolGetCustomFoods:                  {"results", keyCount, "start", "limit"},
+		tools.ToolGetCustomFoodServingUnits:       {"units", keyCount},
 	}
 }

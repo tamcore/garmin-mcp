@@ -29,6 +29,7 @@ func healthCalls(now time.Time) []sweepCall {
 	return slices.Concat(dayScopedHealthCalls(now), []sweepCall{
 		{tools.ToolGetBodyComposition, window},
 		{tools.ToolGetDailySteps, window},
+		{tools.ToolGetStatsRange, window},
 		{tools.ToolGetBodyBattery, window},
 		{tools.ToolGetBloodPressure, window},
 		{tools.ToolGetWeeklySteps, weeks},
@@ -51,6 +52,7 @@ func dayScopedHealthCalls(now time.Time) []sweepCall {
 		{tools.ToolGetBodyBatteryEvents, day},
 		{tools.ToolGetTrainingReadiness, day},
 		{tools.ToolGetMorningTrainingReadiness, day},
+		{tools.ToolGetRecoveryTimeRemaining, day},
 		{tools.ToolGetAllDayEvents, day},
 		{tools.ToolGetHeartRates, day},
 		{tools.ToolGetHeartRatesSummary, day},

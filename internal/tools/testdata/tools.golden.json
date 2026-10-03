@@ -652,6 +652,120 @@
     }
   },
   {
+    "name": "create_run_interval_workout",
+    "tier": "write",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Create an interval run workout"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "cooldown_min": {
+          "description": "the cooldown duration in minutes",
+          "maximum": 300,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "hr_max": {
+          "description": "the upper bpm bound of the work intervals; it must be given with hr_min",
+          "maximum": 250,
+          "minimum": 30,
+          "type": "integer"
+        },
+        "hr_min": {
+          "description": "the lower bpm bound of the work intervals; it must be given with hr_max",
+          "maximum": 250,
+          "minimum": 30,
+          "type": "integer"
+        },
+        "hr_zone": {
+          "default": "Z4",
+          "description": "the target heart-rate zone",
+          "enum": [
+            "Z1",
+            "Z2",
+            "Z3",
+            "Z4",
+            "Z5"
+          ],
+          "maxLength": 2,
+          "type": "string"
+        },
+        "name": {
+          "description": "the workout name",
+          "maxLength": 256,
+          "type": "string"
+        },
+        "recovery_hr_max": {
+          "description": "the upper bpm bound of the recovery jogs; it must be given with recovery_hr_min",
+          "maximum": 250,
+          "minimum": 30,
+          "type": "integer"
+        },
+        "recovery_hr_min": {
+          "description": "the lower bpm bound of the recovery jogs; it must be given with recovery_hr_max",
+          "maximum": 250,
+          "minimum": 30,
+          "type": "integer"
+        },
+        "recovery_seconds": {
+          "description": "the duration of each recovery jog in seconds; 0 omits the jog",
+          "maximum": 14400,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rep_seconds": {
+          "description": "the duration of each work interval in seconds",
+          "maximum": 14400,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "repeats": {
+          "description": "how many work intervals the workout repeats",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "warmup_min": {
+          "description": "the warmup duration in minutes",
+          "maximum": 300,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cooldown_min",
+        "name",
+        "recovery_seconds",
+        "rep_seconds",
+        "repeats",
+        "warmup_min"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "the name Garmin saved, which may differ",
+          "type": "string"
+        },
+        "workout_id": {
+          "description": "the identifier Garmin saved the workout under",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workout_id"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "create_run_workout",
     "tier": "write",
     "annotations": {
@@ -11313,6 +11427,125 @@
     }
   },
   {
+    "name": "get_nutrition_summary_between_dates",
+    "tier": "read-only",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Get nutrition totals for a window"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "end_date": {
+          "description": "the last calendar day of the window, inclusive, in YYYY-MM-DD form. The window must not exceed 61 days, Garmin's own limit for this endpoint",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "the first calendar day of the window, in YYYY-MM-DD form. The window must not exceed 61 days, Garmin's own limit for this endpoint",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "end_date",
+        "start_date"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "description": "how many days this result carries",
+          "type": "integer"
+        },
+        "days": {
+          "description": "one entry per day Garmin returned",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "calories": {
+                "description": "the day's logged calories",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              },
+              "carbs": {
+                "description": "the day's logged carbohydrates in grams",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              },
+              "date": {
+                "description": "the calendar day, YYYY-MM-DD",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "fat": {
+                "description": "the day's logged fat in grams",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              },
+              "item_count": {
+                "description": "how many food items the day logged; 0 means nothing was logged",
+                "type": "integer"
+              },
+              "protein": {
+                "description": "the day's logged protein in grams",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              }
+            },
+            "required": [
+              "item_count"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "end_date": {
+          "description": "the inclusive last day, YYYY-MM-DD",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "the inclusive first day, YYYY-MM-DD",
+          "type": "string"
+        },
+        "truncated": {
+          "description": "whether Garmin returned more days than the window holds",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "start_date",
+        "end_date",
+        "days",
+        "count",
+        "truncated"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "get_personal_record",
     "tier": "read-only",
     "annotations": {
@@ -11914,6 +12147,85 @@
       },
       "required": [
         "predictions"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_recovery_time_remaining",
+    "tier": "read-only",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Get remaining recovery time"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "description": "the day to read; today when omitted, in YYYY-MM-DD form",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "activity_id": {
+          "description": "the activity whose recovery time was decayed",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "date": {
+          "description": "the day that was asked for, YYYY-MM-DD",
+          "type": "string"
+        },
+        "note": {
+          "description": "why no recovery time is reported",
+          "type": "string"
+        },
+        "readiness_level": {
+          "description": "the readiness level of the snapshot",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "readiness_score": {
+          "description": "the readiness score of the snapshot",
+          "type": [
+            "null",
+            "number"
+          ]
+        },
+        "remaining_hours": {
+          "description": "recovery hours still to run, to 0.1 h",
+          "type": [
+            "null",
+            "number"
+          ]
+        },
+        "source": {
+          "description": "where the recovery time came from",
+          "type": "string"
+        },
+        "state": {
+          "description": "recovered, nearly_recovered, recovering, not_recovered, unavailable",
+          "type": "string"
+        }
+      },
+      "required": [
+        "date",
+        "state"
       ],
       "type": "object"
     }
@@ -14145,6 +14457,123 @@
         "date",
         "stats",
         "dropped_fields"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_stats_range",
+    "tier": "read-only",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Get daily calories and steps for a window"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "end_date": {
+          "description": "the last calendar day of the window, inclusive, in YYYY-MM-DD form. The window must not exceed 28 days, Garmin's own limit for this endpoint",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "the first calendar day of the window, in YYYY-MM-DD form. The window must not exceed 28 days, Garmin's own limit for this endpoint",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "end_date",
+        "start_date"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "description": "how many rows this result carries",
+          "type": "integer"
+        },
+        "days": {
+          "description": "one row per day of the window, oldest first",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "active_calories": {
+                "description": "the day's active calories",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              },
+              "date": {
+                "description": "the calendar day, YYYY-MM-DD",
+                "type": "string"
+              },
+              "has_data": {
+                "description": "whether Garmin returned anything for the day",
+                "type": "boolean"
+              },
+              "is_partial": {
+                "description": "whether the day is today and still accumulating",
+                "type": "boolean"
+              },
+              "resting_calories": {
+                "description": "the day's resting calories",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              },
+              "steps": {
+                "description": "the day's total steps",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "total_calories": {
+                "description": "the day's total calories",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              }
+            },
+            "required": [
+              "date",
+              "has_data",
+              "is_partial"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "end_date": {
+          "description": "the inclusive last day, YYYY-MM-DD",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "the inclusive first day, YYYY-MM-DD",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start_date",
+        "end_date",
+        "days",
+        "count"
       ],
       "type": "object"
     }

@@ -204,7 +204,7 @@ func getSleepSummaryRangeContract() Contract {
 			Category:    categoryHealth,
 			Annotations: readOnlyAnnotations(),
 		},
-		Schema: NewSchema(trendWindowProperties(MaxSleepSummaryRangeNights)...),
+		Schema: NewSchema(trendWindowProperties(MaxSleepSummaryRangeNights, reasonReadsPerDay)...),
 	}
 }
 

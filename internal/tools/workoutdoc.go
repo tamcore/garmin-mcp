@@ -212,9 +212,9 @@ func rangedStep(kind stepType, seconds, low, high float64) executableStep {
 	return step
 }
 
-// parseHeartRateZone validates a named zone argument, Z1 to Z5.
-func parseHeartRateZone(value string) (int, error) {
-	zone := optionalTextArg(value, defaultHeartRateZone)
+// parseHeartRateZone validates a named zone argument, Z1 to Z5, defaulting to fallback.
+func parseHeartRateZone(value, fallback string) (int, error) {
+	zone := optionalTextArg(value, fallback)
 	if len(zone) != 2 || zone[:1] != heartRateZonePrefix {
 		return 0, invalidArgument("hr_zone must be Z1, Z2, Z3, Z4 or Z5")
 	}
@@ -234,23 +234,43 @@ func heartRateZoneEnum() []any {
 	return out
 }
 
-// parseHeartRateRange validates the optional explicit bpm range. Both bounds are
-// given together or neither is, because half a range is not a target.
-func parseHeartRateRange(low, high *int) (float64, float64, bool, error) {
+// parseHeartRateRange validates the optional explicit bpm range named prefix+hr_min
+// and prefix+hr_max. Both bounds are given together or neither is, because half a
+// range is not a target.
+func parseHeartRateRange(prefix string, low, high *int) (float64, float64, bool, error) {
+	lowName, highName := prefix+argNameHRMin, prefix+argNameHRMax
 	switch {
 	case low == nil && high == nil:
 		return 0, 0, false, nil
 	case low == nil || high == nil:
-		return 0, 0, false, invalidArgument("hr_min and hr_max must be given together")
+		return 0, 0, false, invalidArgument(lowName + " and " + highName + " must be given together")
 	}
-	if err := inRange(argNameHRMin, float64(*low), minHeartRate, maxHeartRate); err != nil {
+	if err := inRange(lowName, float64(*low), minHeartRate, maxHeartRate); err != nil {
 		return 0, 0, false, err
 	}
-	if err := inRange(argNameHRMax, float64(*high), minHeartRate, maxHeartRate); err != nil {
+	if err := inRange(highName, float64(*high), minHeartRate, maxHeartRate); err != nil {
 		return 0, 0, false, err
 	}
 	if *low >= *high {
-		return 0, 0, false, invalidArgument("hr_min must be below hr_max")
+		return 0, 0, false, invalidArgument(lowName + " must be below " + highName)
 	}
 	return float64(*low), float64(*high), true, nil
+}
+
+// heartRateStep builds one interval step that targets the explicit bpm range when
+// both bounds are given, and the named zone otherwise. Garmin discards a range that
+// arrives beside a zone, so only one of the two is ever written.
+func heartRateStep(seconds float64, zone, fallback string, low, high *int) (executableStep, error) {
+	lowBPM, highBPM, explicit, err := parseHeartRateRange("", low, high)
+	if err != nil {
+		return executableStep{}, err
+	}
+	if explicit {
+		return rangedStep(intervalStep(), seconds, lowBPM, highBPM), nil
+	}
+	number, err := parseHeartRateZone(zone, fallback)
+	if err != nil {
+		return executableStep{}, err
+	}
+	return zonedStep(intervalStep(), seconds, number), nil
 }

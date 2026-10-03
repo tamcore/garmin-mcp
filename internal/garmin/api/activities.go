@@ -89,11 +89,13 @@ func ParseSortOrder(value string) (SortOrder, error) {
 // releases are optional pointers or union decoders, and activityType keeps its raw
 // shape because upstream sends both an object and a bare key.
 type Activity struct {
-	ActivityID     *int64          `json:"activityId"`
-	ActivityName   *string         `json:"activityName"`
-	Description    *string         `json:"description"`
-	StartTimeLocal *string         `json:"startTimeLocal"`
-	StartTimeGMT   *string         `json:"startTimeGMT"`
+	ActivityID     *int64  `json:"activityId"`
+	ActivityName   *string `json:"activityName"`
+	Description    *string `json:"description"`
+	StartTimeLocal *string `json:"startTimeLocal"`
+	StartTimeGMT   *string `json:"startTimeGMT"`
+	// BeginTimestamp is the start in epoch milliseconds. Source: health_wellness.py:87.
+	BeginTimestamp client.Number   `json:"beginTimestamp"`
 	ActivityType   json.RawMessage `json:"activityType"`
 	EventType      json.RawMessage `json:"eventType"`
 	Distance       client.Number   `json:"distance"`

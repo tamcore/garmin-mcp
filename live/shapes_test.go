@@ -27,6 +27,7 @@ const (
 	keyDistance      = "distance"
 	keyHeartRate     = "heart_rate"
 	keyEntries       = "entries"
+	keyDays          = "days"
 )
 
 // answersLocally names the swept tools that reach no Garmin endpoint, with the reason.
@@ -130,6 +131,7 @@ func healthShapes() map[string][]string {
 		tools.ToolGetStressSummary:            {argDate, keyHasData, "data_points_count"},
 		tools.ToolGetTrainingReadiness:        {argDate, keyCount, keyTruncated, keyEntries},
 		tools.ToolGetMorningTrainingReadiness: {argDate, keyHasData, "from_wakeup_reset"},
+		tools.ToolGetRecoveryTimeRemaining:    {argDate, "state"},
 		tools.ToolGetHeartRatesSummary:        {argDate, keyHasData, "data_points_count"},
 		tools.ToolGetRestingHeartRateDay:      {argDate, keyHasData},
 		tools.ToolGetRespirationSummary:       {argDate, keyHasData},
@@ -163,8 +165,9 @@ func healthShapes() map[string][]string {
 			argDate, keyHasData, keySamples, keySampleCount, keyTruncated,
 			"hourly_averages", "hourly_average_count", "hourly_truncated",
 		},
-		tools.ToolGetDailySteps:    {argStartDate, argEndDate, "days", keyCount, keyTruncated},
-		tools.ToolGetBodyBattery:   {argStartDate, argEndDate, keyCount, keyTruncated, "days"},
+		tools.ToolGetDailySteps:    {argStartDate, argEndDate, keyDays, keyCount, keyTruncated},
+		tools.ToolGetStatsRange:    {argStartDate, argEndDate, keyDays, keyCount},
+		tools.ToolGetBodyBattery:   {argStartDate, argEndDate, keyCount, keyTruncated, keyDays},
 		tools.ToolGetBloodPressure: {argStartDate, argEndDate, "readings", keyCount, keyTruncated},
 		tools.ToolGetWeeklySteps: {
 			argEndDate, keyWeeksAsked, keyWeeksReturned, keyWeeklyData,

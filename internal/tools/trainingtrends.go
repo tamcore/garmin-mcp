@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
-	"strconv"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/api"
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
@@ -87,14 +86,9 @@ type trendWindow struct {
 func (s *service) resolveTrendWindow(
 	ctx context.Context, startValue, endValue string, maxDays int,
 ) (trendWindow, error) {
-	span, err := parseWindow(startValue, endValue, s.limits)
+	span, err := parseCappedWindow(startValue, endValue, s.limits, maxDays)
 	if err != nil {
 		return trendWindow{}, err
-	}
-	if span.Days() > maxDays {
-		return trendWindow{}, invalidArgument(
-			"the date window must not exceed " + strconv.Itoa(maxDays) +
-				" days, because this tool reads Garmin once per day")
 	}
 	session, err := s.session(ctx)
 	if err != nil {
@@ -232,30 +226,4 @@ func meanOf(values []float64) *float64 {
 		total += value
 	}
 	return new(total / float64(len(values)))
-}
-
-// trendWindowProperties declares the start and end arguments every trend tool takes,
-// naming the tool's own maximum in the description so the bound is visible to a client
-// before it builds the call.
-func trendWindowProperties(maxDays int) []Property {
-	limit := ", in YYYY-MM-DD form. The window must not exceed " + strconv.Itoa(maxDays) +
-		" days, because this tool reads Garmin once per day"
-	return []Property{
-		trendDateProperty("start_date", "the first calendar day of the window"+limit),
-		trendDateProperty("end_date", "the last calendar day of the window, inclusive"+limit),
-	}
-}
-
-// trendDateProperty is dateProperty with the description passed through verbatim, so a
-// trend can state its own window bound after the date form.
-func trendDateProperty(name, description string) Property {
-	return Property{
-		Name:        name,
-		Types:       []string{typeString},
-		Description: description,
-		Format:      formatDate,
-		Pattern:     patternCalendarDate,
-		MaxLength:   new(maxDateArgumentLen),
-		Required:    true,
-	}
 }

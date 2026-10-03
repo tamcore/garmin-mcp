@@ -352,3 +352,45 @@ func TestSearchFoodsBoundsTheQueryLength(t *testing.T) {
 		t.Errorf("the fake received %d requests, want 0", got)
 	}
 }
+
+// TestSummaryRangeDecodesTheDailySummaries pins the window query and the field
+// spellings get_nutrition_summary_between_dates reads (nutrition.py:135-153).
+func TestSummaryRangeDecodesTheDailySummaries(t *testing.T) {
+	t.Parallel()
+
+	script := testkit.NewScript().With(client.PathNutritionFoodLogRange, testkit.JSON(http.StatusOK,
+		`{"dailyNutritionSummaries":[{"mealDate":"2026-01-01",`+
+			`"dailyNutritionContent":{"calories":2100,"carbs":250.5,"protein":120,"fat":70},`+
+			`"mealDetails":[{"loggedFoods":[{},{}]},{"loggedFoods":null},{"loggedFoods":[{}]}]}]}`))
+	h := newHarness(t, script, client.Limits{})
+	span, err := client.NewDateRange(mustDate(t, scoresWindowStart), mustDate(t, "2026-01-02"))
+	if err != nil {
+		t.Fatalf("NewDateRange() = %v", err)
+	}
+
+	days, err := newNutrition(t, h).SummaryRange(t.Context(), h.session, span)
+	if err != nil {
+		t.Fatalf("SummaryRange() = %v", err)
+	}
+	if len(days) != 1 {
+		t.Fatalf("SummaryRange() = %d days, want 1", len(days))
+	}
+	if date, _ := days[0].MealDate.Value(); date != scoresWindowStart {
+		t.Errorf("mealDate = %q, want 2026-01-01", date)
+	}
+	if carbs, _ := days[0].Content.Carbs.Float64(); carbs != 250.5 {
+		t.Errorf("carbs = %v, want 250.5", carbs)
+	}
+	if got := days[0].ItemCount(); got != 3 {
+		t.Errorf("ItemCount() = %d, want 3", got)
+	}
+	query := h.server.Requests()[0].Query
+	if query.Get(client.QueryStartDate) != scoresWindowStart || query.Get(client.QueryEndDate) != "2026-01-02" {
+		t.Errorf("query = %v, want the window", query)
+	}
+
+	if _, err := newNutrition(t, h).SummaryRange(t.Context(), h.session, client.DateRange{}); !errors.Is(
+		err, client.ErrValidation) {
+		t.Errorf("SummaryRange() without a window = %v, want ErrValidation", err)
+	}
+}
