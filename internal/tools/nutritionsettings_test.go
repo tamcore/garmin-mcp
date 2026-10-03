@@ -10,8 +10,7 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/testkit"
 )
 
-const settingsBodyFixture = `{"activeDailyCalories":2200,"activeDailyCarbohydrateGrams":250,` +
-	`"activeDailyFatGrams":70,"activeDailyProteinGrams":140}`
+const settingsBodyFixture = `{"calorieGoal":2200,"macroGoals":{"carbs":250,"fat":70,"protein":140}}`
 
 func nutritionSettingsScript(behaviors ...testkit.Behavior) testkit.Script {
 	return testkit.NewScript().With(client.PathNutritionSettingsPrefix+"/"+nutritionTestDate, behaviors...)
@@ -62,8 +61,7 @@ func TestSetNutritionDailySettingsAppliesOnlyTheSuppliedOverride(t *testing.T) {
 	// the same path serves a GET and a PUT in sequence.
 	h := newTrendHarness(t, nutritionSettingsScript(
 		testkit.JSON(http.StatusOK, settingsBodyFixture),
-		testkit.JSON(http.StatusOK, `{"activeDailyCalories":2400,"activeDailyCarbohydrateGrams":250,`+
-			`"activeDailyFatGrams":70,"activeDailyProteinGrams":140}`),
+		testkit.JSON(http.StatusOK, `{"calorieGoal":2400,"macroGoals":{"carbs":250,"fat":70,"protein":140}}`),
 	))
 
 	newGoal := int64(2400)

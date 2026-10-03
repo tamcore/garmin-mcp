@@ -30,10 +30,9 @@ const (
 
 // NutritionSettingsResult is one day's nutrition-goal document.
 //
-// Only the four fields internal/garmin/api's NutritionSettings models are carried:
-// activeDailyCalories, activeDailyCarbohydrateGrams, activeDailyFatGrams and
-// activeDailyProteinGrams (nutrition.py:135-138). Every other field the document may
-// carry is unmodeled upstream too, so nothing else is invented here.
+// Only the four goals internal/garmin/api's NutritionSettings models are carried:
+// calorieGoal and macroGoals' carbs, fat and protein (nutrition.py:277-284). The
+// argument and result names are the manifest's; only the wire mapping is Garmin's.
 type NutritionSettingsResult struct {
 	Date         string `json:"date" jsonschema:"the day this goal document applies to, YYYY-MM-DD"`
 	CalorieGoal  *int64 `json:"calorie_goal,omitempty" jsonschema:"the daily calorie target in kcal"`
@@ -57,9 +56,9 @@ func newNutritionSettingsResult(date string, settings api.NutritionSettings) Nut
 	return NutritionSettingsResult{
 		Date:         date,
 		CalorieGoal:  optionalInt64(settings.CalorieGoal),
-		CarbsGrams:   optionalInt64(settings.CarbsGrams),
-		FatGrams:     optionalInt64(settings.FatGrams),
-		ProteinGrams: optionalInt64(settings.ProteinGrams),
+		CarbsGrams:   optionalInt64(settings.MacroGoals.Carbs),
+		FatGrams:     optionalInt64(settings.MacroGoals.Fat),
+		ProteinGrams: optionalInt64(settings.MacroGoals.Protein),
 	}
 }
 
