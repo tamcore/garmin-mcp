@@ -91,6 +91,21 @@ func TestGetTrainingReadinessOmitsFieldsADeviceDoesNotRecord(t *testing.T) {
 	}
 }
 
+// TestGetTrainingReadinessReportsADrainedRecoveryClockAsZero proves REACHED_ZERO
+// overrides the stale recoveryTime Garmin keeps (health_wellness.py:40-52).
+func TestGetTrainingReadinessReportsADrainedRecoveryClockAsZero(t *testing.T) {
+	t.Parallel()
+
+	script := testkit.NewScript().With(readinessToolPath(), testkit.JSON(http.StatusOK,
+		`[{"recoveryTime":720,"recoveryTimeChangePhrase":"REACHED_ZERO"}]`))
+	h := newToolHarness(t, script)
+
+	result := h.call(t, ToolGetTrainingReadiness, stressArgs())
+	if got := number(t, entry(t, list(t, result, "entries"), 0), "recovery_time_hours"); got != 0 {
+		t.Errorf("recovery_time_hours = %v, want 0", got)
+	}
+}
+
 // TestGetTrainingReadinessReportsADayWithNoSnapshotAsEmpty proves absence is an answer.
 func TestGetTrainingReadinessReportsADayWithNoSnapshotAsEmpty(t *testing.T) {
 	t.Parallel()
