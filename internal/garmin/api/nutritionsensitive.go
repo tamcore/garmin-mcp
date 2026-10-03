@@ -81,9 +81,9 @@ func (s NutritionSettings) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("model", "nutritionSettings"),
 		slog.String("calorieGoal", presence(s.CalorieGoal.IsSet())),
-		slog.String("carbsGrams", presence(s.CarbsGrams.IsSet())),
-		slog.String("fatGrams", presence(s.FatGrams.IsSet())),
-		slog.String("proteinGrams", presence(s.ProteinGrams.IsSet())),
+		slog.String("carbsGrams", presence(s.MacroGoals.Carbs.IsSet())),
+		slog.String("fatGrams", presence(s.MacroGoals.Fat.IsSet())),
+		slog.String("proteinGrams", presence(s.MacroGoals.Protein.IsSet())),
 		slog.Any("payload", s.raw),
 	)
 }

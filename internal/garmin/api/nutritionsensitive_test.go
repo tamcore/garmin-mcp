@@ -49,8 +49,10 @@ func collectNutritionModels(t *testing.T) map[string]any {
 		MealName: client.NewText("MIDNIGHT_SNACK"),
 	}
 	settings := api.NutritionSettings{
-		CalorieGoal: client.NewNumber(2100), CarbsGrams: client.NewNumber(271),
-		FatGrams: client.NewNumber(79412), ProteinGrams: client.NewNumber(140),
+		CalorieGoal: client.NewNumber(2100),
+		MacroGoals: api.MacroGoals{
+			Carbs: client.NewNumber(271), Fat: client.NewNumber(79412), Protein: client.NewNumber(140),
+		},
 	}
 
 	return map[string]any{

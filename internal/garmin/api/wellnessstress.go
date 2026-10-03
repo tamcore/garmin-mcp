@@ -333,6 +333,7 @@ type Readiness struct {
 	SleepScoreFactorPercent    client.Number `json:"sleepScoreFactorPercent"`
 	SleepScoreFactorFeed       client.Text   `json:"sleepScoreFactorFeedback"`
 	RecoveryTime               client.Number `json:"recoveryTime"`
+	RecoveryTimeChangePhrase   client.Text   `json:"recoveryTimeChangePhrase"`
 	RecoveryTimeFactorPercent  client.Number `json:"recoveryTimeFactorPercent"`
 	RecoveryTimeFactorFeed     client.Text   `json:"recoveryTimeFactorFeedback"`
 	ACWRFactorPercent          client.Number `json:"acwrFactorPercent"`

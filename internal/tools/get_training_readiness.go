@@ -7,7 +7,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tamcore/garmin-mcp/internal/garmin/api"
-	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 	"github.com/tamcore/garmin-mcp/internal/mcpserver"
 	"github.com/tamcore/garmin-mcp/internal/policy"
 )
@@ -149,7 +148,7 @@ func newReadinessEntry(entry api.Readiness) ReadinessEntry {
 		SleepFactorPercent:  optionalInt(entry.SleepScoreFactorPercent),
 		SleepFactorFeedback: optionalText(entry.SleepScoreFactorFeed),
 
-		RecoveryTimeHours:      recoveryHours(entry.RecoveryTime),
+		RecoveryTimeHours:      recoveryHours(entry),
 		RecoveryFactorPercent:  optionalInt(entry.RecoveryTimeFactorPercent),
 		RecoveryFactorFeedback: optionalText(entry.RecoveryTimeFactorFeed),
 
@@ -168,9 +167,10 @@ func newReadinessEntry(entry api.Readiness) ReadinessEntry {
 }
 
 // recoveryHours renders Garmin's recovery time, which it reports in minutes, as hours
-// rounded to one decimal the way upstream rounds it. An absent time stays absent.
-func recoveryHours(minutes client.Number) *float64 {
-	value, ok := minutes.Float64()
+// rounded to one decimal the way upstream rounds it. An absent time stays absent, and
+// a drained recovery clock reports zero.
+func recoveryHours(entry api.Readiness) *float64 {
+	value, ok := entry.RemainingRecoveryMinutes()
 	if !ok {
 		return nil
 	}

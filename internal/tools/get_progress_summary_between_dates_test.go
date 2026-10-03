@@ -2,6 +2,7 @@ package tools
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"testing"
 
@@ -16,12 +17,13 @@ const (
 	typeCycling    = "cycling"
 )
 
-// progressBody is synthetic: three activity types, one of which carries a different
-// metric, so the filter is visible in the result.
-const progressBody = `[{"date":"2026-01-31","countOfActivities":12,"stats":{` +
+// progressBody is synthetic: four activity types, one of which carries a different
+// metric and one of which counts no activity, so the filters are visible in the result.
+const progressBody = `[{"date":"2026-01-31","countOfActivities":99,"stats":{` +
 	`"running":{"distance":{"count":8,"sum":84000.0,"avg":10500.0,"min":5000.0,` +
 	`"max":21000.0}},` +
 	`"cycling":{"distance":{"count":4,"sum":120000.0,"avg":30000.0}},` +
+	`"walking":{"distance":{"count":0,"sum":0.0}},` +
 	`"swimming":{"duration":{"count":2,"sum":3600.0}}}}]`
 
 func progressScript(body string) testkit.Script {
@@ -40,14 +42,16 @@ func TestProgressSummaryReportsOneEntryPerContributingActivityType(t *testing.T)
 		t.Fatalf("readProgressSummary() = %v", err)
 	}
 
-	if !out.HasData || out.Date != trendEnd {
-		t.Errorf("summary = %+v, want data dated %s", out, trendEnd)
+	if !out.HasData {
+		t.Errorf("summary = %+v, want data", out)
 	}
+	// Garmin's own countOfActivities matches neither the activities nor the per-type
+	// counts, so the result sums the counts it reports (training.py:409-411).
 	if out.CountOfActivities == nil || *out.CountOfActivities != 12 {
 		t.Errorf("count_of_activities = %v, want 12", out.CountOfActivities)
 	}
 	if len(out.StatsByActivityType) != 2 {
-		t.Fatalf("stats = %+v, want only the two types carrying distance", out.StatsByActivityType)
+		t.Fatalf("stats = %+v, want only the two types counting distance", out.StatsByActivityType)
 	}
 	// Sorted, so two identical calls report the same list.
 	if out.StatsByActivityType[0].ActivityType != typeCycling {
@@ -63,6 +67,33 @@ func TestProgressSummaryReportsOneEntryPerContributingActivityType(t *testing.T)
 	}
 	if running.Min == nil || running.Max == nil {
 		t.Error("running carried no min or max")
+	}
+}
+
+// TestProgressSummaryReportsCaloriesInKilocalories undoes the factor Garmin stores
+// the calories metric under (training.py:29-41).
+func TestProgressSummaryReportsCaloriesInKilocalories(t *testing.T) {
+	t.Parallel()
+
+	h := newTrendHarness(t, progressScript(`[{"stats":{"running":{"calories":`+
+		`{"count":2,"sum":4190.0,"avg":2095.0,"min":838.0,"max":3352.0}}}}]`))
+	out, err := h.svc.readProgressSummary(h.ctx, getProgressSummaryInput{
+		StartDate: trendStart, EndDate: trendEnd, Metric: "calories",
+	})
+	if err != nil {
+		t.Fatalf("readProgressSummary() = %v", err)
+	}
+	if len(out.StatsByActivityType) != 1 {
+		t.Fatalf("stats = %+v, want one entry", out.StatsByActivityType)
+	}
+	stats := out.StatsByActivityType[0]
+	for name, pair := range map[string]struct {
+		got  *float64
+		want float64
+	}{"sum": {stats.Sum, 1000}, "avg": {stats.Avg, 500}, "min": {stats.Min, 200}, "max": {stats.Max, 800}} {
+		if pair.got == nil || math.Abs(*pair.got-pair.want) > 1e-9 {
+			t.Errorf("%s = %v, want %v kcal", name, pair.got, pair.want)
+		}
 	}
 }
 

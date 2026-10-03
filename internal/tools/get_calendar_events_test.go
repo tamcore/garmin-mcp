@@ -24,7 +24,7 @@ const marchCalendarBody = `{"calendarItems":[` +
 	`{"itemType":"event","title":"` + eventsSeamTitle + `","date":"2026-03-14",` +
 	`"isRace":true,"primaryEvent":true,"subscribed":false,"location":"  Somewhere  ",` +
 	`"url":"https://example.invalid/race","shareableEventUuid":"aaaa-bbbb",` +
-	`"completionTarget":{"unitType":"distance","value":21097.5},` +
+	`"completionTarget":{"unitType":"distance","unit":"kilometer","value":21.0975},` +
 	`"eventTimeLocal":{"startTimeHhMm":"09:30","timeZoneId":"Europe/Berlin"}},` +
 	`{"itemType":"workout","title":"Easy Run","date":"2026-03-15"},` +
 	`{"itemType":"event","title":"Out Of Window","date":"2026-02-20"}]}`

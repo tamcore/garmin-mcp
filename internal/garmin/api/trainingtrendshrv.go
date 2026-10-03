@@ -18,9 +18,9 @@ type HRVBaseline struct {
 
 // HRVSummary is the summary section of the HRV document.
 //
-// LastNightAvg and LastNight are both decoded because upstream reads both spellings:
-// get_hrv_data reads lastNightAvg and get_hrv_trend reads lastNight. Neither is
-// assumed present; NightAverage prefers the documented lastNightAvg and falls back.
+// Upstream's get_hrv_data and get_hrv_trend both read lastNightAvg; the pinned
+// get_hrv_trend read lastNight, so that spelling stays decoded as a fallback. Neither
+// is assumed present; NightAverage prefers lastNightAvg.
 type HRVSummary struct {
 	CalendarDate      *string       `json:"calendarDate"`
 	LastNightAvg      client.Number `json:"lastNightAvg"`

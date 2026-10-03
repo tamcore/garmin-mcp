@@ -78,13 +78,12 @@ func TestMealsDecodesTheMealsWrapper(t *testing.T) {
 }
 
 // TestSettingsDecodesTheFourKnownFields pins the field spellings
-// set_nutrition_daily_settings reads back after a write (nutrition.py:135-138).
+// set_nutrition_daily_settings reads back after a write (nutrition.py:277-284).
 func TestSettingsDecodesTheFourKnownFields(t *testing.T) {
 	t.Parallel()
 
 	script := testkit.NewScript().With(nutritionSettingsPath(), testkit.JSON(http.StatusOK,
-		`{"activeDailyCalories":2200,"activeDailyCarbohydrateGrams":250,`+
-			`"activeDailyFatGrams":70,"activeDailyProteinGrams":140,"planId":"p-1"}`))
+		`{"calorieGoal":2200,"macroGoals":{"carbs":250,"fat":70,"protein":140},"planId":"p-1"}`))
 	h := newHarness(t, script, client.Limits{})
 
 	settings, err := newNutrition(t, h).Settings(t.Context(), h.session, mustDate(t, testCalendarDate))
@@ -94,8 +93,11 @@ func TestSettingsDecodesTheFourKnownFields(t *testing.T) {
 	if calories, ok := settings.CalorieGoal.Int64(); !ok || calories != 2200 {
 		t.Errorf("CalorieGoal = %v/%v, want 2200", calories, ok)
 	}
-	if carbs, ok := settings.CarbsGrams.Int64(); !ok || carbs != 250 {
-		t.Errorf("CarbsGrams = %v/%v, want 250", carbs, ok)
+	if carbs, ok := settings.MacroGoals.Carbs.Int64(); !ok || carbs != 250 {
+		t.Errorf("MacroGoals.Carbs = %v/%v, want 250", carbs, ok)
+	}
+	if protein, ok := settings.MacroGoals.Protein.Int64(); !ok || protein != 140 {
+		t.Errorf("MacroGoals.Protein = %v/%v, want 140", protein, ok)
 	}
 	if settings.Payload().Len() == 0 {
 		t.Error("Settings() retained no raw payload")

@@ -119,12 +119,11 @@ type ProgressMetricStats struct {
 
 // ProgressSummary is one aggregated progress entry.
 //
-// Source: the date, countOfActivities and stats upstream reads off the first element
-// of the response.
+// Source: the stats upstream reads off the first element of the response. Its date
+// and countOfActivities are not decoded: Garmin echoes today's date and a count that
+// matches neither the activities nor the per-type counts (training.py:380-384).
 type ProgressSummary struct {
-	Date              *string                                   `json:"date"`
-	CountOfActivities client.Number                             `json:"countOfActivities"`
-	Stats             map[string]map[string]ProgressMetricStats `json:"stats"`
+	Stats map[string]map[string]ProgressMetricStats `json:"stats"`
 }
 
 // ProgressSummaries is the progress-summary response.

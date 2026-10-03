@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strconv"
 
@@ -22,6 +23,11 @@ const (
 	maxMacroGrams    = 2000
 )
 
+// AdviceTargetDatePassed refuses a settings write over a passed weight-goal target date.
+const AdviceTargetDatePassed = "Nothing was written: the weight goal's target date is not " +
+	"after the requested date. Set a later target date on the weight goal in Garmin " +
+	"Connect, or end the goal, then retry."
+
 // The upstream compatibility names of the two nutrition-settings tools.
 const (
 	ToolGetNutritionDailySettings = "get_nutrition_daily_settings"
@@ -30,10 +36,9 @@ const (
 
 // NutritionSettingsResult is one day's nutrition-goal document.
 //
-// Only the four fields internal/garmin/api's NutritionSettings models are carried:
-// activeDailyCalories, activeDailyCarbohydrateGrams, activeDailyFatGrams and
-// activeDailyProteinGrams (nutrition.py:135-138). Every other field the document may
-// carry is unmodeled upstream too, so nothing else is invented here.
+// Only the four goals internal/garmin/api's NutritionSettings models are carried:
+// calorieGoal and macroGoals' carbs, fat and protein (nutrition.py:277-284). The
+// argument and result names are the manifest's; only the wire mapping is Garmin's.
 type NutritionSettingsResult struct {
 	Date         string `json:"date" jsonschema:"the day this goal document applies to, YYYY-MM-DD"`
 	CalorieGoal  *int64 `json:"calorie_goal,omitempty" jsonschema:"the daily calorie target in kcal"`
@@ -57,9 +62,9 @@ func newNutritionSettingsResult(date string, settings api.NutritionSettings) Nut
 	return NutritionSettingsResult{
 		Date:         date,
 		CalorieGoal:  optionalInt64(settings.CalorieGoal),
-		CarbsGrams:   optionalInt64(settings.CarbsGrams),
-		FatGrams:     optionalInt64(settings.FatGrams),
-		ProteinGrams: optionalInt64(settings.ProteinGrams),
+		CarbsGrams:   optionalInt64(settings.MacroGoals.Carbs),
+		FatGrams:     optionalInt64(settings.MacroGoals.Fat),
+		ProteinGrams: optionalInt64(settings.MacroGoals.Protein),
 	}
 }
 
@@ -237,6 +242,9 @@ func (s *service) setNutritionDailySettings(
 		ProteinGrams: in.ProteinGrams,
 	}
 	settings, err := s.nutrition.SetSettings(ctx, session, day, update)
+	if _, ok := errors.AsType[*api.TargetDatePassedError](err); ok {
+		return SetNutritionSettingsResult{}, &ToolError{Advice: AdviceTargetDatePassed, Err: err}
+	}
 	if err != nil {
 		return SetNutritionSettingsResult{}, fail(err)
 	}

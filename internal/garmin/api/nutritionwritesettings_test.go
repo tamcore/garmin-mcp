@@ -16,8 +16,8 @@ import (
 func TestSetSettingsMergesOntoTheCurrentDocument(t *testing.T) {
 	t.Parallel()
 
-	current := `{"activeDailyCalories":2000,"activeDailyCarbohydrateGrams":220,` +
-		`"activeDailyFatGrams":65,"activeDailyProteinGrams":120,"planId":"p-1"}`
+	current := `{"calorieGoal":2000,"macroGoals":{"carbs":220,"fat":65,"protein":120,"fiber":30},` +
+		`"planId":"p-1"}`
 	script := testkit.NewScript().With(nutritionSettingsPath(),
 		testkit.JSON(http.StatusOK, current),
 		testkit.JSON(http.StatusNoContent, ""))
@@ -33,8 +33,8 @@ func TestSetSettingsMergesOntoTheCurrentDocument(t *testing.T) {
 	if got, ok := settings.CalorieGoal.Int64(); !ok || got != 2200 {
 		t.Errorf("CalorieGoal = %v/%v, want 2200", got, ok)
 	}
-	if got, ok := settings.ProteinGrams.Int64(); !ok || got != 150 {
-		t.Errorf("ProteinGrams = %v/%v, want 150", got, ok)
+	if got, ok := settings.MacroGoals.Protein.Int64(); !ok || got != 150 {
+		t.Errorf("MacroGoals.Protein = %v/%v, want 150", got, ok)
 	}
 
 	// Payload() is the retained raw RESPONSE, and Garmin's acknowledgement has no
@@ -58,21 +58,67 @@ func TestSetSettingsMergesOntoTheCurrentDocument(t *testing.T) {
 	}
 
 	body := decodeBody(t, requests[1].Body)
-	if body["activeDailyCalories"] != float64(2200) {
-		t.Errorf("activeDailyCalories = %v, want 2200", body["activeDailyCalories"])
-	}
-	if body["activeDailyProteinGrams"] != float64(150) {
-		t.Errorf("activeDailyProteinGrams = %v, want 150", body["activeDailyProteinGrams"])
-	}
-	// The untouched fields must survive the merge, including the unmodeled one.
-	if body["activeDailyCarbohydrateGrams"] != float64(220) {
-		t.Errorf("activeDailyCarbohydrateGrams = %v, want 220 (preserved)", body["activeDailyCarbohydrateGrams"])
-	}
-	if body["activeDailyFatGrams"] != float64(65) {
-		t.Errorf("activeDailyFatGrams = %v, want 65 (preserved)", body["activeDailyFatGrams"])
+	if body["calorieGoal"] != float64(2200) {
+		t.Errorf("calorieGoal = %v, want 2200", body["calorieGoal"])
 	}
 	if body["planId"] != "p-1" {
 		t.Errorf("planId = %v, want p-1 (preserved, unmodeled field)", body["planId"])
+	}
+	macros, ok := body["macroGoals"].(map[string]any)
+	if !ok {
+		t.Fatalf("macroGoals = %v, want an object", body["macroGoals"])
+	}
+	want := map[string]any{"carbs": float64(220), "fat": float64(65), "protein": float64(150), "fiber": float64(30)}
+	for key, value := range want {
+		if macros[key] != value {
+			t.Errorf("macroGoals.%s = %v, want %v", key, macros[key], value)
+		}
+	}
+}
+
+// TestSetSettingsBuildsMacroGoalsWhenAbsentOrNull proves a missing or null
+// macroGoals is treated as an empty object, as upstream does (nutrition.py:261-263).
+func TestSetSettingsBuildsMacroGoalsWhenAbsentOrNull(t *testing.T) {
+	t.Parallel()
+
+	for name, current := range map[string]string{
+		"absent":        `{"calorieGoal":2000}`,
+		"explicit null": `{"calorieGoal":2000,"macroGoals":null}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			script := testkit.NewScript().With(nutritionSettingsPath(),
+				testkit.JSON(http.StatusOK, current), testkit.JSON(http.StatusNoContent, ""))
+			h := newHarness(t, script, client.Limits{})
+
+			if _, err := newNutrition(t, h).SetSettings(t.Context(), h.session,
+				mustDate(t, testCalendarDate), api.NutritionSettingsUpdate{FatGrams: new(int64(70))}); err != nil {
+				t.Fatalf("SetSettings() = %v", err)
+			}
+			body := decodeBody(t, h.server.Requests()[1].Body)
+			macros, ok := body["macroGoals"].(map[string]any)
+			if !ok || len(macros) != 1 || macros["fat"] != float64(70) {
+				t.Errorf("macroGoals = %v, want exactly {fat: 70}", body["macroGoals"])
+			}
+		})
+	}
+}
+
+// TestSetSettingsRejectsANonObjectMacroGoals refuses to overwrite a macroGoals
+// value it cannot merge into (nutrition.py:264-265).
+func TestSetSettingsRejectsANonObjectMacroGoals(t *testing.T) {
+	t.Parallel()
+
+	script := testkit.NewScript().With(nutritionSettingsPath(),
+		testkit.JSON(http.StatusOK, `{"calorieGoal":2000,"macroGoals":[1]}`))
+	h := newHarness(t, script, client.Limits{})
+
+	if _, err := newNutrition(t, h).SetSettings(t.Context(), h.session, mustDate(t, testCalendarDate),
+		api.NutritionSettingsUpdate{CarbsGrams: new(int64(200))}); !errors.Is(err, client.ErrMalformedPayload) {
+		t.Errorf("SetSettings() over a non-object macroGoals = %v, want ErrMalformedPayload", err)
+	}
+	if got := len(h.server.Requests()); got != 1 {
+		t.Errorf("the fake received %d requests, want 1 (the read only)", got)
 	}
 }
 

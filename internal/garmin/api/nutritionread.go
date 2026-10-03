@@ -105,19 +105,25 @@ func (n *Nutrition) Meals(
 
 // NutritionSettings is the account's daily nutrition goal document.
 //
-// Only the four fields set_nutrition_daily_settings reads back after a write
-// are modeled (nutrition.py:135-138): activeDailyCalories,
-// activeDailyCarbohydrateGrams, activeDailyFatGrams and
-// activeDailyProteinGrams. Every other field the document may carry — a plan
-// id, a start date, per-meal targets — is unmodeled and preserved only through
-// the retained raw payload, because upstream never names them either.
+// Only the goals set_nutrition_daily_settings reads back after a write are
+// modeled: the top-level calorieGoal and the carbs, fat and protein members of
+// the nested macroGoals object (nutrition.py:277-284). Every
+// other field the document carries is unmodeled and preserved only through the
+// retained raw payload.
 type NutritionSettings struct {
-	CalorieGoal  client.Number `json:"activeDailyCalories"`
-	CarbsGrams   client.Number `json:"activeDailyCarbohydrateGrams"`
-	FatGrams     client.Number `json:"activeDailyFatGrams"`
-	ProteinGrams client.Number `json:"activeDailyProteinGrams"`
+	CalorieGoal client.Number `json:"calorieGoal"`
+	MacroGoals  MacroGoals    `json:"macroGoals"`
+	// TargetDate is the weight goal's target day, which this document also carries.
+	TargetDate client.Text `json:"targetDate"`
 
 	raw client.Payload
+}
+
+// MacroGoals is the settings document's nested macroGoals object.
+type MacroGoals struct {
+	Carbs   client.Number `json:"carbs"`
+	Fat     client.Number `json:"fat"`
+	Protein client.Number `json:"protein"`
 }
 
 // Payload is the retained raw response, which is also the base document

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 )
@@ -15,7 +17,7 @@ import (
 //
 // Source: set_nutrition_daily_settings, which reads the current document,
 // applies only the overrides the caller supplied, and writes the merged
-// result back (nutrition.py:117-139) — Garmin's settings PUT takes the whole
+// result back (nutrition.py:238-268) — Garmin's settings PUT takes the whole
 // document, so an omitted field would otherwise be cleared rather than left
 // alone.
 type NutritionSettingsUpdate struct {
@@ -32,17 +34,6 @@ type NutritionSettingsUpdate struct {
 // isEmpty reports whether the update carries no field to apply.
 func (u NutritionSettingsUpdate) isEmpty() bool {
 	return u.CalorieGoal == nil && u.CarbsGrams == nil && u.FatGrams == nil && u.ProteinGrams == nil
-}
-
-// settingsFieldKeys names the four known keys of the settings document, in the
-// order NutritionSettingsUpdate's fields correspond to them. A function, not a
-// var: AGENTS.md allows no package-level mutable state, and a constant that
-// cannot be a const is a function, never a var.
-func settingsFieldKeys() [4]string {
-	return [4]string{
-		"activeDailyCalories", "activeDailyCarbohydrateGrams",
-		"activeDailyFatGrams", "activeDailyProteinGrams",
-	}
 }
 
 // SetSettings applies a nutrition-goal update for one day.
@@ -76,6 +67,9 @@ func (n *Nutrition) SetSettings(
 	if current.Payload().Len() == 0 {
 		return NutritionSettings{}, unexpected(req, fmt.Errorf(
 			"%w: no current nutrition settings to update", client.ErrMalformedPayload))
+	}
+	if target, ok := passedTargetDate(current.TargetDate, date); ok {
+		return NutritionSettings{}, invalid(req, &TargetDatePassedError{TargetDate: target, Date: date})
 	}
 
 	body, err := mergeSettingsFields(req, current.Payload().Bytes(), update)
@@ -130,18 +124,13 @@ func mergeSettingsFields(
 			client.ErrMalformedPayload))
 	}
 
-	keys := settingsFieldKeys()
-	overrides := [...]*int64{update.CalorieGoal, update.CarbsGrams, update.FatGrams, update.ProteinGrams}
-	for index, value := range overrides {
-		if value == nil {
-			continue
-		}
-		encoded, err := json.Marshal(*value)
+	setGoal(fields, "calorieGoal", update.CalorieGoal)
+	if update.CarbsGrams != nil || update.FatGrams != nil || update.ProteinGrams != nil {
+		macros, err := mergeMacroGoals(req, fields["macroGoals"], update)
 		if err != nil {
-			return nil, invalid(req, fmt.Errorf("%w: nutrition goal could not be encoded",
-				client.ErrValidation))
+			return nil, err
 		}
-		fields[keys[index]] = encoded
+		fields["macroGoals"] = macros
 	}
 
 	body, err := json.Marshal(fields)
@@ -153,4 +142,62 @@ func mergeSettingsFields(
 		return nil, invalid(req, fmt.Errorf("%w: request body exceeds its bound", client.ErrValidation))
 	}
 	return body, nil
+}
+
+// mergeMacroGoals overlays update's macro goals onto the nested macroGoals
+// object, treating an absent or null one as empty.
+func mergeMacroGoals(
+	req client.Request, base json.RawMessage, update NutritionSettingsUpdate,
+) (json.RawMessage, error) {
+	var macros map[string]json.RawMessage
+	if len(base) > 0 {
+		if err := json.Unmarshal(base, &macros); err != nil {
+			return nil, unexpected(req, fmt.Errorf(
+				"%w: the current macroGoals is not a JSON object", client.ErrMalformedPayload))
+		}
+	}
+	if macros == nil {
+		macros = map[string]json.RawMessage{}
+	}
+	setGoal(macros, "carbs", update.CarbsGrams)
+	setGoal(macros, "fat", update.FatGrams)
+	setGoal(macros, "protein", update.ProteinGrams)
+	encoded, err := json.Marshal(macros)
+	if err != nil {
+		return nil, invalid(req, fmt.Errorf("%w: macro goals could not be encoded", client.ErrValidation))
+	}
+	return encoded, nil
+}
+
+// setGoal writes value under key as a JSON integer when it is set.
+func setGoal(fields map[string]json.RawMessage, key string, value *int64) {
+	if value != nil {
+		fields[key] = strconv.AppendInt(nil, *value, 10)
+	}
+}
+
+// TargetDatePassedError refuses a settings write Garmin rejects with a 400: the
+// weight-goal targetDate the document carries must be after the day written.
+type TargetDatePassedError struct {
+	TargetDate client.Date
+	Date       client.Date
+}
+
+func (e *TargetDatePassedError) Error() string {
+	return "the weight goal's targetDate (" + e.TargetDate.String() + ") is not after " +
+		e.Date.String() + ", and Garmin rejects the whole settings update in that case"
+}
+
+// passedTargetDate reports the stored targetDate when it is on or before date. An
+// absent or unparseable value is left for Garmin to judge.
+func passedTargetDate(stored client.Text, date client.Date) (client.Date, bool) {
+	value, ok := stored.Value()
+	if !ok || len(value) < len(time.DateOnly) {
+		return client.Date{}, false
+	}
+	target, err := client.ParseDate(value[:len(time.DateOnly)])
+	if err != nil || target.Time().After(date.Time()) {
+		return client.Date{}, false
+	}
+	return target, true
 }
