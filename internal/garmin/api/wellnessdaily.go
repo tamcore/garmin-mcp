@@ -253,6 +253,44 @@ func (w *WellnessDaily) DailySteps(
 	return all, nil
 }
 
+// DailyStatsEntry is one calendar day of the per-day stats aggregate. It is health
+// data. Source of the wire names: get_stats_range upstream, which keys the day by
+// calendarDate and reads the totals out of the nested values
+// (health_wellness.py:534-555).
+type DailyStatsEntry struct {
+	CalendarDate *string          `json:"calendarDate"`
+	Values       DailyStatsValues `json:"values"`
+}
+
+// DailyStatsValues is the nested aggregate of one day. The CALORIES series fills the
+// three calorie totals and the STEPS series fills TotalSteps.
+type DailyStatsValues struct {
+	TotalCalories   client.Number `json:"totalCalories"`
+	ActiveCalories  client.Number `json:"activeCalories"`
+	RestingCalories client.Number `json:"restingCalories"`
+	TotalSteps      client.Number `json:"totalSteps"`
+}
+
+// StatsRange reads one series of the per-day stats aggregate for an inclusive window.
+func (w *WellnessDaily) StatsRange(
+	ctx context.Context, session client.Session, span client.DateRange, statsType client.StatsType,
+) ([]DailyStatsEntry, error) {
+	req := w.rangeRequest(client.OpGetStatsRange, client.EndpointDailyStats,
+		client.PathDailyStatsPrefix, span)
+	req.Query = url.Values{client.QueryStatsType: {string(statsType)}}
+	if err := requireWindow(req, w.req.limits(), span); err != nil {
+		return nil, err
+	}
+
+	var out struct {
+		Values client.List[DailyStatsEntry] `json:"values"`
+	}
+	if _, err := w.req.read(ctx, session, req, &out); err != nil {
+		return nil, err
+	}
+	return out.Values.Items(), nil
+}
+
 // WeeklySteps reads the weekly step aggregate for the given number of weeks ending
 // at end.
 func (w *WellnessDaily) WeeklySteps(

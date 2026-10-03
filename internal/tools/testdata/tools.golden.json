@@ -14269,6 +14269,123 @@
     }
   },
   {
+    "name": "get_stats_range",
+    "tier": "read-only",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Get daily calories and steps for a window"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "end_date": {
+          "description": "the last calendar day of the window, inclusive, in YYYY-MM-DD form. The window must not exceed 28 days, Garmin's own limit for this endpoint",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "the first calendar day of the window, in YYYY-MM-DD form. The window must not exceed 28 days, Garmin's own limit for this endpoint",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "end_date",
+        "start_date"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "description": "how many rows this result carries",
+          "type": "integer"
+        },
+        "days": {
+          "description": "one row per day of the window, oldest first",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "active_calories": {
+                "description": "the day's active calories",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              },
+              "date": {
+                "description": "the calendar day, YYYY-MM-DD",
+                "type": "string"
+              },
+              "has_data": {
+                "description": "whether Garmin returned anything for the day",
+                "type": "boolean"
+              },
+              "is_partial": {
+                "description": "whether the day is today and still accumulating",
+                "type": "boolean"
+              },
+              "resting_calories": {
+                "description": "the day's resting calories",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              },
+              "steps": {
+                "description": "the day's total steps",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "total_calories": {
+                "description": "the day's total calories",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              }
+            },
+            "required": [
+              "date",
+              "has_data",
+              "is_partial"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "end_date": {
+          "description": "the inclusive last day, YYYY-MM-DD",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "the inclusive first day, YYYY-MM-DD",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start_date",
+        "end_date",
+        "days",
+        "count"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "get_steps_data",
     "tier": "read-only",
     "annotations": {

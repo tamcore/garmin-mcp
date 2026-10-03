@@ -55,6 +55,7 @@ var wantReadOnlyToolNames = []string{
 	tools.ToolGetBodyComposition,
 	tools.ToolGetStepsData,
 	tools.ToolGetDailySteps,
+	tools.ToolGetStatsRange,
 	tools.ToolGetWeeklySteps,
 	tools.ToolGetFloors,
 	tools.ToolGetWeeklyIntensityMinutes,

@@ -106,6 +106,7 @@ func readOnlyRegistrations() []registration {
 		{getBodyCompositionContract, registerGetBodyComposition},
 		{getStepsDataContract, registerGetStepsData},
 		{getDailyStepsContract, registerGetDailySteps},
+		{getStatsRangeContract, registerGetStatsRange},
 		{getWeeklyStepsContract, registerGetWeeklySteps},
 		{getFloorsContract, registerGetFloors},
 		{getWeeklyIntensityMinutesContract, registerGetWeeklyIntensityMinutes},

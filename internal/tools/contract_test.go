@@ -75,6 +75,7 @@ func additionsBeyondTheManifest() map[string]string {
 		tools.ToolDownloadCourseGPX:               "post-pin upstream addition: course rendered as GPX",
 		tools.ToolGetActivityFITMessages:          "post-pin upstream addition: generic FIT message inspection",
 		tools.ToolGetNutritionSummaryBetweenDates: "post-pin upstream addition: per-day nutrition totals over a window",
+		tools.ToolGetStatsRange:                   "post-pin upstream addition: per-day calories and steps over a window",
 	}
 }
 

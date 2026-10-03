@@ -69,7 +69,15 @@ func newToolHarnessWith(t *testing.T, script testkit.Script, limits client.Limit
 	t.Helper()
 
 	fake := testkit.NewServer(t, script)
-	return toolHarness{fake: fake, session: connectHarness(t, newHarnessServer(t, fake, limits))}
+	return toolHarness{fake: fake, session: connectHarness(t, newHarnessServer(t, fake, limits, nil))}
+}
+
+// newToolHarnessAt is newToolHarness with the service clock injected.
+func newToolHarnessAt(t *testing.T, script testkit.Script, now func() time.Time) toolHarness {
+	t.Helper()
+
+	fake := testkit.NewServer(t, script)
+	return toolHarness{fake: fake, session: connectHarness(t, newHarnessServer(t, fake, client.Limits{}, now))}
 }
 
 // connectHarness runs the server and returns a connected client session, registering
@@ -102,7 +110,9 @@ func connectHarness(t *testing.T, server *mcpserver.Server) *mcp.ClientSession {
 }
 
 // newHarnessServer builds the real registrar over the fake Garmin service.
-func newHarnessServer(t *testing.T, fake *testkit.Server, limits client.Limits) *mcpserver.Server {
+func newHarnessServer(
+	t *testing.T, fake *testkit.Server, limits client.Limits, now func() time.Time,
+) *mcpserver.Server {
 	t.Helper()
 
 	rc, err := client.New(client.Config{
@@ -114,7 +124,7 @@ func newHarnessServer(t *testing.T, fake *testkit.Server, limits client.Limits) 
 	if err != nil {
 		t.Fatalf("client.New() = %v", err)
 	}
-	registrar, err := New(Deps{Client: rc, Caller: harnessCaller{doer: fake.Doer()}})
+	registrar, err := New(Deps{Client: rc, Caller: harnessCaller{doer: fake.Doer()}, Now: now})
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

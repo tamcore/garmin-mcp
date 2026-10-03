@@ -165,6 +165,7 @@ func healthShapes() map[string][]string {
 			"hourly_averages", "hourly_average_count", "hourly_truncated",
 		},
 		tools.ToolGetDailySteps:    {argStartDate, argEndDate, keyDays, keyCount, keyTruncated},
+		tools.ToolGetStatsRange:    {argStartDate, argEndDate, keyDays, keyCount},
 		tools.ToolGetBodyBattery:   {argStartDate, argEndDate, keyCount, keyTruncated, keyDays},
 		tools.ToolGetBloodPressure: {argStartDate, argEndDate, "readings", keyCount, keyTruncated},
 		tools.ToolGetWeeklySteps: {

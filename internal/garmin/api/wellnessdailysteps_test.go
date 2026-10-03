@@ -275,3 +275,45 @@ func TestWellnessDailyDailyStepsDecodesTheFlatDayRecord(t *testing.T) {
 		t.Error("StepGoal must report absent for a record that carried no such field")
 	}
 }
+
+// TestWellnessDailyStatsRangeDecodesTheValues pins the path, the statsType query and
+// the field spellings get_stats_range reads (health_wellness.py:527-555).
+func TestWellnessDailyStatsRangeDecodesTheValues(t *testing.T) {
+	t.Parallel()
+
+	path := client.PathDailyStatsPrefix + "/2026-01-30/2026-01-31"
+	script := testkit.NewScript().With(path, testkit.JSON(http.StatusOK,
+		`{"values":[{"calendarDate":"2026-01-30","values":`+
+			`{"totalCalories":2500,"activeCalories":600,"restingCalories":1900,"totalSteps":9000}}]}`))
+	h := newHarness(t, script, client.Limits{})
+	span, err := client.NewDateRange(mustDate(t, "2026-01-30"), mustDate(t, testCalendarDate))
+	if err != nil {
+		t.Fatalf("NewDateRange() = %v", err)
+	}
+
+	got, err := newWellnessDaily(t, h).StatsRange(t.Context(), h.session, span, client.StatsTypeCalories)
+	if err != nil {
+		t.Fatalf("StatsRange() = %v", err)
+	}
+	if len(got) != 1 || got[0].CalendarDate == nil || *got[0].CalendarDate != "2026-01-30" {
+		t.Fatalf("StatsRange() = %+v, want the one dated entry", got)
+	}
+	values := got[0].Values
+	if total, _ := values.TotalCalories.Float64(); total != 2500 {
+		t.Errorf("totalCalories = %v, want 2500", total)
+	}
+	if resting, _ := values.RestingCalories.Float64(); resting != 1900 {
+		t.Errorf("restingCalories = %v, want 1900", resting)
+	}
+	if steps, _ := values.TotalSteps.Float64(); steps != 9000 {
+		t.Errorf("totalSteps = %v, want 9000", steps)
+	}
+	if query := h.server.Requests()[0].Query.Get(client.QueryStatsType); query != string(client.StatsTypeCalories) {
+		t.Errorf("statsType = %q, want %q", query, client.StatsTypeCalories)
+	}
+
+	if _, err := newWellnessDaily(t, h).StatsRange(t.Context(), h.session, client.DateRange{},
+		client.StatsTypeSteps); !errors.Is(err, client.ErrValidation) {
+		t.Errorf("StatsRange() without a window = %v, want ErrValidation", err)
+	}
+}
