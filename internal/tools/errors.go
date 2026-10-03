@@ -77,6 +77,12 @@ func (e *ToolError) Unwrap() error {
 	return e.Err
 }
 
+// hasStatus reports whether err carries this HTTP status from Garmin.
+func hasStatus(err error, status int) bool {
+	apiErr, ok := errors.AsType[*client.APIError](err)
+	return ok && apiErr.Status == status
+}
+
 // fail wraps a cause in the advice its class deserves.
 func fail(err error) error {
 	return &ToolError{Advice: advise(err), Err: err}

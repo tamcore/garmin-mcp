@@ -9,7 +9,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tamcore/garmin-mcp/internal/garmin/auth"
-	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 	"github.com/tamcore/garmin-mcp/internal/mcpserver"
 	"github.com/tamcore/garmin-mcp/internal/policy"
 )
@@ -73,7 +72,7 @@ func (s *service) garminAuthStatus(ctx context.Context) (GarminAuthStatus, error
 	switch {
 	case errors.Is(err, auth.ErrNoTokens), errors.Is(err, auth.ErrNoRefreshToken):
 		return GarminAuthStatus{Reason: authStatusReasonNoCredentials}, nil
-	case errors.Is(err, auth.ErrRefreshRejected), isUnauthorizedProfile(err):
+	case errors.Is(err, auth.ErrRefreshRejected), hasStatus(err, http.StatusUnauthorized):
 		return GarminAuthStatus{Reason: authStatusReasonRejected}, nil
 	default:
 		return GarminAuthStatus{}, err
@@ -89,9 +88,4 @@ func nonBlankAccount(account *string) *string {
 		return nil
 	}
 	return &trimmed
-}
-
-func isUnauthorizedProfile(err error) bool {
-	apiErr, ok := errors.AsType[*client.APIError](err)
-	return ok && apiErr.Status == http.StatusUnauthorized
 }
