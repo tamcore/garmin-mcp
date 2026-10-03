@@ -67,6 +67,7 @@ var wantReadOnlyToolNames = []string{
 	tools.ToolGetBodyBatteryEvents,
 	tools.ToolGetTrainingReadiness,
 	tools.ToolGetMorningTrainingReadiness,
+	tools.ToolGetRecoveryTimeRemaining,
 	tools.ToolGetAllDayEvents,
 	tools.ToolGetHeartRates,
 	tools.ToolGetHeartRatesSummary,

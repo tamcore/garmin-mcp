@@ -52,6 +52,7 @@ func dayScopedHealthCalls(now time.Time) []sweepCall {
 		{tools.ToolGetBodyBatteryEvents, day},
 		{tools.ToolGetTrainingReadiness, day},
 		{tools.ToolGetMorningTrainingReadiness, day},
+		{tools.ToolGetRecoveryTimeRemaining, day},
 		{tools.ToolGetAllDayEvents, day},
 		{tools.ToolGetHeartRates, day},
 		{tools.ToolGetHeartRatesSummary, day},

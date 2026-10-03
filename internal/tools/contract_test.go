@@ -77,6 +77,7 @@ func additionsBeyondTheManifest() map[string]string {
 		tools.ToolGetNutritionSummaryBetweenDates: "post-pin upstream addition: per-day nutrition totals over a window",
 		tools.ToolGetStatsRange:                   "post-pin upstream addition: per-day calories and steps over a window",
 		tools.ToolCreateRunIntervalWorkout:        "post-pin upstream addition: repeat-based interval run builder",
+		tools.ToolGetRecoveryTimeRemaining:        "post-pin upstream addition: remaining recovery hours with fallbacks",
 	}
 }
 

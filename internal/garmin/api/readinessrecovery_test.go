@@ -34,3 +34,24 @@ func TestReadinessRemainingRecoveryMinutes(t *testing.T) {
 		}
 	}
 }
+
+// TestLatestReadinessPicksTheNewestSnapshot pins the ordering key: timestampLocal,
+// else timestamp (health_wellness.py:58-61).
+func TestLatestReadinessPicksTheNewestSnapshot(t *testing.T) {
+	t.Parallel()
+
+	var entries []api.Readiness
+	body := `[{"timestampLocal":"2026-01-31T07:00:00.0","recoveryTime":1},` +
+		`{"timestamp":"2026-01-31T09:00:00.0","recoveryTime":2},` +
+		`{"timestampLocal":"2026-01-31T08:00:00.0","recoveryTime":3}]`
+	if err := json.Unmarshal([]byte(body), &entries); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	latest, ok := api.LatestReadiness(entries)
+	if minutes, _ := latest.RecoveryTime.Float64(); !ok || minutes != 2 {
+		t.Errorf("LatestReadiness() = %v/%v, want the 09:00 snapshot", minutes, ok)
+	}
+	if _, ok := api.LatestReadiness(nil); ok {
+		t.Error("LatestReadiness(nil) reported a snapshot")
+	}
+}

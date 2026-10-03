@@ -120,6 +120,7 @@ func readOnlyRegistrations() []registration {
 		{getBodyBatteryEventsContract, registerGetBodyBatteryEvents},
 		{getTrainingReadinessContract, registerGetTrainingReadiness},
 		{getMorningTrainingReadinessContract, registerGetMorningTrainingReadiness},
+		{getRecoveryTimeRemainingContract, registerGetRecoveryTimeRemaining},
 		{getAllDayEventsContract, registerGetAllDayEvents},
 
 		// Health and wellness: cardio, respiration and the logged reads.

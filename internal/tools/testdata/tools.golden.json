@@ -12152,6 +12152,85 @@
     }
   },
   {
+    "name": "get_recovery_time_remaining",
+    "tier": "read-only",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Get remaining recovery time"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "description": "the day to read; today when omitted, in YYYY-MM-DD form",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "activity_id": {
+          "description": "the activity whose recovery time was decayed",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "date": {
+          "description": "the day that was asked for, YYYY-MM-DD",
+          "type": "string"
+        },
+        "note": {
+          "description": "why no recovery time is reported",
+          "type": "string"
+        },
+        "readiness_level": {
+          "description": "the readiness level of the snapshot",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "readiness_score": {
+          "description": "the readiness score of the snapshot",
+          "type": [
+            "null",
+            "number"
+          ]
+        },
+        "remaining_hours": {
+          "description": "recovery hours still to run, to 0.1 h",
+          "type": [
+            "null",
+            "number"
+          ]
+        },
+        "source": {
+          "description": "where the recovery time came from",
+          "type": "string"
+        },
+        "state": {
+          "description": "recovered, nearly_recovered, recovering, not_recovered, unavailable",
+          "type": "string"
+        }
+      },
+      "required": [
+        "date",
+        "state"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "get_respiration_data",
     "tier": "read-only",
     "annotations": {

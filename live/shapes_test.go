@@ -131,6 +131,7 @@ func healthShapes() map[string][]string {
 		tools.ToolGetStressSummary:            {argDate, keyHasData, "data_points_count"},
 		tools.ToolGetTrainingReadiness:        {argDate, keyCount, keyTruncated, keyEntries},
 		tools.ToolGetMorningTrainingReadiness: {argDate, keyHasData, "from_wakeup_reset"},
+		tools.ToolGetRecoveryTimeRemaining:    {argDate, "state"},
 		tools.ToolGetHeartRatesSummary:        {argDate, keyHasData, "data_points_count"},
 		tools.ToolGetRestingHeartRateDay:      {argDate, keyHasData},
 		tools.ToolGetRespirationSummary:       {argDate, keyHasData},
