@@ -179,6 +179,7 @@ func readOnlyRegistrations() []registration {
 
 		// Nutrition: the reads.
 		{getNutritionDailyFoodLogContract, registerGetNutritionDailyFoodLog},
+		{getNutritionSummaryBetweenDatesContract, registerGetNutritionSummaryBetweenDates},
 		{getNutritionDailyMealsContract, registerGetNutritionDailyMeals},
 		{getNutritionDailySettingsContract, registerGetNutritionDailySettings},
 		{searchFoodsContract, registerSearchFoods},

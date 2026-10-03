@@ -16,6 +16,7 @@ func TestNutritionConstantsHaveTheirPinnedValues(t *testing.T) {
 		{client.PathNutritionFoodLogPrefix, "/nutrition-service/food/logs"},
 		{client.PathNutritionFoodLogs, "/nutrition-service/food/logs"},
 		{client.PathNutritionFoodLogQuickAdd, "/nutrition-service/food/logs/quickAdd"},
+		{client.PathNutritionFoodLogRange, "/nutrition-service/food/logs/range"},
 		{client.PathNutritionMealsPrefix, "/nutrition-service/meals"},
 		{client.PathNutritionSettingsPrefix, "/nutrition-service/settings"},
 		{client.PathNutritionFoodSearch, "/nutrition-service/food/search"},
@@ -73,6 +74,7 @@ func TestNutritionConstantsHaveTheirPinnedValues(t *testing.T) {
 	}{
 		{client.EndpointNutritionFoodLog, "connectapi.nutrition.food_log"},
 		{client.EndpointNutritionFoodLogQuickAdd, "connectapi.nutrition.food_log_quick_add"},
+		{client.EndpointNutritionFoodLogRange, "connectapi.nutrition.food_log_range"},
 		{client.EndpointNutritionMeals, "connectapi.nutrition.meals"},
 		{client.EndpointNutritionSettings, "connectapi.nutrition.settings"},
 		{client.EndpointNutritionFoodSearch, "connectapi.nutrition.food_search"},
@@ -93,6 +95,7 @@ func TestNutritionConstantsHaveTheirPinnedValues(t *testing.T) {
 		want string
 	}{
 		{client.OpGetNutritionDailyFoodLog, "get_nutrition_daily_food_log"},
+		{client.OpGetNutritionSummaryRange, "get_nutrition_summary_between_dates"},
 		{client.OpGetNutritionDailyMeals, "get_nutrition_daily_meals"},
 		{client.OpGetNutritionDailySettings, "get_nutrition_daily_settings"},
 		{client.OpSetNutritionDailySettings, "set_nutrition_daily_settings"},

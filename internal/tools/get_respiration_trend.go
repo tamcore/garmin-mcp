@@ -67,7 +67,7 @@ func getRespirationTrendContract() Contract {
 			Category:    categoryHealth,
 			Annotations: readOnlyAnnotations(),
 		},
-		Schema: NewSchema(trendWindowProperties(MaxRespirationTrendDays)...),
+		Schema: NewSchema(trendWindowProperties(MaxRespirationTrendDays, reasonReadsPerDay)...),
 	}
 }
 

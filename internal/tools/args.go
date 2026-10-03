@@ -109,12 +109,18 @@ func parseCappedWindow(
 	return parseWindow(startValue, endValue, limits)
 }
 
-// trendWindowProperties declares the start and end arguments every trend tool takes,
-// naming the tool's own maximum in the description so the bound is visible to a client
-// before it builds the call.
-func trendWindowProperties(maxDays int) []Property {
+// The reasons a capped window states for its bound.
+const (
+	reasonReadsPerDay    = "because this tool reads Garmin once per day"
+	reasonEndpointLimits = "Garmin's own limit for this endpoint"
+)
+
+// trendWindowProperties declares the start and end arguments of a capped window,
+// naming the maximum and its reason in the description so the bound is visible to a
+// client before it builds the call.
+func trendWindowProperties(maxDays int, reason string) []Property {
 	limit := ", in YYYY-MM-DD form. The window must not exceed " + strconv.Itoa(maxDays) +
-		" days, because this tool reads Garmin once per day"
+		" days, " + reason
 	return []Property{
 		trendDateProperty("start_date", "the first calendar day of the window"+limit),
 		trendDateProperty("end_date", "the last calendar day of the window, inclusive"+limit),

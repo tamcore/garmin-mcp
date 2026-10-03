@@ -100,6 +100,7 @@ var wantReadOnlyToolNames = []string{
 
 	// Nutrition reads and the challenge surface.
 	tools.ToolGetNutritionDailyFoodLog,
+	tools.ToolGetNutritionSummaryBetweenDates,
 	tools.ToolGetNutritionDailyMeals,
 	tools.ToolGetNutritionDailySettings,
 	tools.ToolSearchFoods,

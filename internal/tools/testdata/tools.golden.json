@@ -11313,6 +11313,125 @@
     }
   },
   {
+    "name": "get_nutrition_summary_between_dates",
+    "tier": "read-only",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Get nutrition totals for a window"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "end_date": {
+          "description": "the last calendar day of the window, inclusive, in YYYY-MM-DD form. The window must not exceed 61 days, Garmin's own limit for this endpoint",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "the first calendar day of the window, in YYYY-MM-DD form. The window must not exceed 61 days, Garmin's own limit for this endpoint",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "end_date",
+        "start_date"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "description": "how many days this result carries",
+          "type": "integer"
+        },
+        "days": {
+          "description": "one entry per day Garmin returned",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "calories": {
+                "description": "the day's logged calories",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              },
+              "carbs": {
+                "description": "the day's logged carbohydrates in grams",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              },
+              "date": {
+                "description": "the calendar day, YYYY-MM-DD",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "fat": {
+                "description": "the day's logged fat in grams",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              },
+              "item_count": {
+                "description": "how many food items the day logged; 0 means nothing was logged",
+                "type": "integer"
+              },
+              "protein": {
+                "description": "the day's logged protein in grams",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              }
+            },
+            "required": [
+              "item_count"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "end_date": {
+          "description": "the inclusive last day, YYYY-MM-DD",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "the inclusive first day, YYYY-MM-DD",
+          "type": "string"
+        },
+        "truncated": {
+          "description": "whether Garmin returned more days than the window holds",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "start_date",
+        "end_date",
+        "days",
+        "count",
+        "truncated"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "get_personal_record",
     "tier": "read-only",
     "annotations": {

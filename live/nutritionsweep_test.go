@@ -28,6 +28,7 @@ func nutritionCalls(now time.Time) []sweepCall {
 
 	return []sweepCall{
 		{tools.ToolGetNutritionDailyFoodLog, day},
+		{tools.ToolGetNutritionSummaryBetweenDates, sweepWindow(now)},
 		{tools.ToolGetNutritionDailyMeals, day},
 		{tools.ToolGetNutritionDailySettings, day},
 		{tools.ToolSearchFoods, map[string]any{argQuery: sweepFoodQuery}},

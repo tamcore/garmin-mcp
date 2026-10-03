@@ -75,7 +75,7 @@ func getHRVTrendContract() Contract {
 			Category:    categoryHealth,
 			Annotations: readOnlyAnnotations(),
 		},
-		Schema: NewSchema(trendWindowProperties(MaxHRVTrendDays)...),
+		Schema: NewSchema(trendWindowProperties(MaxHRVTrendDays, reasonReadsPerDay)...),
 	}
 }
 
