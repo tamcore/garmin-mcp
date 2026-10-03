@@ -227,7 +227,7 @@ func (w *WellnessDaily) DailySteps(
 ) ([]DailyStepsEntry, error) {
 	probe := w.rangeRequest(client.OpGetDailySteps, client.EndpointDailyStepsStats,
 		client.PathDailyStepsStatsPrefix, span)
-	if err := w.requireWindow(probe, span); err != nil {
+	if err := requireWindow(probe, w.req.limits(), span); err != nil {
 		return nil, err
 	}
 
@@ -284,7 +284,7 @@ func (w *WellnessDaily) WeeklyIntensityMinutes(
 	req := w.rangeRequest(client.OpGetWeeklyIntensityMinutes,
 		client.EndpointWeeklyIntensityMinutesStats,
 		client.PathWeeklyIntensityMinutesStatsPrefix, span)
-	if err := w.requireWindow(req, span); err != nil {
+	if err := requireWindow(req, w.req.limits(), span); err != nil {
 		return nil, err
 	}
 
@@ -302,16 +302,4 @@ func (w *WellnessDaily) rangeRequest(
 ) client.Request {
 	return readRequest(op, endpoint,
 		prefix+"/"+span.Start().String()+"/"+span.End().String(), nil)
-}
-
-// requireWindow refuses an unset or oversized window before anything is dispatched.
-func (w *WellnessDaily) requireWindow(req client.Request, span client.DateRange) error {
-	if span.IsZero() {
-		return invalid(req, fmt.Errorf("%w: a date window is required for this endpoint",
-			client.ErrValidation))
-	}
-	if err := w.req.limits().ValidateDateRange(span); err != nil {
-		return invalid(req, err)
-	}
-	return nil
 }

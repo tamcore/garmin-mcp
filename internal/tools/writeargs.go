@@ -245,6 +245,23 @@ func boundedCount(field string, count, limit int) error {
 	return nil
 }
 
+// boundCheck is one numeric argument and its declared bounds.
+type boundCheck struct {
+	field     string
+	value     float64
+	low, high float64
+}
+
+// checkBounds refuses the first argument outside its declared bounds.
+func checkBounds(checks []boundCheck) error {
+	for _, check := range checks {
+		if err := inRange(check.field, check.value, check.low, check.high); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // inRange refuses a numeric argument outside its declared bounds.
 func inRange(field string, value, low, high float64) error {
 	if value < low || value > high {

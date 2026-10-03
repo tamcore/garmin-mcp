@@ -101,6 +101,40 @@ func parseWindow(startValue, endValue string, limits client.Limits) (client.Date
 	return span, nil
 }
 
+// parseCappedWindow is parseWindow for a tool that caps the window at maxDays.
+func parseCappedWindow(
+	startValue, endValue string, limits client.Limits, maxDays int,
+) (client.DateRange, error) {
+	limits.MaxDateRangeDays = min(limits.MaxDateRangeDays, maxDays)
+	return parseWindow(startValue, endValue, limits)
+}
+
+// trendWindowProperties declares the start and end arguments every trend tool takes,
+// naming the tool's own maximum in the description so the bound is visible to a client
+// before it builds the call.
+func trendWindowProperties(maxDays int) []Property {
+	limit := ", in YYYY-MM-DD form. The window must not exceed " + strconv.Itoa(maxDays) +
+		" days, because this tool reads Garmin once per day"
+	return []Property{
+		trendDateProperty("start_date", "the first calendar day of the window"+limit),
+		trendDateProperty("end_date", "the last calendar day of the window, inclusive"+limit),
+	}
+}
+
+// trendDateProperty is dateProperty with the description passed through verbatim, so a
+// window can state its own bound after the date form.
+func trendDateProperty(name, description string) Property {
+	return Property{
+		Name:        name,
+		Types:       []string{typeString},
+		Description: description,
+		Format:      formatDate,
+		Pattern:     patternCalendarDate,
+		MaxLength:   new(maxDateArgumentLen),
+		Required:    true,
+	}
+}
+
 // parseActivityTypeFilter validates the optional activity-type filter. An empty value
 // is the unfiltered zero value, matching upstream's optional parameter.
 func parseActivityTypeFilter(value string) (api.ActivityType, error) {

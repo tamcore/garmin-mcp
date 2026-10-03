@@ -72,7 +72,7 @@ func (w *WellnessDaily) bodyComposition(
 	query.Set(client.QueryEndDate, span.End().String())
 	req := readRequest(op, client.EndpointBodyComposition, client.PathBodyComposition, query)
 
-	if err := w.requireWindow(req, span); err != nil {
+	if err := requireWindow(req, w.req.limits(), span); err != nil {
 		return BodyComposition{}, err
 	}
 

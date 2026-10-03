@@ -161,23 +161,13 @@ func buildWalkRunWorkout(in createWalkRunWorkoutInput) (api.WorkoutDocument, err
 
 // validateWalkRunBounds checks every numeric argument against its declared bound.
 func validateWalkRunBounds(in createWalkRunWorkoutInput) error {
-	checks := []struct {
-		field     string
-		value     float64
-		low, high float64
-	}{
+	return checkBounds([]boundCheck{
 		{argNameRunSeconds, float64(in.RunSeconds), 1, maxIntervalSeconds},
 		{"walk_seconds", float64(in.WalkSeconds), 1, maxIntervalSeconds},
 		{"repeats", float64(in.Repeats), 1, maxRepeats},
 		{argNameWarmupMin, float64(in.WarmupMin), 0, maxBlockMinutes},
 		{argNameCooldownMin, float64(in.CooldownMin), 0, maxBlockMinutes},
-	}
-	for _, check := range checks {
-		if err := inRange(check.field, check.value, check.low, check.high); err != nil {
-			return err
-		}
-	}
-	return nil
+	})
 }
 
 // addBlock appends a warmup or cooldown block, skipping a zero-length one rather than

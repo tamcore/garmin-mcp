@@ -82,6 +82,18 @@ func readRequest(op client.Op, endpoint client.Endpoint, path string, query url.
 	}
 }
 
+// requireWindow refuses an unset or oversized window before anything is dispatched.
+func requireWindow(req client.Request, limits client.Limits, span client.DateRange) error {
+	if span.IsZero() {
+		return invalid(req, fmt.Errorf("%w: a date window is required for this endpoint",
+			client.ErrValidation))
+	}
+	if err := limits.ValidateDateRange(span); err != nil {
+		return invalid(req, err)
+	}
+	return nil
+}
+
 // activitySegmentPath builds a per-activity path. The identifier is a validated
 // client.ID, so it is decimal digits only and can carry no path separator.
 func activitySegmentPath(id client.ID, segment string) string {
