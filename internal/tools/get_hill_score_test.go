@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"maps"
 	"net/http"
-	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -276,7 +274,7 @@ func TestHillScoreLogValueReportsShapeOnly(t *testing.T) {
 }
 
 // TestTrainingScoresContractsMatchTheManifest pins the seven contracts against
-// compat/tools.json now, before register.go lists them.
+// the pinned upstream manifest.
 //
 // The package contract test covers only what Contracts() returns, and that is built
 // from register.go. Until these seven are wired there, this is what keeps their names,
@@ -311,10 +309,7 @@ type scoresManifestEntry struct {
 func loadScoresManifest(t *testing.T) map[string]scoresManifestEntry {
 	t.Helper()
 
-	raw, err := os.ReadFile(filepath.Join("..", "..", "compat", "tools.json"))
-	if err != nil {
-		t.Fatalf("reading the manifest: %v", err)
-	}
+	raw := testkit.PrivateManifest(t, "tools.json")
 	var manifest struct {
 		Tools []scoresManifestEntry `json:"tools"`
 	}

@@ -111,9 +111,10 @@
 // attempted exactly once: the sink already holds the failed attempt's bytes, so a
 // retry could only corrupt it. This package never opens, creates or names a file.
 //
-// # Documented gaps
+// # Not in this package
 //
-//   - Multipart upload, which activity and course file import need.
+//   - Multipart body encoding, which internal/garmin/api builds for course and FIT
+//     uploads.
 //   - The JWT_WEB cookie fallback and any non-DI authentication, which stay with
 //     internal/garmin/auth.
 //   - Per-endpoint response caching and per-principal rate limiting, which belong to

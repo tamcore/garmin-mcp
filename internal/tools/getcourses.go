@@ -14,12 +14,12 @@ import (
 const ToolGetCourses = "get_courses"
 
 // maxCourses bounds the returned course listing. Not one of deps.go's Bounds
-// fields: this is the one tool in this slice that reads a list, and a local
-// bound keeps deps.go's shared Bounds struct untouched.
+// fields: this is the one course tool that reads a list, so the bound stays
+// local to it.
 const maxCourses = 500
 
 // CourseSummary is one course get_courses reports, matching
-// compat/tools.json's curated shape.
+// the pinned upstream manifest's curated shape.
 type CourseSummary struct {
 	CourseID            *int64   `json:"course_id,omitempty" jsonschema:"the course identifier"`
 	Name                *string  `json:"name,omitempty" jsonschema:"the course name"`

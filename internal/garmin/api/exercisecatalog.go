@@ -12,8 +12,8 @@ import (
 
 // The strength-exercise catalog: the published one read by [LoadExerciseCatalog],
 // and the compiled-in subset it falls back to. Which answered is reported by
-// [ExerciseCatalog.Source]; why the published document is preferred, and what the
-// one web-tier read is allowed to do, is in docs/parity.md.
+// [ExerciseCatalog.Source]. The published document is preferred because it carries
+// values Garmin's web application writes that the FIT enum cannot express.
 //
 // Garmin validates a strength set against its own FIT enum — an unknown category
 // is a 400, a null name under a known category is accepted — which is why

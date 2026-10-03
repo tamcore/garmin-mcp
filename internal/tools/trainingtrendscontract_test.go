@@ -2,8 +2,6 @@ package tools
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"slices"
 	"testing"
 
@@ -18,7 +16,7 @@ import (
 
 // trendManifestPath is the pinned contract these tools take their names, arguments and
 // effects from.
-const trendManifestPath = "../../compat/tools.json"
+const trendManifestPath = "tools.json"
 
 // manifestEntry is the subset of a manifest record these tests enforce.
 type manifestEntry struct {
@@ -31,10 +29,7 @@ type manifestEntry struct {
 func loadTrendManifest(t *testing.T) map[string]manifestEntry {
 	t.Helper()
 
-	raw, err := os.ReadFile(filepath.Clean(trendManifestPath))
-	if err != nil {
-		t.Fatalf("reading %s: %v", trendManifestPath, err)
-	}
+	raw := testkit.PrivateManifest(t, trendManifestPath)
 	var decoded struct {
 		Tools []manifestEntry `json:"tools"`
 	}
@@ -48,7 +43,7 @@ func loadTrendManifest(t *testing.T) map[string]manifestEntry {
 	return byName
 }
 
-// trendContracts is every contract this slice declares, keyed by wire name.
+// trendContracts is every training-trend contract, keyed by wire name.
 func trendContracts() map[string]Contract {
 	contracts := map[string]Contract{}
 	for _, build := range []func() Contract{
@@ -67,9 +62,8 @@ func trendContracts() map[string]Contract {
 	return contracts
 }
 
-// TestTrendContractsMatchTheManifest is the drift test for this slice. It is the check
-// register.go's contract test performs, run here because these tools are not yet in
-// the registration lists.
+// TestTrendContractsMatchTheManifest is the drift test for the training-trend tools,
+// run over this named group.
 func TestTrendContractsMatchTheManifest(t *testing.T) {
 	t.Parallel()
 
@@ -101,12 +95,12 @@ func TestTrendContractsMatchTheManifest(t *testing.T) {
 			t.Errorf("%s: open-world hint is false; Garmin is an open-world API", name)
 		}
 		if contract.Spec.Annotations.Destructive {
-			t.Errorf("%s: destructive hint is true; no tool in this slice is destructive", name)
+			t.Errorf("%s: destructive hint is true; no training-trend tool is destructive", name)
 		}
 	}
 }
 
-// TestOnlyRequestReloadIsAWrite pins the tier split of this slice.
+// TestOnlyRequestReloadIsAWrite pins the tier split of the training-trend tools.
 func TestOnlyRequestReloadIsAWrite(t *testing.T) {
 	t.Parallel()
 
@@ -150,11 +144,8 @@ func requiredNames(schema map[string]any) []string {
 	return names
 }
 
-// trendRegistrar registers this slice's tools and records what landed.
-//
-// register.go does not carry them yet, so this stands in for the tier lists: it proves
-// every contract is one the SDK accepts, and it is what the composition root will do
-// once the eight registration entries are added.
+// trendRegistrar registers the training-trend tools alone and records what landed,
+// proving every contract is one the SDK accepts.
 type trendRegistrar struct {
 	svc   *service
 	names []string
@@ -180,7 +171,7 @@ func (r *trendRegistrar) RegisterTools(registry *mcpserver.Registry) error {
 	return nil
 }
 
-// TestTrendToolsRegister proves every tool of this slice registers with its declared
+// TestTrendToolsRegister proves every training-trend tool registers with its declared
 // schema, in the tier its contract names.
 func TestTrendToolsRegister(t *testing.T) {
 	t.Parallel()

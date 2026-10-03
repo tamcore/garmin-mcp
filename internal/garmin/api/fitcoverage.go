@@ -2,8 +2,7 @@ package api
 
 import "time"
 
-// A fitCoverage reports whether a span's window survived the record bound. See
-// docs/parity.md.
+// A fitCoverage reports whether a span's window survived the record bound.
 type fitCoverage struct {
 	truncated bool
 	last      time.Time

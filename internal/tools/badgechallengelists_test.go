@@ -34,13 +34,11 @@ const (
 	challengeNameLater  = "Later"
 )
 
-// challengesHarness drives the challenges/badges/goals tools ahead of their wiring
-// into register.go's readOnlyRegistrations(): a minimal in-package registrar calls
-// only the register<Name> functions a test names, over the same fake-Garmin harness
-// plumbing harness_internal_test.go already provides (harnessCaller, harnessPrincipal,
-// connectHarness). This lets the whole suite in this file exercise the real
-// middleware chain — policy, the MCP session, structured content — without editing
-// register.go, which is out of scope for this slice.
+// challengesHarness drives the challenges/badges/goals tools in isolation: a minimal
+// in-package registrar calls only the register<Name> functions a test names, over
+// the fake-Garmin harness plumbing harness_internal_test.go provides (harnessCaller,
+// harnessPrincipal, connectHarness), so each test exercises the real middleware
+// chain — policy, the MCP session, structured content — for those tools alone.
 
 // challengesRegistrar registers exactly the register funcs it is given, against one
 // shared service.

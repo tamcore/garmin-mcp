@@ -134,8 +134,8 @@ func cardioHeartRatePath() string {
 	return client.PathDailyHeartRatePrefix + "/" + cardioDisplayName
 }
 
-// cardioRegistrations names every register function this slice adds, so the wiring the
-// composition slice must perform is visible from the tests too.
+// cardioRegistrations names every heart-rate register function, so the tests can
+// drive that group alone.
 func cardioRegistrations() []registration {
 	return []registration{
 		{getHeartRatesContract, registerGetHeartRates},

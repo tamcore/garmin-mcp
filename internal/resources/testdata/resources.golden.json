@@ -1,0 +1,37 @@
+[
+  {
+    "uri": "workout://reference/structure",
+    "name": "get_structure_reference",
+    "title": "Workout structure reference",
+    "description": "Reference guide for workout JSON structure\n\nDocuments valid values for step types, conditions, targets, and sports.\nUse this to understand what values are valid in workout definitions.",
+    "mimeType": "text/plain"
+  },
+  {
+    "uri": "workout://templates/interval-running",
+    "name": "get_interval_template",
+    "title": "Interval running workout template",
+    "description": "Interval running workout template with repeat groups\n\nDemonstrates RepeatGroupDTO for interval training.\nIncludes 6x400m intervals with 2min recovery.",
+    "mimeType": "text/plain"
+  },
+  {
+    "uri": "workout://templates/simple-run",
+    "name": "get_simple_run_template",
+    "title": "Simple run workout template",
+    "description": "Simple run workout template (warmup, run, cooldown)\n\nA basic running workout structure suitable for easy runs.\nModify the endConditionValue to adjust durations.",
+    "mimeType": "text/plain"
+  },
+  {
+    "uri": "workout://templates/strength-circuit",
+    "name": "get_strength_template",
+    "title": "Strength training circuit template",
+    "description": "Strength training circuit template\n\nCircuit-style strength workout with repeat groups.\n3 rounds of 10min work + 2min rest.",
+    "mimeType": "text/plain"
+  },
+  {
+    "uri": "workout://templates/tempo-run",
+    "name": "get_tempo_template",
+    "title": "Tempo run workout template",
+    "description": "Tempo run workout template with heart rate zone target\n\nDemonstrates targeting a specific heart rate zone.\n20min tempo block at HR zone 4.",
+    "mimeType": "text/plain"
+  }
+]

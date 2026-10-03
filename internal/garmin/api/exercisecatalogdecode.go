@@ -8,8 +8,9 @@ import (
 )
 
 // The streaming walk of the published document: each level is opened, read member
-// by member with its bounds applied as the keys arrive, and closed. Why the walk
-// streams rather than unmarshalling whole is in docs/parity.md.
+// by member with its bounds applied as the keys arrive, and closed. It streams so
+// nothing beyond the accepted structure is ever held: a byte cap alone does not
+// bound what a document expands into.
 
 // decodeDocument reads the top-level object and returns the catalog rows its
 // "categories" member declares.

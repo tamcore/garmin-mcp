@@ -129,8 +129,7 @@ func TestAuthCredentialFlagsDoNotExist(t *testing.T) {
 }
 
 // TestAuthReportsTheOutcomeWithoutLeakingTheTransaction keeps the run's capability
-// out of everything a user or a log can see, and proves the command is no longer a
-// declared gap.
+// out of everything a user or a log can see.
 func TestAuthReportsTheOutcomeWithoutLeakingTheTransaction(t *testing.T) {
 	clearGarminEnv(t)
 	stateDir(t)
@@ -140,9 +139,6 @@ func TestAuthReportsTheOutcomeWithoutLeakingTheTransaction(t *testing.T) {
 	for _, stream := range []string{stdout, stderr} {
 		if strings.Contains(stream, "garmin_mcp_login=") {
 			t.Errorf("a stream carries the run cookie:\n%s", stream)
-		}
-		if strings.Contains(stream, "not implemented in this milestone") {
-			t.Errorf("auth still reports itself as unimplemented:\n%s", stream)
 		}
 	}
 }

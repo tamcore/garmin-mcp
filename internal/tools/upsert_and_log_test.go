@@ -100,7 +100,7 @@ func TestUpsertAndLogPropagatesASearchFailureWithoutCreating(t *testing.T) {
 	}
 
 	// The request layer's own bounded retry may repeat the failed GET search, but no
-	// PUT (create) may ever be dispatched: that is the duplicate this fix prevents.
+	// PUT (create) may ever be dispatched: that would create a duplicate.
 	for _, r := range h.fake.Requests() {
 		if r.Path == client.PathNutritionCustomFood && r.Method == http.MethodPut {
 			t.Error("a create (PUT) request was dispatched despite the search failure")

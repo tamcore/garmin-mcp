@@ -46,8 +46,7 @@ const (
 	// problemEnumerationFailed means a directory this command must list to
 	// discover further targets (the key directory, the token records
 	// directory) could not be listed, even after the one-shot recovery
-	// resolveScan attempts. Treating this as "empty" — the bug item 2 in
-	// AGENTS.md's review names — would hide every file inside it from the
+	// resolveScan attempts. Treating this as "empty" would hide every file inside it from the
 	// rest of this command, and from its own exit status.
 	problemEnumerationFailed
 )
@@ -203,8 +202,7 @@ func currentEUID() uint32 {
 // recovery below is never a blind chmod of an unverified path.
 //
 // The recovery is a deliberate, narrow exception to the inspect-everything-
-// then-fix-everything rule the rest of this command follows (see item 6 in
-// AGENTS.md's review): a directory this command cannot read hides every
+// then-fix-everything rule the rest of this command follows: a directory this command cannot read hides every
 // target inside it, so there is no way to even report the rest of the
 // deployment's state — let alone decide whether anything else is
 // structurally unresolved — until the directory itself can be listed. It
@@ -217,7 +215,7 @@ func currentEUID() uint32 {
 //
 // The first attempt goes through applyFix, the same descriptor-based,
 // identity-confirming chmod every other fix in this command uses. That is
-// not enough on its own for the exact case item 2 names: a mode of 0300
+// not enough on its own for an unlistable directory: a mode of 0300
 // (write and execute, no read) cannot be opened at all — Go's os.Root, like
 // opendir(3), needs read access to obtain a directory descriptor — so
 // applyFix itself fails with a permission error before it ever reaches the

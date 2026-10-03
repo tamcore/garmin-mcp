@@ -30,8 +30,7 @@ import (
 // guess.
 //
 // The test drives the real built server over real HTTPS with a bare
-// http.Client. No second MCP SDK is added to this repository (ADR 0002 pins
-// the one that's here); a raw client is also strictly better for this
+// http.Client. No second MCP SDK is added to this repository; a raw client is also strictly better for this
 // property, because it observes the wire directly instead of a library's
 // interpretation of it.
 //

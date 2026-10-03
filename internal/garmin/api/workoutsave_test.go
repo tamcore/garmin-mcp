@@ -157,11 +157,11 @@ func TestUpdateRefusesAnAnswerNamingADifferentWorkout(t *testing.T) {
 // TestUpdateRefusesAnIdentifierOnlyAFloatWouldCallEqual is the same identity check
 // against the two answers a float64 comparison cannot refuse.
 //
-// The identifier used to be compared through Number.Int64, which truncates the float64
-// the payload was parsed into. That accepted an answer naming 18446744.9 for a request
-// addressing 18446744 — a different object under any reading — and, above 2^53, made two
+// Comparing the identifier through Number.Int64 truncates the float64 the payload
+// was parsed into. That would accept an answer naming 18446744.9 for a request
+// addressing 18446744 — a different object under any reading — and, above 2^53, make two
 // identifiers one apart compare equal, so a drifted answer naming the neighbouring
-// workout was reported as the workout the caller had updated. Both shapes are refused
+// workout would be reported as the workout the caller had updated. Both shapes are refused
 // here, on both the direct answer and the read-back that stands in for a 204.
 func TestUpdateRefusesAnIdentifierOnlyAFloatWouldCallEqual(t *testing.T) {
 	t.Parallel()

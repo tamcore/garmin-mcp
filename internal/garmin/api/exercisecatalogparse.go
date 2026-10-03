@@ -100,7 +100,7 @@ func parseExerciseCatalog(reader io.Reader) (*ExerciseCatalog, error) {
 // become the closed set strength writes validate against. Measured against the
 // published document: 33 of 33 required categories and 63 of 98 names (64%), so
 // the floor leaves room for drift. It is recognition, not authentication — the
-// trust anchor is TLS to connect.garmin.com. See docs/parity.md.
+// trust anchor is TLS to connect.garmin.com.
 const (
 	// unknownCategory is the FIT no-category sentinel. It is compiled in and
 	// absent from the published document, so it is the one category not required.

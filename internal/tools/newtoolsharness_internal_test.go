@@ -18,10 +18,10 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/testkit"
 )
 
-// This file extends garmincoach_internal_test.go's own pattern — driving one tool
-// through the real server before register.go carries it — to the write and
-// destructive tiers, which the six courses/data-management tools in this slice both
-// need. It is shared across their test files rather than copied six times.
+// This file extends garmincoach_internal_test.go's pattern — driving one tool
+// through the real server in isolation — to the write and destructive tiers, which
+// the six courses/data-management tools need. It is shared across their test files
+// rather than copied six times.
 
 const newToolsPrincipal = "principal-newtools-0001"
 
@@ -69,8 +69,8 @@ type newToolsRegistration struct {
 	register func(*mcpserver.Registry, *service) error
 }
 
-// newToolsRegistrar registers exactly the tools a test names, so a tool added in
-// this slice can be driven through the real server before register.go carries it.
+// newToolsRegistrar registers exactly the tools a test names, so one tool can be
+// driven through the real server in isolation.
 type newToolsRegistrar struct {
 	svc           *service
 	registrations []newToolsRegistration
@@ -110,8 +110,7 @@ type newToolsServerConfig struct {
 
 // newToolsServer builds a server carrying only the tools cfg names, enabling
 // whichever tiers it uses and granting the matching scopes, so a write or
-// destructive tool in this slice can be driven exactly the way it will be once
-// register.go carries it.
+// destructive tool is driven exactly the way the full registrar serves it.
 func newToolsServer(t *testing.T, svc *service, cfg newToolsServerConfig) *mcpserver.Server {
 	t.Helper()
 

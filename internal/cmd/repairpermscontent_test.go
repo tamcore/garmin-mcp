@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// TestRepairPermissionsNeverBlocksOnAContentOpen is the RED case for item 7:
-// none of this package's other tests distinguish a metadata-only check
+// TestRepairPermissionsNeverBlocksOnAContentOpen exists because none of this package's
+// other tests distinguish a metadata-only check
 // (Lstat, then a descriptor open used only for chmod) from a real content
 // read. A mutant that added an ordinary os.ReadFile(path) somewhere in this
 // command's path — and discarded the bytes — would pass every other test

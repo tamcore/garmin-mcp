@@ -94,8 +94,8 @@ func TestLiveStrengthActivityLifecycle(t *testing.T) {
 // own sub-category enum, and the compiled-in catalog is a documented subset rather
 // than a mirror: it lists names Garmin refuses. These two are checked against the
 // live service, and the rest of the sets name a category with no exercise name,
-// which Garmin accepts under any known parent. See docs/implementation-status.md for
-// the catalog entries that are known not to survive a real write.
+// which Garmin accepts under any known parent. SQUAT / BACK_SQUAT is one compiled-in
+// pair a real write rejects.
 const (
 	categoryBench = "BENCH_PRESS"
 	exerciseBench = "BARBELL_BENCH_PRESS"

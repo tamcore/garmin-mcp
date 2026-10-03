@@ -36,13 +36,10 @@ func TestCheckRotationTargetRefusesATargetAboveTheEnvelopeMaximum(t *testing.T) 
 	}
 }
 
-// TestReportFileStoreResealDoesNotClaimActiveKeyAfterALostRace is the MEDIUM
-// item: a lost race must not be reported the same way as "nothing needed
-// resealing". Before this fix, both store.ResealAlreadyCurrent and what is
-// now store.ResealRaced collapsed into a single changed=false, so the
-// affirmative "the bound principal's record is at the active key version"
-// line printed even when the record had actually just changed under a
-// concurrent writer.
+// TestReportFileStoreResealDoesNotClaimActiveKeyAfterALostRace: a lost race must
+// not be reported the same way as "nothing needed resealing". The affirmative
+// "the bound principal's record is at the active key version" line must not
+// print when the record just changed under a concurrent writer.
 func TestReportFileStoreResealDoesNotClaimActiveKeyAfterALostRace(t *testing.T) {
 	var out bytes.Buffer
 	err := reportFileStoreReseal(&out, store.ResealRaced)

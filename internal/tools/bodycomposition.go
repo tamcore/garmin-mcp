@@ -34,7 +34,7 @@ func nullableBoundedIntegerProperty(name, description string, minimum, maximum f
 
 // nullableBoundedNumberProperty declares a nullable optional number argument
 // bounded to [minimum, maximum]. Unlike nullableBoundedIntegerProperty, a
-// fractional value is accepted: compat/tools.json types metabolic_age
+// fractional value is accepted: the pinned upstream manifest types metabolic_age
 // "number", not "integer".
 func nullableBoundedNumberProperty(name, description string, minimum, maximum float64) Property {
 	return Property{
@@ -68,7 +68,7 @@ func (r AddBodyCompositionResult) LogValue() slog.Value {
 }
 
 // addBodyCompositionInput is the strict argument set, matching
-// compat/tools.json's add_body_composition inputSchema.
+// the pinned upstream manifest's add_body_composition inputSchema.
 type addBodyCompositionInput struct {
 	Date             string   `json:"date" jsonschema:"the calendar day to record the reading for, YYYY-MM-DD"`
 	Weight           float64  `json:"weight" jsonschema:"the weight to record, in kg"`
@@ -80,7 +80,7 @@ type addBodyCompositionInput struct {
 	BasalMet         *float64 `json:"basal_met,omitempty" jsonschema:"basal metabolic rate in kcal/day"`
 	ActiveMet        *float64 `json:"active_met,omitempty" jsonschema:"active metabolic rate in kcal/day"`
 	PhysiqueRating   *int64   `json:"physique_rating,omitempty" jsonschema:"physique rating, 1-9"`
-	// MetabolicAge is a number, not an integer: compat/tools.json types
+	// MetabolicAge is a number, not an integer: the pinned upstream manifest types
 	// metabolic_age "number", unlike physique_rating and
 	// visceral_fat_rating, which really are integers.
 	MetabolicAge      *float64 `json:"metabolic_age,omitempty" jsonschema:"metabolic age in years"`
@@ -149,7 +149,7 @@ func registerAddBodyComposition(registry *mcpserver.Registry, svc *service) erro
 // upstream's own bug: an account whose real timezone is not UTC can still
 // see the reading attributed to the adjacent calendar day. There is no
 // timestamp or timezone argument on this tool's own manifest to resolve that
-// correctly; see docs/parity.md's deliberate-deviations list.
+// correctly.
 func (s *service) addBodyComposition(
 	ctx context.Context, in addBodyCompositionInput,
 ) (AddBodyCompositionResult, error) {

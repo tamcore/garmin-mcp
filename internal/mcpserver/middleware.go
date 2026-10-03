@@ -172,8 +172,7 @@ func elicitationDeclaredFor(req mcp.Request) bool {
 //
 // It runs first, because the panic happens during argument validation, which is
 // downstream of every other middleware. Remove it once the dependency stops
-// writing into a nil map; the upstream report is linked in
-// docs/implementation-status.md.
+// writing into a nil map.
 func argumentsMiddleware() mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
@@ -543,9 +542,8 @@ func principalIDOf(ctx context.Context) string {
 
 // clientIDOf names the calling client.
 //
-// Under stdio this is the client's self-reported implementation name, which is not
-// an authenticated identity and is only ever used as a log label. The M2 remote path
-// will take the client id from the verified token context instead.
+// On every transport this is the client's self-reported implementation name. It is
+// not an authenticated identity and is only used as a log label.
 func clientIDOf(req mcp.Request) string {
 	callReq, ok := req.(*mcp.CallToolRequest)
 	if !ok {

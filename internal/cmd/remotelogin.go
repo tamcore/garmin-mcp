@@ -184,8 +184,7 @@ func (r *remoteLogin) attempt(
 //
 // Resolving the principal, linking the Garmin account, and storing the token set
 // all happen inside the one store call: a failure at any point leaves no new
-// principal and no partial linkage behind, rather than the durable half-write a
-// multi-step commit here used to risk.
+// principal and no partial linkage behind, never a durable half-write.
 func (r *remoteLogin) bind(
 	ctx context.Context, staged, email string, result auth.Result,
 ) (string, error) {

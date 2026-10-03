@@ -83,7 +83,7 @@ type ToolSpec struct {
 	// such as "limit is 1 to 100, default 20" would be enforced in the handler and
 	// invisible to the client. The brief requires the strict schema on the wire,
 	// so a tool that declares one passes it here and the two cannot drift: the
-	// contract test compares the published schema against compat/tools.json.
+	// contract test compares the published schema against the pinned upstream manifest.
 	//
 	// It must marshal to a JSON Schema object.
 	InputSchema any

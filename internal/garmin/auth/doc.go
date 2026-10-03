@@ -123,19 +123,15 @@
 // verifying its signature. They exist for scheduling and labeling only. Never
 // authorize anything from one.
 //
-// # Documented gaps
+// # Limits and differences from upstream
 //
-//   - Widget MFA code delivery is no longer a gap: the page's inline JS variables
-//     are parsed by the protocol package and requestWidgetMFACode asks Garmin to
-//     send an email or SMS code before the caller is prompted for one. What
-//     remains deliberate is the handling of a failed request — it does not fail
-//     the login, because a code may have arrived from the sign-in POST anyway, and
-//     Pending.MFADeliveryUncertain then reports that delivery is unconfirmed.
+//   - A failed widget MFA code request does not fail the login, because a code
+//     may have arrived from the sign-in POST anyway. Pending.MFADeliveryUncertain
+//     then reports that delivery is unconfirmed.
 //   - MFA transaction binding. A pending transaction is bound to its principal
-//     only. It is not bound to the browser session, the OAuth client, the redirect
-//     URI, the requested resource or a PKCE challenge, so a capability that leaks
-//     to another client of the same principal is usable there. That binding belongs
-//     with the M2 OAuth transaction work and is deliberately not attempted here.
+//     only. The browser session, OAuth client, redirect URI, resource and PKCE
+//     challenge are bound by the login transaction in internal/loginweb, which
+//     holds the MFA continuation server-side.
 //   - JWT_WEB cookie fallback. Upstream falls back to consuming the CAS ticket
 //     through the web front end when the DI exchange fails. This package requires
 //     the DI token set and reports the exchange failure instead.

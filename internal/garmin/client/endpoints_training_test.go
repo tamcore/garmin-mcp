@@ -10,7 +10,7 @@ import (
 // TestTrainingConstantsHaveTheirPinnedValues pins every training constant to its
 // literal value: a shape test passes a path that points at the wrong service, and 15
 // tools are built on these. The values come from python-garminconnect at the
-// commit docs/upstream-pins.md names, so changing one here without changing the
+// pinned upstream commit, so changing one here without changing the
 // pin is the mistake this test exists to make loud.
 func TestTrainingConstantsHaveTheirPinnedValues(t *testing.T) {
 	t.Parallel()

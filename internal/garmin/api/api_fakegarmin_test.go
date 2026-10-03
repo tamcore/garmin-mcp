@@ -12,7 +12,7 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/testkit"
 )
 
-// fullScript scripts every endpoint this slice reads, so one harness can drive the
+// fullScript scripts every endpoint this package reads, so one harness can drive the
 // whole flow a tool call performs: resolve the display name, then read the domains.
 func fullScript() testkit.Script {
 	return testkit.NewScript().

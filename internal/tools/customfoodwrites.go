@@ -131,7 +131,7 @@ func customFoodFactsProperties() []Property {
 // Source: "On success the response includes foodId and servingId needed for
 // log_custom_food. If the API returns no data (204), use get_custom_foods(...)"
 // (nutrition.py:291-293). A 204 leaves every field here absent, matching that
-// documented gap rather than inventing values Garmin did not send. The domain
+// documented 204 case rather than inventing values Garmin did not send. The domain
 // client's CreateCustomFood/UpdateCustomFood return only the decoded FoodItem, with
 // no retained status of their own, so none is reported here either.
 type CustomFoodWriteResult struct {

@@ -332,8 +332,7 @@ func TestSaveLeavesNoTemporaryFileBehind(t *testing.T) {
 // TestSaveRefusesWhenTheRecordsDirectoryWasRemoved pins the deliberate choice
 // NOT to self-heal a removed records directory.
 //
-// Recreating it is friendlier, and commit's own ensureOwnerOnlyDir used to do
-// exactly that. It cannot coexist with an inode-based lock: while one process
+// Recreating it is friendlier, but it cannot coexist with an inode-based lock: while one process
 // holds the lock on the old directory's lock file, a second process that
 // recreates the directory opens a NEW inode, so both believe they hold the lock
 // and both write — which defeats the exclusion the lock exists for. Refusing is

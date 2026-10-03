@@ -178,11 +178,9 @@ func TestServeCarriesTheSafetyDelayIntoTheServer(t *testing.T) {
 // TestGarminLimitsCarriesTheConfiguredResponseBound is the property that makes
 // max-response-bytes a control rather than a decoration.
 //
-// client.New used to be called with no Limits at all, so every bound was the
-// package default. max-response-bytes was loaded, flag-exposed, validated, capped
-// and printed in the redacted config dump, and read by nothing — so an operator
-// who lowered it saw the configured value reported back by doctor and the dump
-// while the running server ignored it. That is worse than the setting not existing.
+// If client.New got no Limits, every bound would be the package default while
+// doctor and the config dump reported the configured value. That is worse than the
+// setting not existing.
 //
 // The decompressed bound is checked too, in both directions. Raising the wire bound
 // past the request layer's default decompressed bound would violate its own

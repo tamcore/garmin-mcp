@@ -32,14 +32,9 @@ const (
 	// PathWidgetRequestMFACode asks Garmin to deliver an email or SMS OTP for a
 	// widget session, which the credential POST does not reliably trigger. New in
 	// 0.3.10 ("explicitly request widget MFA code delivery", GH-386).
-	// Source: Client._widget_request_mfa_code.
-	//
-	// Documented gap: the classifier work this endpoint belongs to is not
-	// implemented here. Upstream parses the widget page's inline JS variables
-	// (customerGuid, mfaMethod, locale, clientId, codeSentTo) via
-	// _parse_widget_mfa_vars, requests delivery only for "email" and "sms" and
-	// only when codeSentTo is empty, and uses those variables as the JSON body.
-	// Only the wire constant is ported.
+	// Source: Client._widget_request_mfa_code. widgetmfa.go parses the page's
+	// inline variables (customerGuid, mfaMethod, locale, clientId, codeSentTo)
+	// that form the JSON body.
 	PathWidgetRequestMFACode = "/sso/verifyMFA/mfaCode"
 	// PathDIToken is the DI OAuth2 token endpoint on the diauth host.
 	// Source: DI_TOKEN_URL / Client._di_token_url.

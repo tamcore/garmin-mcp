@@ -1,24 +1,23 @@
 // The contract test. It pins the registered tool names and their normalized input
-// schemas against compat/tools.json, so a drift between the pinned upstream
+// schemas against the pinned upstream manifest, so a drift between the pinned upstream
 // manifest and this code fails the build rather than a client.
 package tools_test
 
 import (
 	"encoding/json"
 	"maps"
-	"os"
-	"path/filepath"
 	"reflect"
 	"slices"
 	"testing"
 
 	"github.com/tamcore/garmin-mcp/internal/mcpserver"
 	"github.com/tamcore/garmin-mcp/internal/policy"
+	"github.com/tamcore/garmin-mcp/internal/testkit"
 	"github.com/tamcore/garmin-mcp/internal/tools"
 )
 
-// manifestPath is the pinned contract this package must not drift from.
-const manifestPath = "../../compat/tools.json"
+// manifestPath names the pinned upstream manifest this package must not drift from.
+const manifestPath = "tools.json"
 
 // manifestTool is the subset of a manifest entry this test enforces.
 type manifestTool struct {
@@ -37,10 +36,7 @@ type manifest struct {
 func loadManifest(t *testing.T) map[string]manifestTool {
 	t.Helper()
 
-	raw, err := os.ReadFile(filepath.Clean(manifestPath))
-	if err != nil {
-		t.Fatalf("reading %s: %v", manifestPath, err)
-	}
+	raw := testkit.PrivateManifest(t, manifestPath)
 	var decoded manifest
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		t.Fatalf("decoding %s: %v", manifestPath, err)
@@ -53,7 +49,7 @@ func loadManifest(t *testing.T) map[string]manifestTool {
 	return byName
 }
 
-// additionsBeyondTheManifest are the tools this slice registers that the pinned
+// additionsBeyondTheManifest are the tools this package registers that the pinned
 // manifest does not describe, each with the reason it exists.
 //
 // The manifest is a snapshot of one upstream commit. Some additions come from
@@ -264,7 +260,7 @@ func TestEveryRegisteredToolsTierMatchesTheManifestEffect(t *testing.T) {
 			continue
 		}
 		if want := effects[contract.Spec.Tier]; !slices.Contains(want, entry.Effect) {
-			t.Errorf("%s: manifest effect = %q, but this slice registers it in the %v tier, "+
+			t.Errorf("%s: manifest effect = %q, but it is registered in the %v tier, "+
 				"which requires one of %v", name, entry.Effect, contract.Spec.Tier, want)
 		}
 	}
@@ -308,8 +304,8 @@ func TestEveryRegisteredToolLogsTheManifestSensitivityDomain(t *testing.T) {
 	}
 }
 
-// TestNoManifestToolIsRegisteredWithoutTheEndpointItNeeds pins the tools this slice
-// deliberately leaves unregistered, so the parity manifest keeps telling the truth.
+// TestNoManifestToolIsRegisteredWithoutTheEndpointItNeeds pins the tools this package
+// deliberately leaves unregistered, so the manifest keeps telling the truth.
 func TestNoManifestToolIsRegisteredWithoutTheEndpointItNeeds(t *testing.T) {
 	t.Parallel()
 

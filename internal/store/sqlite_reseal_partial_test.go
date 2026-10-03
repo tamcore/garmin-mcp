@@ -10,16 +10,12 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/store"
 )
 
-// TestResealToActiveKeyReportsPartialProgressOnAnUnreadableRow is item 8(b) of
-// the fix list: one unreadable row anywhere must not discard the counts
-// ResealToActiveKey already accumulated for tables it finished cleanly before
-// reaching it. Without the fix, ResealToActiveKey returned the zero-value
-// ResealReport alongside the error the moment ANY table's scan failed, so an
-// operator whose garmin_token_sets and principal identities tables both fully
-// resealed would see 0 for both the instant one corrupt auth_transactions row
-// made the whole call fail — indistinguishable from a run that touched
-// nothing, with no way to tell that only the last table needs another look
-// and the retiring key can never be confirmed clear for the ones already done.
+// TestResealToActiveKeyReportsPartialProgressOnAnUnreadableRow: one unreadable
+// row anywhere must not discard the counts ResealToActiveKey already
+// accumulated for tables it finished cleanly before reaching it. A zero-value
+// report next to the error would be indistinguishable from a run that touched
+// nothing, and the operator could not tell that only the last table needs
+// another look.
 func TestResealToActiveKeyReportsPartialProgressOnAnUnreadableRow(t *testing.T) {
 	t.Parallel()
 	path := testDBPath(t)

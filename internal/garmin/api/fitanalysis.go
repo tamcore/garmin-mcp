@@ -119,7 +119,7 @@ func AnalyzeFIT(ctx context.Context, activity FITActivity) (FITSummary, error) {
 }
 
 // analysisStages are the whole-activity walks, listed so a context check can sit
-// between them. A stage whose input a bound truncated is omitted. See docs/parity.md.
+// between them. A stage whose input a bound truncated is omitted.
 func analysisStages(activity FITActivity, coverage fitCoverage, summary *FITSummary) []func() {
 	records := activity.Records
 	sessions := activity.Sessions

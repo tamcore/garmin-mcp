@@ -52,8 +52,8 @@ import (
 // TestLiveHydrationRoundTripIsUndoneByACompensatingWrite proves the total actually
 // returns to what it was.
 
-// envHealthWriteAck is a sixth gate, narrower than and additional to the four
-// AGENTS.md names: it covers only add_body_composition and set_blood_pressure, the
+// envHealthWriteAck is a separate gate beyond GARMIN_LIVE_WRITE_ACK: it covers only
+// add_body_composition and set_blood_pressure, the
 // two writes in this file this suite cannot undo.
 const envHealthWriteAck = "GARMIN_LIVE_HEALTH_WRITE_ACK"
 

@@ -113,7 +113,7 @@ func assertNoLeak[T any](t *testing.T, label string, value T, material ...string
 	}
 }
 
-// TestStrippedSecretAliasCannotRevealTheValue is the HIGH finding: a
+// TestStrippedSecretAliasCannotRevealTheValue: a
 // method-stripping alias must not turn a Secret into a printable string.
 func TestStrippedSecretAliasCannotRevealTheValue(t *testing.T) {
 	t.Parallel()

@@ -24,7 +24,7 @@ import (
 // real Garmin authenticator (internal/cmd/remotelogin.go), which this package
 // must never let reach the real Garmin service. Reaching a genuine MFA
 // continuation would require a completed login, which is exactly the step this
-// package cannot take; see AGENTS.md/docs/implementation-status.md for that gap.
+// package cannot take.
 
 // loginSSOHost is the one authority every login strategy's JSON and widget
 // flows address (internal/garmin/protocol/hosts.go: Hosts.sso for the default

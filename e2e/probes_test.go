@@ -10,10 +10,8 @@ import (
 	"testing"
 )
 
-// The probe and rate-limit features were built and unit-tested before anything
-// mounted them, so for a while both behaved perfectly in their own package and
-// answered 404 in a real deployment. These tests drive the shipped binary, which
-// is the only place that gap was visible.
+// Unit tests prove the probe and rate-limit handlers in their own package; only the
+// shipped binary proves they are mounted. These tests drive the shipped binary.
 
 func TestLivenessAndReadinessAnswerOnTheRunningServer(t *testing.T) {
 	server := startRemoteServer(t)

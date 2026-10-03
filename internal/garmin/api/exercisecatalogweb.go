@@ -12,8 +12,8 @@ import (
 )
 
 // The one web-tier read this project makes: Garmin's published strength catalog.
-// Why it is preferred to the vendored FIT profile, and why the exception is
-// exactly this URL, is in docs/parity.md.
+// The URL is compiled in so no configuration or caller can widen the exception
+// into a general fetcher.
 
 // ExerciseCatalogURL is the published strength catalog. It is the only URL under
 // connect.garmin.com/web-data this project reads, and it is compiled in: no

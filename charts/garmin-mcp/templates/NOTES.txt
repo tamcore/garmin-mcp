@@ -21,7 +21,7 @@ resolve to this Service from outside the cluster.
 
 UNSAFE: redirect wildcards are enabled. An open redirector anywhere under a
 wildcarded prefix yields a victim's authorization code, and PKCE does not
-mitigate it. See docs/threat-model.md and ADR 0009.
+mitigate it. See docs/threat-model.md.
 {{- end }}
 
 {{- if not .Values.persistence.enabled }}

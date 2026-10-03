@@ -12,7 +12,7 @@ import (
 // The shape tests below cannot catch a wrong value: a path that is host-relative
 // and free of query text passes them while pointing at the wrong Garmin service,
 // and 27 tools are built on these. The values come from python-garminconnect at
-// the commit docs/upstream-pins.md names, so changing one here without changing
+// the pinned upstream commit, so changing one here without changing
 // the pin is the mistake this test exists to make loud.
 func TestHealthConstantsHaveTheirPinnedValues(t *testing.T) {
 	t.Parallel()

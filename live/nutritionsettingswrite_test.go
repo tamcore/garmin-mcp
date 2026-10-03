@@ -16,8 +16,8 @@ import (
 // restores the original exactly.
 const settingsCalorieDelta = 111
 
-// envNutritionSettingsAck is a fifth gate, narrower than and additional to the four
-// AGENTS.md names: it covers only this one test.
+// envNutritionSettingsAck is a separate gate beyond GARMIN_LIVE_WRITE_ACK: it
+// covers only this one test.
 const envNutritionSettingsAck = "GARMIN_LIVE_NUTRITION_SETTINGS_ACK"
 
 // nutritionSettingsAckValue is the exact value envNutritionSettingsAck must carry,

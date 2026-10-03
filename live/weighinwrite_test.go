@@ -26,8 +26,8 @@ const (
 // Garmin's own validation accepts it, and it is removed again before the test ends.
 const weighInTestKg = 61.5
 
-// envWeighInDeleteAck is a fifth gate, narrower than and additional to the four
-// AGENTS.md names: it covers only the tests in this file.
+// envWeighInDeleteAck is a separate gate beyond GARMIN_LIVE_WRITE_ACK: it covers
+// only the tests in this file.
 //
 // delete_weigh_ins' own MCP argument surface (internal/tools/weighindelete.go)
 // names a calendar date and a delete_all flag, never a sample identifier — unlike

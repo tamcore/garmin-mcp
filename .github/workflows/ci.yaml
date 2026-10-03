@@ -77,7 +77,7 @@ jobs:
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: low
-          # Matches the licenses recorded in docs/dependencies.md. A dependency
+          # Matches the licenses of the current dependency set. A dependency
           # under anything else needs a decision, not an automatic pass.
           allow-licenses: Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT
 
@@ -287,7 +287,7 @@ jobs:
     name: Fuzz smoke
     runs-on: ubuntu-latest
     # Bounds a hung dependency download or a fuzz target that never returns
-    # control (a hang is a real fuzz finding, not only a crash). 7 targets at
+    # control (a hang is a real fuzz finding, not only a crash).
     # The race detector is deliberately NOT enabled here. It slows fuzzing by
     # roughly an order of magnitude, and on a GitHub runner that made the engine
     # miss its own shutdown deadline and report "context deadline exceeded" as a

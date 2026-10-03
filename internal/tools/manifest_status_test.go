@@ -6,16 +6,15 @@ package tools_test
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"slices"
 	"testing"
 
+	"github.com/tamcore/garmin-mcp/internal/testkit"
 	"github.com/tamcore/garmin-mcp/internal/tools"
 )
 
 // statusManifestPath is the same pinned manifest the contract test reads.
-const statusManifestPath = "../../compat/tools.json"
+const statusManifestPath = "tools.json"
 
 // statusImplemented is the enum value that claims this server registers the tool.
 const statusImplemented = "implemented"
@@ -43,10 +42,7 @@ type manifestStatusDocument struct {
 func loadManifestStatuses(t *testing.T) manifestStatusDocument {
 	t.Helper()
 
-	raw, err := os.ReadFile(filepath.Clean(statusManifestPath))
-	if err != nil {
-		t.Fatalf("reading %s: %v", statusManifestPath, err)
-	}
+	raw := testkit.PrivateManifest(t, statusManifestPath)
 	var decoded manifestStatusDocument
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		t.Fatalf("decoding %s: %v", statusManifestPath, err)
@@ -61,7 +57,7 @@ func loadManifestStatuses(t *testing.T) manifestStatusDocument {
 // directions.
 //
 // A record marked implemented that this package does not register is a manifest that
-// overstates the surface; a registered manifest tool still marked not-implemented is a
+// overstates the surface; a registered manifest tool not marked implemented is a
 // manifest that has fallen behind the code. Both failures name the drifted tools,
 // because a bare count would leave the next reader to diff 138 records by hand.
 func TestManifestStatusMatchesTheRegisteredSurface(t *testing.T) {

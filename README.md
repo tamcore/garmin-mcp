@@ -148,49 +148,37 @@ oauth-clients:
 garmin-mcp --config /etc/garmin-mcp/config.yaml serve
 ```
 
-Four things decide whether a remote deployment starts at all:
-
-- the public URL must be `https` — the authorization server will not name a
-  cleartext issuer, and no override changes that;
-- a non-loopback bind needs TLS material, trusted proxy networks, or the explicit
-  development override;
-- at least one OAuth client must be registered, because there is no dynamic
-  registration;
-- the master key must be supplied by file, and it must be owner-only.
+A remote deployment starts only with an `https` public URL, TLS material or
+trusted proxy networks for a non-loopback bind, at least one registered OAuth
+client, and an owner-only master key file.
 
 Read [docs/operations.md](docs/operations.md) before running this in production.
-It covers the canonical public URL, TLS and reverse proxies, client registration
-and reconciliation, the database and its backups, key management, revocation, and
-the single-active-instance limit. Every setting is listed in
-[docs/configuration.md](docs/configuration.md).
+Every setting is listed in [docs/configuration.md](docs/configuration.md).
 
-## Current state
+## Compatibility
 
-This is honest, not promotional.
+garmin-mcp is a tool-compatible server for the
+[Taxuspt/garmin_mcp](https://github.com/Taxuspt/garmin_mcp) project. Its tool
+surface is pinned by a golden snapshot test. It also serves the 5 upstream workout resources. Deliberate differences:
 
-**Tool coverage: 137 of the 138 upstream tools are implemented.** The upstream
-surface is the Taxuspt `garmin_mcp` project at a pinned commit, inventoried
-statically into `compat/tools.json`. This build registers 154 tools — 108
-read-only, 37 write, 9 destructive — which is those 137 plus 17 the manifest does
-not carry: the built-in `server_info`, six from unmerged upstream proposals or the
-compared legacy surface, and ten upstream added to its `main` after the pinned
-commit. `docs/upstream-pins.md` records why those ten are implemented on top of the
-pin rather than by moving it. The single upstream tool this
-build refuses is `set_fit_download_dir`, because it writes to the server
-filesystem at a caller's direction; ADR 0006 and `docs/parity.md` record why. All
-5 upstream resources are implemented. `docs/parity.md` carries the per-tool
-status.
+- `set_fit_download_dir` is not registered: it writes to the server filesystem at
+  a caller's direction.
+- Tools that upstream gives a filesystem path take the file content instead
+  (`upload_course` takes `gpx_content`).
+- There is no login tool. Credentials never become tool arguments.
+- 17 tools are added beyond the pinned manifest, including `server_info`.
 
-Do not trust that paragraph over the build. `garmin-mcp tools list` prints the
-registered tools with their tier and effect, needs no Garmin account, no token and
-no database, and is the only count that cannot go stale:
+`garmin-mcp tools list` prints the registered tools with their tier and effect.
+It needs no Garmin account, no token and no database:
 
 ```console
 $ garmin-mcp tools list | grep ' tools:'
 154 tools: 108 read-only, 37 write, 9 destructive
 ```
 
-**Writes and destructive tools are off by default.** `enable-write-tools` and
+## Safety defaults
+
+Write and destructive tools are off by default. `enable-write-tools` and
 `enable-destructive-tools` both default to false, and destructive requires write.
 On stdio those explicit operator flags authorize their tiers. Remotely the flag
 is only half of the gate: the caller's OAuth grant must also carry the matching
@@ -198,21 +186,8 @@ scope. A destructive call additionally requires explicit client confirmation and
 fails closed when it cannot obtain one. Write tools need no confirmation; local
 operators should use the allowlist, denylist, and safety delay to narrow exposure.
 
-**MCP conformance is blocked upstream, and it is not outstanding work in this
-repository.** The official `@modelcontextprotocol/conformance` suite was run
-against a live deployment. Two independent blockers were verified in the suite's
-own source: its only stable release knows specification versions up to
-`2026-02-12` and not the pinned `2026-07-28`; and its server leg can present no
-credential — its options accept a URL and a scenario, no header and no token —
-while this server authenticates every request from the `Authorization` header,
-and its scored scenarios call the SDK reference fixture's tools by literal name.
-The measurement and the evidence are in `docs/implementation-status.md` and ADR
-0002.
-
-Other limits worth knowing before you deploy: no horizontal scaling, no scheduled
-database cleanup, no key rotation command, and no working `migrate` or
-`tools list` command. See the last section of
-[docs/operations.md](docs/operations.md).
+A remote deployment runs as a single active instance and does not scale
+horizontally. See the last section of [docs/operations.md](docs/operations.md).
 
 ## Documentation
 
@@ -222,9 +197,6 @@ database cleanup, no key rotation command, and no working `migrate` or
 | [docs/operations.md](docs/operations.md) | Deployment, clients, database, keys, revocation, upgrades, metrics |
 | [SECURITY.md](SECURITY.md) | Disclosure process, supported versions, data held, deployment checklist |
 | [docs/threat-model.md](docs/threat-model.md) | Assets, adversaries, and the decisions that follow |
-| [docs/parity.md](docs/parity.md) | Per-tool status against the pinned upstream manifest |
-| [docs/implementation-status.md](docs/implementation-status.md) | Milestone state and measured evidence |
-| [docs/adr/](docs/adr/) | Architecture decision records |
 
 ## Security
 

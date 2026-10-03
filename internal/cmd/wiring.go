@@ -327,12 +327,8 @@ const decompressedHeadroom = 4
 
 // garminLimits builds the request layer's bounds from configuration.
 //
-// This existed as a gap rather than a bug for a while: client.New was called with
-// no Limits at all, so every bound was the package default. max-response-bytes was
-// loaded, flag-exposed, validated, capped, and printed in the redacted config dump
-// — and read by nothing. An operator lowering it saw the configured value reported
-// back by doctor and the dump while the running server ignored it, which is worse
-// than the setting not existing.
+// A setting that doctor and the config dump report but the running server ignores
+// is worse than no setting, so the configured bound must reach client.New.
 //
 // Only the settings configuration actually exposes are overridden; everything else
 // stays at DefaultLimits, which is what the zero value already meant.

@@ -8,8 +8,8 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/store"
 )
 
-// TestRevocationReportsDatabaseBusyUnderRealContention is the CLI's own failure
-// mode from AGENTS.md's revoke/unlink contention rule, reproduced for real: a
+// TestRevocationReportsDatabaseBusyUnderRealContention is the revoke/unlink CLI's
+// failure mode under a concurrent writer, reproduced for real: a
 // second writer (a raw connection, standing in for a live "serve") holds the
 // write lock, and a store opened with a short busy timeout must fail with
 // store.ErrDatabaseBusy — a clean, named error rather than a raw driver string

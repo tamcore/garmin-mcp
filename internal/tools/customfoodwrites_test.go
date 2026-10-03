@@ -50,7 +50,7 @@ func TestCreateCustomFoodDecodesTheCreatedRecord(t *testing.T) {
 	}
 }
 
-// TestCreateCustomFoodReportsNoIdentifiersOnAnEmptyResponse pins the documented gap:
+// TestCreateCustomFoodReportsNoIdentifiersOnAnEmptyResponse pins the 204 case:
 // a 204 leaves food_id and serving_id absent rather than fabricated.
 func TestCreateCustomFoodReportsNoIdentifiersOnAnEmptyResponse(t *testing.T) {
 	t.Parallel()

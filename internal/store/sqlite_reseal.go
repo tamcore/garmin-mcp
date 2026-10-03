@@ -8,7 +8,7 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/cryptostore"
 )
 
-// Store-level re-sealing, the SQLite half of ADR 0005's second open item.
+// Store-level re-sealing under a rotated key: the SQLite half.
 //
 // # Why there is no checkpoint table
 //

@@ -2,10 +2,9 @@
 //
 // The notices file is a distribution condition, not documentation: the release
 // archives carry it through .goreleaser.yaml and the container image carries it
-// under /licenses/garmin-mcp/. It was originally produced by a throwaway script,
-// which meant a dependency bump could leave it silently wrong. This package is
-// the generator that replaces that script, and the freshness test beside it is
-// what turns a stale file into a failing build.
+// under /licenses/garmin-mcp/. A dependency bump can leave it silently wrong, so
+// this package generates it, and the freshness test beside it turns a stale file
+// into a failing build.
 //
 // Two rules shape the design.
 //

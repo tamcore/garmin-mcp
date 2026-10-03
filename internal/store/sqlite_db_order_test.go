@@ -10,10 +10,10 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/store"
 )
 
-// TestOpenDatabaseRefusesAPreExistingSymlinkedFileBeforeTouchingItsBytes is gap
-// 3: OpenDatabase used to open and Ping the SQLite driver before validating a
-// pre-existing file, so an insecure file's bytes were consumed (the driver
-// parses the SQLite header, and can replay a WAL) ahead of any path check.
+// TestOpenDatabaseRefusesAPreExistingSymlinkedFileBeforeTouchingItsBytes:
+// OpenDatabase validates a pre-existing file before it opens and pings the SQLite
+// driver, so an insecure file's bytes are never consumed (the driver parses the
+// SQLite header, and can replay a WAL) ahead of the path check.
 //
 // A planted symlink is the property this package refuses rather than silently
 // repairs (unlike a bare permission bit, which restrictDatabaseFiles tightens
@@ -56,8 +56,8 @@ func TestOpenDatabaseRefusesAPreExistingSymlinkedFileBeforeTouchingItsBytes(t *t
 
 // TestOpenDatabaseTightensAPreExistingPermissiveFileBeforeOpeningIt proves the
 // reorder does not regress the ordinary reopen path: a real database this
-// process created earlier, whose mode was later widened (the same shape as
-// gap 4's directory case, but for the file), must still be tightened and must
+// process created earlier, whose mode was later widened (the same shape as the
+// widened key directory case, but for the file), must still be tightened and must
 // still open, and the tightening must happen before the driver is handed the
 // file.
 func TestOpenDatabaseTightensAPreExistingPermissiveFileBeforeOpeningIt(t *testing.T) {

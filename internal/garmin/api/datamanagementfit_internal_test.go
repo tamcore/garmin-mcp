@@ -204,7 +204,7 @@ func TestBodyCompositionEntryValidateRefusesATimestampBeyondTheFITRange(t *testi
 }
 
 // TestBodyCompositionEntryValidateAcceptsAFractionalMetabolicAge proves
-// metabolic_age accepts a manifest-valid fractional value: compat/tools.json
+// metabolic_age accepts a manifest-valid fractional value: the pinned upstream manifest
 // types it "number", not "integer".
 func TestBodyCompositionEntryValidateAcceptsAFractionalMetabolicAge(t *testing.T) {
 	t.Parallel()

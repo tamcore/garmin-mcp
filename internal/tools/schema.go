@@ -49,7 +49,7 @@ const (
 // A Property is one strict input property of a tool.
 //
 // It is the declared contract: the ranges, formats and defaults a caller may rely on,
-// and the shape the contract test compares against compat/tools.json. The handler
+// and the shape the contract test compares against the pinned upstream manifest. The handler
 // enforces the same bounds from the same constants, so the declaration and the
 // behaviour cannot drift apart silently.
 type Property struct {

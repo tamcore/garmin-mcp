@@ -16,7 +16,7 @@ import (
 // macro/calorie/identifier figures. "79412" replaces an earlier two-character
 // needle that risked colliding with an incidental digit elsewhere in a
 // rendered log line. A function, not a package-level var: AGENTS.md allows no
-// package-level mutable state, and this slice is never mutated after
+// package-level mutable state, and the returned slice is never mutated after
 // construction, so a function returning a fresh literal each call is the
 // equivalent of a const for a value that cannot itself be one.
 func nutritionLogNeedles() []string {
@@ -70,9 +70,8 @@ func collectNutritionModels(t *testing.T) map[string]any {
 
 // mustFoodLogEntryWithNeedle decodes one FoodLogEntry carrying a needle in
 // every field UnmarshalJSON can populate. FoodLogEntry is the one nutrition
-// model carrying a decoded log identifier, and it was previously missing from
-// collectNutritionModels entirely, so the leak sweep never actually exercised
-// its LogValue.
+// model carrying a decoded log identifier, so collectNutritionModels must include
+// it for the leak sweep to exercise its LogValue.
 func mustFoodLogEntryWithNeedle(t *testing.T) api.FoodLogEntry {
 	t.Helper()
 

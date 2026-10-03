@@ -318,7 +318,7 @@ func namesOf(registrations []registration) []string {
 // Contracts returns every registered tool's declared contract, keyed by wire name.
 //
 // It is the input to the contract test, which compares these schemas with
-// compat/tools.json. The returned map is a fresh copy.
+// the pinned upstream manifest. The returned map is a fresh copy.
 func Contracts() map[string]Contract {
 	registrations := allRegistrations()
 	contracts := make(map[string]Contract, len(registrations))

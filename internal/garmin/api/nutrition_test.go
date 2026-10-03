@@ -68,9 +68,8 @@ func TestNutritionIdentifiersRejectHostileInput(t *testing.T) {
 // (nutrition.py:567, :728); ServingID's wire format is not evidenced upstream
 // at all (nutrition.py:186, :470 and :613 only ever pass it through as an
 // opaque string), so it is validated the same permissive way rather than
-// refusing a hex value no source rules out. A hyphenated token that the old,
-// looser alphanumeric-hyphen charset used to accept must still be refused for
-// all three.
+// refusing a hex value no source rules out. A hyphenated token that a looser
+// alphanumeric-hyphen charset would accept must still be refused for all three.
 func TestNutritionIdentifiersRejectShapesThatAreNeitherDecimalNorHex(t *testing.T) {
 	t.Parallel()
 

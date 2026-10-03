@@ -185,12 +185,10 @@ func TestRepairPermissionsNeverCreatesDatabaseSidecars(t *testing.T) {
 	}
 }
 
-// TestRepairPermissionsRefusesASymlinkedStateDir is the RED case for item 1:
-// a symlinked state root pointing at clean, owner-only state must not be
-// followed. Today the command never checks the ancestry of --state-dir, so
-// ReadDir/Lstat happily follow the symlink, report everything clean, and
-// exit 0 — while serve's own securefile checks refuse the same symlinked
-// component and never start.
+// TestRepairPermissionsRefusesASymlinkedStateDir: a symlinked state root
+// pointing at clean, owner-only state must not be followed. Following it would
+// report everything clean and exit 0, while serve's own securefile checks refuse
+// the same symlinked component and never start.
 func TestRepairPermissionsRefusesASymlinkedStateDir(t *testing.T) {
 	clearGarminEnv(t)
 	real := repairPermsStateDir(t)
@@ -211,11 +209,10 @@ func TestRepairPermissionsRefusesASymlinkedStateDir(t *testing.T) {
 	}
 }
 
-// TestRepairPermissionsRecoversAnUnlistableKeysDirectory is the RED case for
-// item 2: a keys directory this process owns but cannot currently list
-// (mode 0300) must not make the widened key file inside it invisible. Today
-// every ReadDir error is treated as an empty directory, so the command
-// tightens the directory and exits 0 without ever seeing the widened file.
+// TestRepairPermissionsRecoversAnUnlistableKeysDirectory: a keys directory this
+// process owns but cannot currently list (mode 0300) must not make the widened
+// key file inside it invisible. Treating a ReadDir error as an empty directory
+// would tighten the directory and exit 0 without ever seeing the widened file.
 func TestRepairPermissionsRecoversAnUnlistableKeysDirectory(t *testing.T) {
 	clearGarminEnv(t)
 	stateDir := repairPermsStateDir(t)
@@ -237,11 +234,9 @@ func TestRepairPermissionsRecoversAnUnlistableKeysDirectory(t *testing.T) {
 	}
 }
 
-// TestRepairPermissionsRejectsADirectoryNamedLikeAKeyFile is the RED case for
-// item 3: a directory happens to carry a key file's name. Today
-// listMatchingFiles skips any entry.IsDir(), so this is silently excluded
-// from the target set and the command exits 0, while serve's key load fails
-// because the path is not a regular file.
+// TestRepairPermissionsRejectsADirectoryNamedLikeAKeyFile: a directory that
+// carries a key file's name must be reported, not silently excluded from the
+// target set, because serve's key load fails on it as not a regular file.
 func TestRepairPermissionsRejectsADirectoryNamedLikeAKeyFile(t *testing.T) {
 	clearGarminEnv(t)
 	stateDir := repairPermsStateDir(t)
@@ -256,11 +251,9 @@ func TestRepairPermissionsRejectsADirectoryNamedLikeAKeyFile(t *testing.T) {
 	}
 }
 
-// TestRepairPermissionsIncludesTheOAuthClientSecretHashFile is the RED case
-// for item 4: a confidential OAuth client's secret-hash-file is read through
-// securefile.ReadFile at start-up, but repairTargets never lists it. A
-// widened digest file, sitting anywhere the operator pointed it, is
-// invisible to this command today.
+// TestRepairPermissionsIncludesTheOAuthClientSecretHashFile: a confidential
+// OAuth client's secret-hash-file is read through securefile.ReadFile at
+// start-up, so repairTargets must list it wherever the operator pointed it.
 func TestRepairPermissionsIncludesTheOAuthClientSecretHashFile(t *testing.T) {
 	clearGarminEnv(t)
 	stateDir := repairPermsStateDir(t)
@@ -291,12 +284,12 @@ func TestRepairPermissionsIncludesTheOAuthClientSecretHashFile(t *testing.T) {
 	}
 }
 
-// TestRepairPermissionsIgnoresANonCanonicalKeyFileName is the RED case for
-// item 8: cryptostore's keyFilePath only ever produces "key-v" + a canonical
-// positive integer (strconv.Itoa never emits a leading zero, and version 0
-// is invalid), but the current pattern also matches "key-v0.json" and
-// "key-v00.json" — names the server itself never reads or writes. Widening
-// one of those must not be reported as something repair-permissions fixed.
+// TestRepairPermissionsIgnoresANonCanonicalKeyFileName: cryptostore's
+// keyFilePath only ever produces "key-v" + a canonical positive integer
+// (strconv.Itoa never emits a leading zero, and version 0 is invalid), so
+// "key-v0.json" and "key-v00.json" are names the server never reads or writes.
+// Widening one of those must not be reported as something repair-permissions
+// fixed.
 func TestRepairPermissionsIgnoresANonCanonicalKeyFileName(t *testing.T) {
 	clearGarminEnv(t)
 	stateDir := repairPermsStateDir(t)

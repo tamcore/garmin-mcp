@@ -294,10 +294,10 @@ func TestTrainingStatusReportsAnEmptyDeviceMap(t *testing.T) {
 // TestSelectStatusDeviceIsTheOneSelectorBothReadersUse pins the rule that stopped a
 // result being spliced across two devices.
 //
-// The status read and the trend reads each used to choose a device for themselves,
-// out of the same document, by different rules. One selector is what makes the
-// document's own PrimaryStatus and any caller's choice the same device; split it
-// again and this fails.
+// If the status read and the trend reads each chose a device for themselves, out of
+// the same document, by different rules, a result could splice two devices. One
+// selector is what makes the document's own PrimaryStatus and any caller's choice
+// the same device; split it again and this fails.
 func TestSelectStatusDeviceIsTheOneSelectorBothReadersUse(t *testing.T) {
 	t.Parallel()
 

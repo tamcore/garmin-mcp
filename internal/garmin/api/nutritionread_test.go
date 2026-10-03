@@ -206,10 +206,8 @@ func TestCustomFoodServingUnitsDecodesABareArray(t *testing.T) {
 }
 
 // TestCustomFoodServingUnitsDecodesAnObjectWrapper proves the read also
-// tolerates a normal `{"servingUnits":[...]}` object wrapper: the doc comment
-// on ServingUnits used to claim the shape was unevidenced and then modeled
-// only a bare array, so this single-key object wrapper hard-failed the whole
-// read with ErrMalformedPayload.
+// tolerates a normal `{"servingUnits":[...]}` object wrapper, not only a bare
+// array, instead of failing the whole read with ErrMalformedPayload.
 func TestCustomFoodServingUnitsDecodesAnObjectWrapper(t *testing.T) {
 	t.Parallel()
 

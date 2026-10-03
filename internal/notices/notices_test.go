@@ -29,13 +29,11 @@ var noticesPath = filepath.Join(repoRoot, "THIRD_PARTY_NOTICES.md")
 // image. It is therefore a distribution condition of the terms of every module
 // in it.
 //
-// Before this test the file was produced once by a script that no longer exists,
-// so a dependency bump could add a module, change a version, or replace a
-// licence text and leave the shipped notices quietly wrong — attributing code to
-// terms that no longer apply, and omitting terms that now do. Nothing anywhere
-// caught that.
+// A dependency bump can add a module, change a version, or replace a licence text
+// and leave the shipped notices quietly wrong — attributing code to terms that no
+// longer apply, and omitting terms that now do.
 //
-// This test is what catches it: it regenerates the file from the module graph
+// This test catches it: it regenerates the file from the module graph
 // and the module cache and requires the checked-in bytes to match exactly. The
 // fix is never to edit the expectation; it is to run `go run ./cmd/notices` and
 // commit the result in the same commit as the dependency change.

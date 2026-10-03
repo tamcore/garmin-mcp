@@ -8,7 +8,7 @@ import (
 	"fmt"
 )
 
-// Store-level re-sealing, the FileStore half of ADR 0005's second open item.
+// Store-level re-sealing under a rotated key: the FileStore half.
 //
 // FileStore is single-principal by construction: a local deployment binds exactly
 // one account (internal/identity.NewStdioResolver), so unlike the SQLite backend
@@ -37,9 +37,7 @@ import (
 // ResealOutcome distinguishes why Reseal did or did not rewrite a record. A
 // plain bool cannot: "nothing needed resealing" and "another writer moved the
 // record out from under this attempt" are different situations for a caller
-// deciding whether it is safe to say the record is at the active key, and
-// collapsing them into one false was exactly the defect this type closes —
-// see the MEDIUM item on the lost-race report in AGENTS.md's fix list.
+// deciding whether it is safe to say the record is at the active key.
 type ResealOutcome int
 
 const (

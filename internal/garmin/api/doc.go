@@ -12,7 +12,7 @@
 // client.ErrNotFound, client.ErrAuthentication, client.ErrRateLimited,
 // client.ErrValidation, client.ErrMalformedPayload and the rest.
 //
-// # Endpoints in this slice
+// # Endpoints
 //
 // Source: python-garminconnect 0.3.10, plus the two unmerged upstream proposals
 // named below. The reads are first; the writes follow with their declared
@@ -136,18 +136,6 @@
 //     and the pre-check belongs to the tool layer that can report what it found.
 //   - Upstream's unbounded reads. Every list here is paginated or bounded, and a
 //     caller-supplied body has a size bound of its own.
-//
-// # Documented gaps
-//
-//   - The nutrition, body-composition and hydration writes and the course
-//     endpoints. The GraphQL-backed calendar reads are no longer a gap: Calendar
-//     serves them over the request shape in internal/garmin/client/graphql.go.
-//   - Activity and course file upload, which needs multipart encoding.
-//   - The remaining 0.3.10 read endpoints — body battery, HRV, stress, training
-//     readiness, badges, challenges, gear, goals, workouts, courses, nutrition — which
-//     the parity backlog tracks. The four payload styles they use are all covered by
-//     the five clients here, so adding one is an endpoint plus a model, not new
-//     machinery.
 //   - Upstream's chunked sleep-stats range endpoint (get_sleep_daily, 28-day chunks).
 //     DailySleepRange reads the per-day endpoint with bounded fan-out instead, which
 //     keeps one bound per request rather than a server-defined chunk size.

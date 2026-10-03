@@ -113,11 +113,10 @@ func runRotateKeyFileStore(
 // let the affirmative "at the active key version" line be printed honestly.
 //
 // Pulled out of runRotateKeyFileStore so the printed-message-per-outcome
-// mapping is testable without a real store, a lock, or any concurrency: the
-// defect this guards used to collapse store.ResealRaced into the same silent
-// "already matched" case as store.ResealAlreadyCurrent, which let an operator
-// read the affirmative line and retire a key that still protected a live
-// record.
+// mapping is testable without a real store, a lock, or any concurrency.
+// store.ResealRaced must never collapse into the silent "already matched" case of
+// store.ResealAlreadyCurrent: that would let an operator read the affirmative
+// line and retire a key that still protected a live record.
 func reportFileStoreReseal(out io.Writer, outcome store.ResealOutcome) error {
 	switch outcome {
 	case store.ResealRewrote:

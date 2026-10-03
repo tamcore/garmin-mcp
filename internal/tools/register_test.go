@@ -10,7 +10,7 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/tools"
 )
 
-// wantReadOnlyToolNames is the read-only Garmin surface this slice registers, in the
+// wantReadOnlyToolNames is the read-only Garmin surface this package registers, in the
 // order register.go wires them.
 var wantReadOnlyToolNames = []string{
 	tools.ToolGarminAuthStatus,
@@ -186,7 +186,7 @@ var wantDestructiveToolNames = []string{
 	"unschedule_workouts",
 }
 
-// wantToolNames is the whole Garmin surface this slice registers.
+// wantToolNames is the whole Garmin surface this package registers.
 func wantToolNames() []string {
 	return slices.Concat(
 		wantReadOnlyToolNames, wantWriteToolNames, wantDestructiveToolNames)

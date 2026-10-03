@@ -63,8 +63,7 @@ type Config struct {
 // update detectable instead of silent. Two SEPARATE processes sharing a
 // directory — a live serve process and a rotate-key run — additionally take an
 // OS-level advisory lock (flock(2), filelock_unix.go) around the same
-// read-modify-write section, so the cross-process window this comment used to
-// describe as open is closed: Save, Delete and Reseal cannot interleave their
+// read-modify-write section, so Save, Delete and Reseal cannot interleave their
 // reads and writes across processes either.
 //
 // A FileStore is safe for concurrent use and holds no package-level state.
@@ -173,8 +172,7 @@ func (s *FileStore) Save(ctx context.Context, principal string, set TokenSet, ex
 	// A removed records directory is deliberately NOT self-healed here, and the
 	// honest ENOENT from lockRecord's create is the intended outcome.
 	//
-	// Recreating it would be the friendlier behaviour and it is what commit's own
-	// ensureOwnerOnlyDir used to provide, but it cannot coexist with an
+	// Recreating it would be the friendlier behaviour, but it cannot coexist with an
 	// inode-based lock: while one process holds the lock on the old directory's
 	// lock file, a second process that recreates the directory gets a NEW inode,
 	// so both hold "the lock" on different files and both write. That defeats the

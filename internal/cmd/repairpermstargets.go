@@ -28,8 +28,8 @@ const secretHashFileMode fs.FileMode = 0o600
 // int + ".json". strconv.Itoa never emits a leading zero, and cryptostore
 // refuses version 0 (GenerateKey, LoadKey and LoadOrCreateKey all reject
 // version <= 0), so "key-v0.json" and "key-v00.json" are never a name the
-// server itself creates or reads. Matching [0-9]+ used to accept both, which
-// meant this command could chmod a file the server ignores. The canonical
+// server itself creates or reads. Matching [0-9]+ would accept both and let
+// this command chmod a file the server ignores. The canonical
 // positive integer is a single digit 1-9, or a longer run that starts with
 // one — exactly what strconv.Itoa emits.
 //
