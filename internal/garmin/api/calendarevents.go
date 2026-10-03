@@ -43,7 +43,24 @@ const (
 // A CalendarTarget is one calendar item's completion goal.
 type CalendarTarget struct {
 	UnitType *string       `json:"unitType"`
+	Unit     *string       `json:"unit"`
 	Value    client.Number `json:"value"`
+}
+
+// metersPerDistanceUnit scales a completion-target distance unit to metres.
+// Source: _DISTANCE_UNIT_TO_METERS in calendar_events.py.
+func metersPerDistanceUnit(unit string) (float64, bool) {
+	switch unit {
+	case "meter":
+		return 1, true
+	case "kilometer":
+		return 1000, true
+	case "yard":
+		return 0.9144, true
+	case "mile":
+		return 1609.344, true
+	}
+	return 0, false
 }
 
 // A CalendarEventTime is the local start time an organiser published.
@@ -79,13 +96,19 @@ func (c CalendarItem) IsEvent() bool {
 	return c.ItemType != nil && *c.ItemType == CalendarItemTypeEvent
 }
 
-// DistanceMeters reports the item's goal when it is expressed as a distance.
+// DistanceMeters reports the item's goal in metres when it is expressed as a
+// distance in a known unit.
 func (c CalendarItem) DistanceMeters() (float64, bool) {
-	if c.Target == nil || c.Target.UnitType == nil ||
+	if c.Target == nil || c.Target.UnitType == nil || c.Target.Unit == nil ||
 		*c.Target.UnitType != calendarDistanceUnit {
 		return 0, false
 	}
-	return c.Target.Value.Float64()
+	scale, known := metersPerDistanceUnit(*c.Target.Unit)
+	value, ok := c.Target.Value.Float64()
+	if !known || !ok {
+		return 0, false
+	}
+	return value * scale, true
 }
 
 // calendarMonth is the month document the feed answers with.
