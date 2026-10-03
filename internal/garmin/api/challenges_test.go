@@ -147,11 +147,69 @@ func TestChallengesGoalsWalksUntilAnEmptyPage(t *testing.T) {
 	if got := requests[0].Query.Get(client.QuerySortOrder); got != client.GoalSortAscending {
 		t.Errorf("sortOrder = %q, want %q", got, client.GoalSortAscending)
 	}
-	if got := requests[0].Query.Get(client.QueryStart); got != "0" {
-		t.Errorf("first request start = %q, want 0", got)
+	// Source: c99194b challenges.py:288-295 — start is 1-based and the
+	// Connect UI goals need Sec-Fetch-Site: same-origin.
+	if got := requests[0].Query.Get(client.QueryStart); got != "1" {
+		t.Errorf("first request start = %q, want 1", got)
 	}
-	if got := requests[1].Query.Get(client.QueryStart); got != "20" {
-		t.Errorf("second request start = %q, want 20", got)
+	if got := requests[1].Query.Get(client.QueryStart); got != "21" {
+		t.Errorf("second request start = %q, want 21", got)
+	}
+	for i, req := range requests {
+		if got := req.Header.Get("Sec-Fetch-Site"); got != "same-origin" {
+			t.Errorf("request %d Sec-Fetch-Site = %q, want same-origin", i, got)
+		}
+	}
+}
+
+func TestChallengesGoalsFallsBackToTheLegacyWalkWhenEmpty(t *testing.T) {
+	t.Parallel()
+
+	// Source: c99194b challenges.py:340-358 — an empty Connect UI read falls
+	// back once to python-garminconnect's get_goals: start=0, no extra header.
+	script := testkit.NewScript().With(client.PathGoals,
+		testkit.JSON(http.StatusOK, "[]"),
+		testkit.JSON(http.StatusOK, goalPageOneBody),
+		testkit.JSON(http.StatusOK, "[]"))
+	h := newHarness(t, script, client.Limits{})
+
+	result, err := newChallenges(t, h).Goals(t.Context(), h.session, api.GoalStatusActive)
+	if err != nil {
+		t.Fatalf("Goals() = %v", err)
+	}
+	if len(result.Goals) != 1 {
+		t.Fatalf("Goals() returned %d goals, want 1 from the fallback", len(result.Goals))
+	}
+
+	requests := h.server.Requests()
+	if len(requests) != 3 {
+		t.Fatalf("the fake received %d requests, want 3", len(requests))
+	}
+	wantStart := []string{"1", "0", "20"}
+	wantSite := []string{"same-origin", "", ""}
+	for i, req := range requests {
+		if got := req.Query.Get(client.QueryStart); got != wantStart[i] {
+			t.Errorf("request %d start = %q, want %q", i, got, wantStart[i])
+		}
+		if got := req.Header.Get("Sec-Fetch-Site"); got != wantSite[i] {
+			t.Errorf("request %d Sec-Fetch-Site = %q, want %q", i, got, wantSite[i])
+		}
+	}
+}
+
+func TestChallengesGoalsDoesNotFallBackOnAnError(t *testing.T) {
+	t.Parallel()
+
+	script := testkit.NewScript().With(client.PathGoals, testkit.JSON(http.StatusInternalServerError, "{}"))
+	h := newHarness(t, script, client.Limits{})
+
+	if _, err := newChallenges(t, h).Goals(t.Context(), h.session, api.GoalStatusActive); err == nil {
+		t.Fatal("Goals() = nil, want the Connect UI read's error")
+	}
+	for i, req := range h.server.Requests() {
+		if got := req.Query.Get(client.QueryStart); got != "1" {
+			t.Errorf("request %d start = %q, want only the start=1 read", i, got)
+		}
 	}
 }
 

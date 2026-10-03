@@ -101,6 +101,8 @@ type Request struct {
 	// rejected payload is reported as ErrInvalidFile rather than as a generic
 	// validation failure.
 	FileTransfer bool
+	// SameOrigin sends Sec-Fetch-Site: same-origin; a flag, so no caller can set other headers.
+	SameOrigin bool
 }
 
 // method is the effective HTTP method.

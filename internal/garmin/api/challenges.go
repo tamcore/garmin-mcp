@@ -199,11 +199,23 @@ type GoalResult struct {
 // headroom over any real account's goal list.
 const maxGoalWalkItems = 5000
 
+// connectUIGoalsStart is goal-service's first page index for the Connect UI
+// read; start=0 returns [] even when goals exist.
+const connectUIGoalsStart = 1
+
 // Goals reads every goal matching status, walking pages until Garmin returns an
 // empty page.
 //
-// Source: get_goals's own loop, which pages at its default limit of 30,
-// starting from 0, and stops on the first empty page — not a short one, unlike
+// Source: upstream c99194b (challenges.py:288-295,340-358). The first walk
+// reads the way Connect's Goals page does — 1-based start and Sec-Fetch-Site:
+// same-origin — because goal-service omits goals created in the current
+// Connect Goals UI otherwise. When that walk finds nothing, one fallback walk
+// repeats python-garminconnect's get_goals call: start 0, no extra header.
+// Upstream also falls back when the first walk errors; this port returns the
+// error instead of hiding it.
+//
+// Both walks follow get_goals's own loop, which pages at its default limit of
+// 30 and stops on the first empty page — not a short one, unlike
 // Activities.ListByDate, where upstream's get_activities_by_date stops on a
 // short page instead. The two upstream loops differ and this keeps the
 // difference rather than unifying it. The tool built on get_goals exposes no
@@ -228,25 +240,30 @@ func (c *Challenges) Goals(
 	}
 
 	limits := c.req.limits()
-	page, err := client.NewPage(0, limits.MaxPageSize)
-	if err != nil {
-		return GoalResult{}, invalid(req, err)
+	result, err := c.walkGoals(ctx, session, status, connectUIGoalsStart, true, limits)
+	if err != nil || len(result.Goals) > 0 {
+		return result, err
 	}
-	if err := limits.ValidatePage(page); err != nil {
-		return GoalResult{}, invalid(req, err)
-	}
-	return c.walkGoals(ctx, session, status, page, limits)
+	return c.walkGoals(ctx, session, status, 0, false, limits)
 }
 
-// walkGoals fetches successive goal pages until one is empty, the page bound
-// is reached, or maxGoalWalkItems is reached.
+// walkGoals fetches successive goal pages from start until one is empty, the
+// page bound is reached, or maxGoalWalkItems is reached.
 func (c *Challenges) walkGoals(
-	ctx context.Context, session client.Session, status GoalStatus, page client.Page, limits client.Limits,
+	ctx context.Context, session client.Session, status GoalStatus, start int, sameOrigin bool, limits client.Limits,
 ) (GoalResult, error) {
+	page, err := client.NewPage(start, limits.MaxPageSize)
+	if err == nil {
+		err = limits.ValidatePage(page)
+	}
+	if err != nil {
+		return GoalResult{}, invalid(readRequest(client.OpGetGoals, client.EndpointGoals, client.PathGoals, nil), err)
+	}
 	var all []Goal
 
 	for range limits.MaxPages {
 		req := readRequest(client.OpGetGoals, client.EndpointGoals, client.PathGoals, goalQuery(status, page))
+		req.SameOrigin = sameOrigin
 
 		var goals client.List[Goal]
 		if _, err := c.req.read(ctx, session, req, &goals); err != nil {

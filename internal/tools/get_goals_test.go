@@ -62,15 +62,18 @@ func TestGetGoalsSendsTheRequestedStatus(t *testing.T) {
 
 	h.call(t, ToolGetGoals, map[string]any{argGoalType: valueFuture})
 
+	// An empty Connect UI read is followed by one legacy fallback read.
 	requests := h.fake.Requests()
-	if len(requests) != 1 {
-		t.Fatalf("the fake received %d requests, want one", len(requests))
+	if len(requests) != 2 {
+		t.Fatalf("the fake received %d requests, want two", len(requests))
 	}
-	if got := requests[0].Query.Get(client.QueryStatus); got != valueFuture {
-		t.Errorf("status = %q, want future", got)
-	}
-	if got := requests[0].Query.Get(client.QuerySortOrder); got != client.GoalSortAscending {
-		t.Errorf("sortOrder = %q, want %q", got, client.GoalSortAscending)
+	for i, req := range requests {
+		if got := req.Query.Get(client.QueryStatus); got != valueFuture {
+			t.Errorf("request %d status = %q, want future", i, got)
+		}
+		if got := req.Query.Get(client.QuerySortOrder); got != client.GoalSortAscending {
+			t.Errorf("request %d sortOrder = %q, want %q", i, got, client.GoalSortAscending)
+		}
 	}
 }
 
