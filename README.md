@@ -166,14 +166,14 @@ surface is pinned by a golden snapshot test. It also serves the 5 upstream worko
 - Tools that upstream gives a filesystem path take the file content instead
   (`upload_course` takes `gpx_content`).
 - There is no login tool. Credentials never become tool arguments.
-- 19 tools are added beyond the pinned manifest, including `server_info`.
+- 20 tools are added beyond the pinned manifest, including `server_info`.
 
 `garmin-mcp tools list` prints the registered tools with their tier and effect.
 It needs no Garmin account, no token and no database:
 
 ```console
 $ garmin-mcp tools list | grep ' tools:'
-156 tools: 110 read-only, 37 write, 9 destructive
+157 tools: 110 read-only, 38 write, 9 destructive
 ```
 
 ## Safety defaults

@@ -652,6 +652,120 @@
     }
   },
   {
+    "name": "create_run_interval_workout",
+    "tier": "write",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Create an interval run workout"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "cooldown_min": {
+          "description": "the cooldown duration in minutes",
+          "maximum": 300,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "hr_max": {
+          "description": "the upper bpm bound of the work intervals; it must be given with hr_min",
+          "maximum": 250,
+          "minimum": 30,
+          "type": "integer"
+        },
+        "hr_min": {
+          "description": "the lower bpm bound of the work intervals; it must be given with hr_max",
+          "maximum": 250,
+          "minimum": 30,
+          "type": "integer"
+        },
+        "hr_zone": {
+          "default": "Z4",
+          "description": "the target heart-rate zone",
+          "enum": [
+            "Z1",
+            "Z2",
+            "Z3",
+            "Z4",
+            "Z5"
+          ],
+          "maxLength": 2,
+          "type": "string"
+        },
+        "name": {
+          "description": "the workout name",
+          "maxLength": 256,
+          "type": "string"
+        },
+        "recovery_hr_max": {
+          "description": "the upper bpm bound of the recovery jogs; it must be given with recovery_hr_min",
+          "maximum": 250,
+          "minimum": 30,
+          "type": "integer"
+        },
+        "recovery_hr_min": {
+          "description": "the lower bpm bound of the recovery jogs; it must be given with recovery_hr_max",
+          "maximum": 250,
+          "minimum": 30,
+          "type": "integer"
+        },
+        "recovery_seconds": {
+          "description": "the duration of each recovery jog in seconds; 0 omits the jog",
+          "maximum": 14400,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rep_seconds": {
+          "description": "the duration of each work interval in seconds",
+          "maximum": 14400,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "repeats": {
+          "description": "how many work intervals the workout repeats",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "warmup_min": {
+          "description": "the warmup duration in minutes",
+          "maximum": 300,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cooldown_min",
+        "name",
+        "recovery_seconds",
+        "rep_seconds",
+        "repeats",
+        "warmup_min"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "the name Garmin saved, which may differ",
+          "type": "string"
+        },
+        "workout_id": {
+          "description": "the identifier Garmin saved the workout under",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workout_id"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "create_run_workout",
     "tier": "write",
     "annotations": {

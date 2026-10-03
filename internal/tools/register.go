@@ -272,6 +272,7 @@ func writeRegistrations() []registration {
 		{scheduleWeekContract, registerScheduleWeek},
 		{createWalkRunWorkoutContract, registerCreateWalkRunWorkout},
 		{createRunWorkoutContract, registerCreateRunWorkout},
+		{createRunIntervalWorkoutContract, registerCreateRunIntervalWorkout},
 		{createZ2WalkWorkoutContract, registerCreateZ2WalkWorkout},
 		{createStrengthWorkoutContract, registerCreateStrengthWorkout},
 		{downloadActivityFileContract, registerDownloadActivityFile},

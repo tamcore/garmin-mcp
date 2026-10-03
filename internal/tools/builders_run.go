@@ -55,6 +55,21 @@ func intervalSeconds(name, description string) Property {
 	}
 }
 
+// argNameRepeats is the repeat-count argument of the interval builders.
+const argNameRepeats = "repeats"
+
+// repeatsProperty declares the iteration count of a built repeat group.
+func repeatsProperty(description string) Property {
+	return Property{
+		Name:        argNameRepeats,
+		Types:       []string{typeInteger},
+		Description: description,
+		Minimum:     bound(1),
+		Maximum:     bound(maxRepeats),
+		Required:    true,
+	}
+}
+
 // heartRateZoneProperty declares the optional named-zone target and its default.
 func heartRateZoneProperty(fallback string) Property {
 	zoneKeyLen := 2
@@ -107,14 +122,7 @@ func createWalkRunWorkoutContract() Contract {
 			builderName(),
 			intervalSeconds(argNameRunSeconds, "the duration of each run interval in seconds"),
 			intervalSeconds("walk_seconds", "the duration of each walk interval in seconds"),
-			Property{
-				Name:        "repeats",
-				Types:       []string{typeInteger},
-				Description: "how many run and walk pairs the workout repeats",
-				Minimum:     bound(1),
-				Maximum:     bound(maxRepeats),
-				Required:    true,
-			},
+			repeatsProperty("how many run and walk pairs the workout repeats"),
 			blockMinutes(argNameWarmupMin, "the warmup duration in minutes"),
 			blockMinutes(argNameCooldownMin, "the cooldown duration in minutes"),
 			heartRateZoneProperty(defaultHeartRateZone),
@@ -164,7 +172,7 @@ func validateWalkRunBounds(in createWalkRunWorkoutInput) error {
 	return checkBounds([]boundCheck{
 		{argNameRunSeconds, float64(in.RunSeconds), 1, maxIntervalSeconds},
 		{"walk_seconds", float64(in.WalkSeconds), 1, maxIntervalSeconds},
-		{"repeats", float64(in.Repeats), 1, maxRepeats},
+		{argNameRepeats, float64(in.Repeats), 1, maxRepeats},
 		{argNameWarmupMin, float64(in.WarmupMin), 0, maxBlockMinutes},
 		{argNameCooldownMin, float64(in.CooldownMin), 0, maxBlockMinutes},
 	})

@@ -169,6 +169,7 @@ var wantWriteToolNames = []string{
 	tools.ToolScheduleWeek,
 	"create_walk_run_workout",
 	"create_run_workout",
+	tools.ToolCreateRunIntervalWorkout,
 	"create_z2_walk_workout",
 	"create_strength_workout",
 	"download_activity_file",
@@ -207,6 +208,7 @@ var nonIdempotentTools = []string{
 	tools.ToolScheduleWeek,
 	"create_walk_run_workout",
 	"create_run_workout",
+	tools.ToolCreateRunIntervalWorkout,
 	"create_z2_walk_workout",
 	"create_strength_workout",
 	// Nutrition: a create and the three log writes. The manifest classifies each

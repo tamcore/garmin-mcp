@@ -32,6 +32,7 @@ const (
 	argStartTime       = "start_time"
 	argRunSeconds      = "run_seconds"
 	argWalkSeconds     = "walk_seconds"
+	argRepeats         = "repeats"
 	argWarmupMin       = "warmup_min"
 	argCooldownMin     = "cooldown_min"
 	argHRMin           = "hr_min"
