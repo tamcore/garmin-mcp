@@ -1,17 +1,33 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"log/slog"
+	"net/http"
+	"slices"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tamcore/garmin-mcp/internal/garmin/api"
+	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 	"github.com/tamcore/garmin-mcp/internal/mcpserver"
 	"github.com/tamcore/garmin-mcp/internal/policy"
 )
 
 // ToolGetTrainingEffect is the upstream compatibility name of the training-effect read.
 const ToolGetTrainingEffect = "get_training_effect"
+
+// The two documents a training effect can be read from.
+const (
+	trainingEffectSourceDetails = "activity_details"
+	trainingEffectSourceList    = "activity_list"
+)
+
+// adviceTrainingEffectNotListed answers a refused details read whose list fallback
+// found nothing. It is not the authentication advice: the session is fine.
+const adviceTrainingEffectNotListed = "Garmin refused the activity details (HTTP 403), " +
+	"and the activity is not among the most recent activities. Its training effect " +
+	"cannot be read."
 
 // TrainingEffect is one activity's training effect. It is health data — never log it,
 // never cache it.
@@ -28,7 +44,8 @@ type TrainingEffect struct {
 	TrainingLoad         *float64 `json:"training_load,omitempty" jsonschema:"the activity's training load"`
 	PerformanceCondition *float64 `json:"performance_condition,omitempty" jsonschema:"the performance condition"`
 
-	Reported bool `json:"reported" jsonschema:"whether the activity carried a training summary at all"`
+	Reported bool   `json:"reported" jsonschema:"whether the activity carried a training summary at all"`
+	Source   string `json:"source" jsonschema:"activity_details, or activity_list when Garmin refused the details"`
 }
 
 // LogValue reports the shape of the answer, never a reading.
@@ -84,12 +101,50 @@ func registerGetTrainingEffect(registry *mcpserver.Registry, svc *service) error
 			return nil, TrainingEffect{}, err
 		}
 		effect, err := scores.TrainingEffect(ctx, session, id)
-		if err != nil {
+		switch {
+		case hasStatus(err, http.StatusForbidden):
+			listed, listErr := trainingEffectFromList(ctx, svc, session, id)
+			return nil, listed, listErr
+		case err != nil:
 			return nil, TrainingEffect{}, fail(err)
 		}
-		return nil, newTrainingEffect(id.Int64(), effect), nil
+		return nil, newTrainingEffect(id.Int64(), effect.Summary, trainingEffectSourceDetails), nil
 	}
 	return mcpserver.AddTool(registry, getTrainingEffectContract().Registration(), handler)
+}
+
+// trainingEffectFromList answers from the activity list, which Garmin still serves
+// for activities whose details it refuses: first filtered by the identifier, then one
+// bounded page of the most recent activities. Source: training.py:163-207.
+func trainingEffectFromList(
+	ctx context.Context, svc *service, session client.Session, id client.ID,
+) (TrainingEffect, error) {
+	probe, err := client.NewPage(0, 1)
+	if err != nil {
+		return TrainingEffect{}, fail(err)
+	}
+	recent, err := client.NewPage(0, min(DefaultMaxActivityPageSize, svc.limits.MaxPageSize))
+	if err != nil {
+		return TrainingEffect{}, fail(err)
+	}
+	for _, query := range []api.ListQuery{{Page: probe, ID: id}, {Page: recent}} {
+		result, err := svc.activities.List(ctx, session, query)
+		if err != nil {
+			return TrainingEffect{}, fail(err)
+		}
+		i := slices.IndexFunc(result.Activities, func(activity api.Activity) bool {
+			return activity.ActivityID != nil && *activity.ActivityID == id.Int64()
+		})
+		if i < 0 {
+			continue
+		}
+		var summary *api.TrainingEffectSummary
+		if listed := result.Activities[i].TrainingEffectSummary; listed != (api.TrainingEffectSummary{}) {
+			summary = &listed
+		}
+		return newTrainingEffect(id.Int64(), summary, trainingEffectSourceList), nil
+	}
+	return TrainingEffect{}, &ToolError{Advice: adviceTrainingEffectNotListed, Err: client.ErrNotFound}
 }
 
 // newTrainingEffect maps the activity summary onto the result.
@@ -97,17 +152,16 @@ func registerGetTrainingEffect(registry *mcpserver.Registry, svc *service) error
 // The identifier is the validated one the caller asked for, never the one the payload
 // echoed: a response that names a different activity must not be reported as if it
 // answered the question that was asked.
-func newTrainingEffect(activityID int64, effect api.ActivityTrainingEffect) TrainingEffect {
-	out := TrainingEffect{ActivityID: activityID}
-	if effect.Summary == nil {
+func newTrainingEffect(activityID int64, summary *api.TrainingEffectSummary, source string) TrainingEffect {
+	out := TrainingEffect{ActivityID: activityID, Source: source}
+	if summary == nil {
 		return out
 	}
 
-	summary := effect.Summary
 	out.Reported = true
-	out.AerobicEffect = optionalFloat(summary.TrainingEffect)
+	out.AerobicEffect = optionalFloat(cmp.Or(summary.TrainingEffect, summary.AerobicTrainingEffect))
 	out.AnaerobicEffect = optionalFloat(summary.AnaerobicTrainingEffect)
-	out.EffectLabel = optionalText(summary.TrainingEffectLabel)
+	out.EffectLabel = optionalText(cmp.Or(summary.TrainingEffectLabel, summary.AerobicTrainingEffectMessage))
 	out.TrainingLoad = optionalFloat(summary.ActivityTrainingLoad)
 	out.PerformanceCondition = optionalFloat(summary.PerformanceCondition)
 	if minutes, ok := summary.RecoveryTime.Float64(); ok {
