@@ -119,11 +119,10 @@ type Activity struct {
 	// Optional per activity: an indoor ride records no altitude at all.
 	ElevationGain client.Number `json:"elevationGain"`
 	ElevationLoss client.Number `json:"elevationLoss"`
-}
 
-// jsonNull is the JSON null literal, which every tolerant decoder in this package
-// treats as an absent document rather than as a decode failure.
-const jsonNull = "null"
+	// The search listing carries at the top level what the summary nests under summaryDTO.
+	TrainingEffectSummary
+}
 
 // activityEnvelope decodes both shapes the search endpoint answers with: a bare
 // array, and an object that carries the array under a key. Upstream only ever sees
@@ -183,14 +182,20 @@ type ListQuery struct {
 	Page client.Page
 	// Type filters by activity type. The zero value is unfiltered.
 	Type ActivityType
+	// ID filters by one activity. The zero value is unfiltered.
+	ID client.ID
 }
 
 // List reads one page of activities.
 func (a *Activities) List(
 	ctx context.Context, session client.Session, query ListQuery,
 ) (ActivityPage, error) {
+	params := activityQuery(query.Page, query.Type, client.DateRange{}, SortDefault)
+	if !query.ID.IsZero() {
+		params.Set(client.QueryActivityIDs, query.ID.String())
+	}
 	req := readRequest(client.OpListActivities, client.EndpointActivitySearch,
-		client.PathActivitySearch, activityQuery(query.Page, query.Type, client.DateRange{}, SortDefault))
+		client.PathActivitySearch, params)
 
 	if err := a.req.limits().ValidatePage(query.Page); err != nil {
 		return ActivityPage{}, invalid(req, err)

@@ -141,6 +141,7 @@ const (
 	QueryDate                  = "date"
 	QueryNonSleepBufferMinutes = "nonSleepBufferMinutes"
 	QueryActivityID            = "activityId"
+	QueryActivityIDs           = "activityIds"
 )
 
 // Endpoint is a sanitized endpoint label for logs, metrics and errors.

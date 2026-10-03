@@ -139,14 +139,18 @@ func (t *TrainingScores) EnduranceScore(
 }
 
 // TrainingEffectSummary is the training-effect part of an activity summary. Source:
-// the summaryDTO keys the upstream curation reads for get_training_effect.
+// the keys the upstream curation reads for get_training_effect, from the summaryDTO
+// and from a search-listing item alike. Each aerobic spelling is a fallback for the
+// other. RecoveryTime is in minutes.
 type TrainingEffectSummary struct {
-	TrainingEffect          client.Number `json:"trainingEffect"`
-	AnaerobicTrainingEffect client.Number `json:"anaerobicTrainingEffect"`
-	TrainingEffectLabel     client.Text   `json:"trainingEffectLabel"`
-	RecoveryTime            client.Number `json:"recoveryTime"`
-	ActivityTrainingLoad    client.Number `json:"activityTrainingLoad"`
-	PerformanceCondition    client.Number `json:"performanceCondition"`
+	TrainingEffect               client.Number `json:"trainingEffect"`
+	AerobicTrainingEffect        client.Number `json:"aerobicTrainingEffect"`
+	AnaerobicTrainingEffect      client.Number `json:"anaerobicTrainingEffect"`
+	TrainingEffectLabel          client.Text   `json:"trainingEffectLabel"`
+	AerobicTrainingEffectMessage client.Text   `json:"aerobicTrainingEffectMessage"`
+	RecoveryTime                 client.Number `json:"recoveryTime"`
+	ActivityTrainingLoad         client.Number `json:"activityTrainingLoad"`
+	PerformanceCondition         client.Number `json:"performanceCondition"`
 }
 
 // ActivityTrainingEffect is one activity's training effect. Garmin serves it inside

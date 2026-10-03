@@ -9,6 +9,10 @@ import (
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 )
 
+// jsonNull is the JSON null literal, which every tolerant decoder in this package
+// treats as an absent document rather than as a decode failure.
+const jsonNull = "null"
+
 // requester is the request layer every domain client is built on. It is a value
 // wrapper rather than an interface because there is exactly one implementation and
 // no seam is needed: the injectable seams — the caller, the clock, the sleeper and
