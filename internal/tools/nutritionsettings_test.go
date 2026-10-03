@@ -136,3 +136,23 @@ func TestNutritionSettingsResultsNeverLogATargetFigure(t *testing.T) {
 	}
 	assertShapeOnly(t, "NutritionSettingsResult", out, "2200", "250", "70", "140")
 }
+
+func TestSetNutritionDailySettingsNamesAPassedWeightGoalTargetDate(t *testing.T) {
+	t.Parallel()
+
+	h := newTrendHarness(t, nutritionSettingsScript(
+		testkit.JSON(http.StatusOK, `{"calorieGoal":2200,"targetDate":"2026-01-15"}`)))
+	_, err := h.svc.setNutritionDailySettings(h.ctx, setNutritionDailySettingsInput{
+		Date: nutritionTestDate, CalorieGoal: new(int64(2300)),
+	})
+	toolErr, ok := errors.AsType[*ToolError](err)
+	if !ok {
+		t.Fatalf("setNutritionDailySettings() = %v, want a ToolError", err)
+	}
+	if toolErr.Advice != AdviceTargetDatePassed {
+		t.Errorf("advice = %q, want the authored target-date advice", toolErr.Advice)
+	}
+	if got := len(h.fake.Requests()); got != 1 {
+		t.Errorf("the fake received %d requests, want 1 (the read only)", got)
+	}
+}

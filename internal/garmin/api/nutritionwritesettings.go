@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
 )
@@ -66,6 +67,9 @@ func (n *Nutrition) SetSettings(
 	if current.Payload().Len() == 0 {
 		return NutritionSettings{}, unexpected(req, fmt.Errorf(
 			"%w: no current nutrition settings to update", client.ErrMalformedPayload))
+	}
+	if target, ok := passedTargetDate(current.TargetDate, date); ok {
+		return NutritionSettings{}, invalid(req, &TargetDatePassedError{TargetDate: target, Date: date})
 	}
 
 	body, err := mergeSettingsFields(req, current.Payload().Bytes(), update)
@@ -170,4 +174,30 @@ func setGoal(fields map[string]json.RawMessage, key string, value *int64) {
 	if value != nil {
 		fields[key] = strconv.AppendInt(nil, *value, 10)
 	}
+}
+
+// TargetDatePassedError refuses a settings write Garmin rejects with a 400: the
+// weight-goal targetDate the document carries must be after the day written.
+type TargetDatePassedError struct {
+	TargetDate client.Date
+	Date       client.Date
+}
+
+func (e *TargetDatePassedError) Error() string {
+	return "the weight goal's targetDate (" + e.TargetDate.String() + ") is not after " +
+		e.Date.String() + ", and Garmin rejects the whole settings update in that case"
+}
+
+// passedTargetDate reports the stored targetDate when it is on or before date. An
+// absent or unparseable value is left for Garmin to judge.
+func passedTargetDate(stored client.Text, date client.Date) (client.Date, bool) {
+	value, ok := stored.Value()
+	if !ok || len(value) < len(time.DateOnly) {
+		return client.Date{}, false
+	}
+	target, err := client.ParseDate(value[:len(time.DateOnly)])
+	if err != nil || target.Time().After(date.Time()) {
+		return client.Date{}, false
+	}
+	return target, true
 }

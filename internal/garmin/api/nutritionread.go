@@ -113,6 +113,8 @@ func (n *Nutrition) Meals(
 type NutritionSettings struct {
 	CalorieGoal client.Number `json:"calorieGoal"`
 	MacroGoals  MacroGoals    `json:"macroGoals"`
+	// TargetDate is the weight goal's target day, which this document also carries.
+	TargetDate client.Text `json:"targetDate"`
 
 	raw client.Payload
 }

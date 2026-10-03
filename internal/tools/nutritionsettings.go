@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strconv"
 
@@ -21,6 +22,11 @@ const (
 	maxCalorieGoal   = 20000
 	maxMacroGrams    = 2000
 )
+
+// AdviceTargetDatePassed refuses a settings write over a passed weight-goal target date.
+const AdviceTargetDatePassed = "Nothing was written: the weight goal's target date is not " +
+	"after the requested date. Set a later target date on the weight goal in Garmin " +
+	"Connect, or end the goal, then retry."
 
 // The upstream compatibility names of the two nutrition-settings tools.
 const (
@@ -236,6 +242,9 @@ func (s *service) setNutritionDailySettings(
 		ProteinGrams: in.ProteinGrams,
 	}
 	settings, err := s.nutrition.SetSettings(ctx, session, day, update)
+	if _, ok := errors.AsType[*api.TargetDatePassedError](err); ok {
+		return SetNutritionSettingsResult{}, &ToolError{Advice: AdviceTargetDatePassed, Err: err}
+	}
 	if err != nil {
 		return SetNutritionSettingsResult{}, fail(err)
 	}
