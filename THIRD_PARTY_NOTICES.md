@@ -141,7 +141,7 @@ artifact.
 | `go.yaml.in/yaml/v3` | `v3.0.5` | `MIT AND Apache-2.0` |
 | `golang.org/x/oauth2` | `v0.37.0` | `BSD-3-Clause` |
 | `golang.org/x/sync` | `v0.23.0` | `BSD-3-Clause` |
-| `golang.org/x/sys` | `v0.48.0` | `BSD-3-Clause` |
+| `golang.org/x/sys` | `v0.49.0` | `BSD-3-Clause` |
 | `golang.org/x/text` | `v0.42.0` | `BSD-3-Clause` |
 | `golang.org/x/time` | `v0.16.0` | `BSD-3-Clause` |
 | `google.golang.org/protobuf` | `v1.36.11` | `BSD-3-Clause` |
@@ -2558,7 +2558,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 ```
 
-### `golang.org/x/sys` v0.48.0
+### `golang.org/x/sys` v0.49.0
 
 SPDX identifier: `BSD-3-Clause`
 
