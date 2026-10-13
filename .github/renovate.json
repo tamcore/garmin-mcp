@@ -39,6 +39,21 @@
         "gcr.io/distroless/static-debian12"
       ],
       "groupName": "distroless base image"
+    },
+    {
+      "description": "TestRunWritesTheNoticesToAFile pins every module version, so a Go bump must regenerate the notices.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "postUpgradeTasks": {
+        "commands": [
+          "go run ./cmd/notices"
+        ],
+        "fileFilters": [
+          "THIRD_PARTY_NOTICES.md"
+        ],
+        "executionMode": "branch"
+      }
     }
   ]
 }
