@@ -49,7 +49,7 @@ func (a *Authenticator) beginMFA(principal string, strategy StrategyName, step s
 		MFAMethod:            method,
 		MFADeliveryUncertain: step.class.MFADeliveryUncertain() && !step.codeDelivered,
 		CSRFToken:            step.class.CSRFToken(),
-		Cookies:              step.session.cookiesFor(a.hosts.SSOBase()),
+		Cookies:              step.session.cookiesForAll(a.continuationURLs(strategy)...),
 		Query:                step.query,
 		Referer:              step.referer,
 		ServiceURL:           step.serviceURL,
@@ -60,6 +60,19 @@ func (a *Authenticator) beginMFA(principal string, strategy StrategyName, step s
 		return failedResult(strategy), err
 	}
 	return mfaPendingResult(strategy, transactionID, pending), nil
+}
+
+// continuationURLs lists the URLs whose cookies the continuation keeps, the
+// strategy's own verify endpoint first. Garmin scopes SESSION below the SSO root.
+func (a *Authenticator) continuationURLs(strategy StrategyName) []string {
+	own, other := a.hosts.PortalMFAVerifyCodeURL(), a.hosts.MobileMFAVerifyCodeURL()
+	if strategy == StrategyMobileIOS {
+		own, other = other, own
+	}
+	if strategy == StrategyWidget {
+		return []string{a.hosts.WidgetVerifyMFAURL(), own, other, a.hosts.SSOBase()}
+	}
+	return []string{own, other, a.hosts.SSOBase()}
 }
 
 // CompleteMFA submits a one-time code for the transaction named by
