@@ -23,7 +23,7 @@ env:
   # Pinned tool versions. CI must never resolve a floating "latest".
   GOLANGCI_LINT_VERSION: v2.14.0 # renovate: datasource=github-releases depName=golangci/golangci-lint
   GORELEASER_VERSION: v2.18.3 # renovate: datasource=github-releases depName=goreleaser/goreleaser
-  GOVULNCHECK_VERSION: v1.8.0 # renovate: datasource=go depName=golang.org/x/vuln
+  GOVULNCHECK_VERSION: v1.9.0 # renovate: datasource=go depName=golang.org/x/vuln
 
 jobs:
   verify:
@@ -79,7 +79,8 @@ jobs:
           fail-on-severity: low
           # Matches the licenses of the current dependency set. A dependency
           # under anything else needs a decision, not an automatic pass.
-          allow-licenses: Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT
+          # The LicenseRef is the PATENTS grant of golang.org/x modules.
+          allow-licenses: Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT, LicenseRef-scancode-google-patent-license-golang
 
   lint:
     name: Lint
