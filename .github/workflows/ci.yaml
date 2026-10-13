@@ -79,7 +79,8 @@ jobs:
           fail-on-severity: low
           # Matches the licenses of the current dependency set. A dependency
           # under anything else needs a decision, not an automatic pass.
-          allow-licenses: Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT
+          # The LicenseRef is the PATENTS grant of golang.org/x modules.
+          allow-licenses: Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT, LicenseRef-scancode-google-patent-license-golang
 
   lint:
     name: Lint
