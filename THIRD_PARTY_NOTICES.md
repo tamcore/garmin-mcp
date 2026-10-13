@@ -123,10 +123,10 @@ artifact.
 | `github.com/munnerz/goautoneg` | `v0.0.0-20191010083416-a7dc8b61c822` | `BSD-3-Clause` |
 | `github.com/ncruces/go-strftime` | `v1.0.0` | `MIT` |
 | `github.com/pelletier/go-toml/v2` | `v2.4.3` | `MIT` |
-| `github.com/prometheus/client_golang` | `v1.24.1` | `Apache-2.0` |
-| `github.com/prometheus/client_model` | `v0.6.2` | `Apache-2.0` |
-| `github.com/prometheus/common` | `v0.70.1` | `Apache-2.0` |
-| `github.com/prometheus/procfs` | `v0.21.1` | `Apache-2.0` |
+| `github.com/prometheus/client_golang` | `v1.25.0` | `Apache-2.0` |
+| `github.com/prometheus/client_model` | `v0.6.3` | `Apache-2.0` |
+| `github.com/prometheus/common` | `v0.72.0` | `Apache-2.0` |
+| `github.com/prometheus/procfs` | `v0.22.0` | `Apache-2.0` |
 | `github.com/remyoudompheng/bigfft` | `v0.0.0-20230129092748-24d4a6f8daec` | `BSD-3-Clause` |
 | `github.com/sagikazarmark/locafero` | `v0.12.0` | `MIT` |
 | `github.com/segmentio/asm` | `v1.2.1` | `MIT` |
@@ -144,7 +144,7 @@ artifact.
 | `golang.org/x/sys` | `v0.48.0` | `BSD-3-Clause` |
 | `golang.org/x/text` | `v0.42.0` | `BSD-3-Clause` |
 | `golang.org/x/time` | `v0.16.0` | `BSD-3-Clause` |
-| `google.golang.org/protobuf` | `v1.36.11` | `BSD-3-Clause` |
+| `google.golang.org/protobuf` | `v1.36.12` | `BSD-3-Clause` |
 | `modernc.org/libc` | `v1.77.1` | `BSD-3-Clause` |
 | `modernc.org/mathutil` | `v1.7.1` | `BSD-3-Clause` |
 | `modernc.org/memory` | `v1.12.1` | `BSD-3-Clause` |
@@ -839,7 +839,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### `github.com/prometheus/client_golang` v1.24.1
+### `github.com/prometheus/client_golang` v1.25.0
 
 SPDX identifier: `Apache-2.0`
 
@@ -1072,7 +1072,7 @@ Copyright 2010 The Go Authors
 See source code for license details.
 ```
 
-### `github.com/prometheus/client_model` v0.6.2
+### `github.com/prometheus/client_model` v0.6.3
 
 SPDX identifier: `Apache-2.0`
 
@@ -1292,7 +1292,7 @@ This product includes software developed at
 SoundCloud Ltd. (http://soundcloud.com/).
 ```
 
-### `github.com/prometheus/common` v0.70.1
+### `github.com/prometheus/common` v0.72.0
 
 SPDX identifier: `Apache-2.0`
 
@@ -1512,7 +1512,7 @@ This product includes software developed at
 SoundCloud Ltd. (http://soundcloud.com/).
 ```
 
-### `github.com/prometheus/procfs` v0.21.1
+### `github.com/prometheus/procfs` v0.22.0
 
 SPDX identifier: `Apache-2.0`
 
@@ -2747,7 +2747,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 ```
 
-### `google.golang.org/protobuf` v1.36.11
+### `google.golang.org/protobuf` v1.36.12
 
 SPDX identifier: `BSD-3-Clause`
 
