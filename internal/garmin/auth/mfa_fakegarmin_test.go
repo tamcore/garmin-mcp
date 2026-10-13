@@ -626,3 +626,27 @@ func TestConcurrentCompleteMFAIsSingleUse(t *testing.T) {
 		t.Fatalf("registry holds %d transactions, want 0", h.registry.Len())
 	}
 }
+
+// Garmin sets SESSION on the login POST without a Path, so the jar scopes it to
+// /mobile/api. The continuation must still present it on the verify call.
+func TestCompleteMFAReplaysAPathScopedSessionCookie(t *testing.T) {
+	login := testkit.JSON(http.StatusOK, testkit.LoginMFARequiredJSON(protocol.MFAMethodEmail))
+	login.Header = http.Header{"Set-Cookie": {"SESSION=session-secret-3001; HttpOnly"}}
+	h := newHarness(t, mobileMFAScript().With(protocol.PathMobileLogin, login))
+	capability := startMFA(t, h)
+
+	if _, err := h.auth.CompleteMFA(t.Context(), capability, testPrincipal, testMFACode); err != nil {
+		t.Fatalf("CompleteMFA: %v", err)
+	}
+
+	for _, req := range h.server.Requests() {
+		if req.Path != protocol.PathMobileMFAVerifyCode {
+			continue
+		}
+		if !strings.Contains(req.Header.Get("Cookie"), "SESSION=session-secret-3001") {
+			t.Fatal("the verify request did not carry the SESSION cookie")
+		}
+		return
+	}
+	t.Fatal("no verify request was made")
+}

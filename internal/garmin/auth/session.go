@@ -88,6 +88,23 @@ func (s *session) cookiesFor(rawURL string) []*http.Cookie {
 	return s.jar.Cookies(parsed)
 }
 
+// cookiesForAll merges the cookies for each of rawURLs, keeping the first value
+// of each name. The jar returns no Path, so seeding at the SSO root scopes each
+// cookie to "/".
+func (s *session) cookiesForAll(rawURLs ...string) []*http.Cookie {
+	seen := map[string]bool{}
+	var out []*http.Cookie
+	for _, rawURL := range rawURLs {
+		for _, cookie := range s.cookiesFor(rawURL) {
+			if !seen[cookie.Name] {
+				seen[cookie.Name] = true
+				out = append(out, cookie)
+			}
+		}
+	}
+	return out
+}
+
 // get performs a GET.
 func (s *session) get(ctx context.Context, rawURL string, header http.Header) (rawResponse, error) {
 	return s.do(ctx, http.MethodGet, rawURL, header, nil, "")
