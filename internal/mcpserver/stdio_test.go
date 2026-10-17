@@ -227,7 +227,9 @@ func TestStdioStartupLoggingDoesNotTouchStdout(t *testing.T) {
 	harness.send(t, initializeFrame)
 	frames := harness.readFrames(t, 1)
 	harness.closeStdin(t)
-	<-done
+	if err := <-done; err != nil {
+		t.Errorf("RunStdio() = %v, want nil after stdin closes", err)
+	}
 
 	if len(frames) != 1 {
 		t.Fatalf("read %d frames, want 1", len(frames))
@@ -297,7 +299,10 @@ func TestRunStdioReturnsOnContextCancellation(t *testing.T) {
 
 	cancel()
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Fatalf("RunStdio returned error: %v", err)
+		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("RunStdio did not return after its context was cancelled")
 	}
