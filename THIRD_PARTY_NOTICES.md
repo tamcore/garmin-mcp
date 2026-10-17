@@ -119,7 +119,7 @@ artifact.
 | `github.com/google/uuid` | `v1.6.0` | `BSD-3-Clause` |
 | `github.com/mattn/go-isatty` | `v0.0.24` | `MIT` |
 | `github.com/modelcontextprotocol/go-sdk` | `v1.8.0` | `Apache-2.0 AND MIT` |
-| `github.com/muktihari/fit` | `v0.28.4` | `BSD-3-Clause` |
+| `github.com/muktihari/fit` | `v0.28.5` | `BSD-3-Clause` |
 | `github.com/munnerz/goautoneg` | `v0.0.0-20191010083416-a7dc8b61c822` | `BSD-3-Clause` |
 | `github.com/ncruces/go-strftime` | `v1.0.0` | `MIT` |
 | `github.com/pelletier/go-toml/v2` | `v2.4.3` | `MIT` |
@@ -620,7 +620,7 @@ CC-BY-4.0. See https://creativecommons.org/licenses/by/4.0/legalcode for
 the full license text.
 ```
 
-### `github.com/muktihari/fit` v0.28.4
+### `github.com/muktihari/fit` v0.28.5
 
 SPDX identifier: `BSD-3-Clause`
 
