@@ -30,8 +30,8 @@ func gearLinkSchema(action string) Schema {
 	return NewSchema(activityIDIntegerProperty(), Property{
 		Name:        "gear_uuid",
 		Types:       []string{typeString},
-		Description: "the canonical UUID of the gear to " + action + ", from get_gear",
-		Pattern:     `^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$`,
+		Description: "the UUID of the gear to " + action + ", as get_gear returns it, with or without hyphens",
+		Pattern:     `^([0-9a-fA-F]{32}|[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$`,
 		MaxLength:   new(maxGearUUIDLen),
 		Required:    true,
 	})

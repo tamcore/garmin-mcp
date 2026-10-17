@@ -32,6 +32,21 @@ func mustGearUUID(t *testing.T) api.GearUUID {
 	return gear
 }
 
+// TestGearUUIDAcceptsTheHyphenFreeFormGarminReturns pins issue #35: the gear list
+// returns 32 hex digits without hyphens, and the identifier keeps that form.
+func TestGearUUIDAcceptsTheHyphenFreeFormGarminReturns(t *testing.T) {
+	t.Parallel()
+
+	const compact = "1F3C9D2A000040008000ABCDEF012345"
+	gear, err := api.ParseGearUUID(compact)
+	if err != nil {
+		t.Fatalf("ParseGearUUID(%q) = %v", compact, err)
+	}
+	if got := gear.String(); got != compact {
+		t.Errorf("String() = %q, want %q", got, compact)
+	}
+}
+
 // TestGearUUIDRefusesAnythingThatIsNotOne is the path-safety test: only a parsed
 // identifier reaches a URL path, so no separator or traversal segment can.
 func TestGearUUIDRefusesAnythingThatIsNotOne(t *testing.T) {
@@ -42,6 +57,10 @@ func TestGearUUIDRefusesAnythingThatIsNotOne(t *testing.T) {
 		"1f3c9d2a-0000-4000-8000-abcdef01234",
 		"1f3c9d2a-0000-4000-8000-abcdefg12345",
 		"1f3c9d2a/0000/4000/8000/abcdef012345",
+		"1f3c9d2a000040008000abcdef01234",
+		"1f3c9d2a000040008000abcdef0123456",
+		"1f3c9d2a000040008000abcdefg12345",
+		"1f3c9d2a-000040008000abcdef012345",
 	}
 	for _, value := range rejected {
 		if _, err := api.ParseGearUUID(value); !errors.Is(err, client.ErrValidation) {

@@ -42,9 +42,16 @@ type GearUUID struct {
 // uuidLayout is the canonical 8-4-4-4-12 hyphen layout.
 var uuidLayout = [...]int{8, 4, 4, 4, 12}
 
-// ParseGearUUID validates a canonical hyphenated UUID.
+// compactUUIDLen is the hyphen-free form the gear list returns.
+const compactUUIDLen = 32
+
+// ParseGearUUID validates a canonical hyphenated UUID or its 32-digit hyphen-free
+// form, and keeps the form it was given.
 func ParseGearUUID(value string) (GearUUID, error) {
 	trimmed := strings.TrimSpace(value)
+	if len(trimmed) == compactUUIDLen && isHex(trimmed) {
+		return GearUUID{value: trimmed}, nil
+	}
 	groups := strings.Split(trimmed, "-")
 	if len(groups) != len(uuidLayout) {
 		return GearUUID{}, fmt.Errorf("%w: gear uuid must be a canonical UUID",

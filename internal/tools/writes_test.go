@@ -214,7 +214,7 @@ func TestGearToolsLinkAndUnlinkTheNamedGear(t *testing.T) {
 
 			out := h.call(t, tc.tool, map[string]any{
 				argActivityID: 987654321,
-				"gear_uuid":   testGearUUID,
+				argGearUUID:   testGearUUID,
 			})
 			if got := out["updated"]; got != tc.want {
 				t.Errorf("updated = %v, want %v", got, tc.want)
@@ -223,12 +223,29 @@ func TestGearToolsLinkAndUnlinkTheNamedGear(t *testing.T) {
 	}
 }
 
+// TestGearToolsTakeTheHyphenFreeUUIDGetGearReturns pins issue #35.
+func TestGearToolsTakeTheHyphenFreeUUIDGetGearReturns(t *testing.T) {
+	const compact = "1f3c9d2a000040008000abcdef012345"
+	script := testkit.NewScript().
+		With(client.PathSocialProfile, okJSON(profileBody)).
+		With(client.PathGearPrefix+"/link/"+compact+"/activity/"+testActivityID, okJSON(`{}`))
+	h := newWriteHarness(t, script, enabledWrites())
+
+	out := h.call(t, tools.ToolAddGearToActivity, map[string]any{
+		argActivityID: 987654321,
+		argGearUUID:   compact,
+	})
+	if got := out["updated"]; got != "gear_linked" {
+		t.Errorf("updated = %v, want gear_linked", got)
+	}
+}
+
 func TestGearToolsRefuseAGearIdentifierThatIsNotAUUID(t *testing.T) {
 	h := newWriteHarness(t, gearScript(), enabledWrites())
 
 	h.callError(t, tools.ToolAddGearToActivity, map[string]any{
 		argActivityID: 987654321,
-		"gear_uuid":   traversalAttempt,
+		argGearUUID:   traversalAttempt,
 	})
 
 	if len(h.fake.Requests()) != 0 {

@@ -40,6 +40,7 @@ const (
 	argEndDate      = "end_date"
 	argActivityType = "activity_type"
 	argActivityID   = "activity_id"
+	argGearUUID     = "gear_uuid"
 	argDate         = "date"
 	argUserID       = "user_id"
 )
