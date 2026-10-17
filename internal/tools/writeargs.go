@@ -21,7 +21,7 @@ const (
 	// maxEventTypeArgumentLen bounds an event-type key.
 	maxEventTypeArgumentLen = 32
 
-	// maxGearUUIDLen is the length of a canonical hyphenated UUID.
+	// maxGearUUIDLen is the length of a hyphenated UUID, the longer accepted form.
 	maxGearUUIDLen = 36
 
 	// maxTimeZoneArgumentLen bounds an IANA timezone name.
@@ -173,12 +173,12 @@ func parseRequiredText(field, value string, limit int) (string, error) {
 // parseGearIdentifier validates a gear UUID. Only a parsed value reaches a URL path.
 func parseGearIdentifier(value string) (api.GearUUID, error) {
 	if len(value) > maxGearUUIDLen {
-		return api.GearUUID{}, invalidArgument("gear_uuid is not a canonical UUID")
+		return api.GearUUID{}, invalidArgument("gear_uuid is not a UUID")
 	}
 	gear, err := api.ParseGearUUID(value)
 	if err != nil {
 		return api.GearUUID{}, invalidArgument(
-			"gear_uuid must be a canonical hyphenated UUID from get_gear")
+			"gear_uuid must be a UUID from get_gear")
 	}
 	return gear, nil
 }

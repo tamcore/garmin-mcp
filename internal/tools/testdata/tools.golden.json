@@ -139,9 +139,9 @@
           "type": "integer"
         },
         "gear_uuid": {
-          "description": "the canonical UUID of the gear to link, from get_gear",
+          "description": "the UUID of the gear to link, as get_gear returns it, with or without hyphens",
           "maxLength": 36,
-          "pattern": "^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$",
+          "pattern": "^([0-9a-fA-F]{32}|[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$",
           "type": "string"
         }
       },
@@ -17302,9 +17302,9 @@
           "type": "integer"
         },
         "gear_uuid": {
-          "description": "the canonical UUID of the gear to unlink, from get_gear",
+          "description": "the UUID of the gear to unlink, as get_gear returns it, with or without hyphens",
           "maxLength": 36,
-          "pattern": "^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$",
+          "pattern": "^([0-9a-fA-F]{32}|[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$",
           "type": "string"
         }
       },
