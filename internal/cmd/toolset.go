@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"net/http"
 	"slices"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/api"
@@ -23,6 +24,10 @@ type ToolDeps struct {
 	// Refresher, which attaches the DI bearer token and enforces the Garmin host
 	// allowlist, so a tool never sees a token.
 	Caller client.Caller
+
+	// StatusClient reads Garmin's public service-status page. It never carries
+	// a credential and does not follow redirects.
+	StatusClient *http.Client
 
 	// Activities lists and filters activities.
 	Activities *api.Activities

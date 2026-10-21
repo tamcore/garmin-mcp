@@ -14,6 +14,7 @@ import (
 // order register.go wires them.
 var wantReadOnlyToolNames = []string{
 	tools.ToolGarminAuthStatus,
+	tools.ToolGetGarminServiceStatus,
 	"get_user_profile",
 	"get_full_name",
 	"get_unit_system",

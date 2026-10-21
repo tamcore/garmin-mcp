@@ -162,6 +162,7 @@ func newRegistrar(
 	registrar, err := tools.New(tools.Deps{
 		Client:          rc,
 		Caller:          caller{doer: fake.Doer()},
+		StatusClient:    &http.Client{Transport: testkit.RoundTripper(fake.Doer())},
 		Bounds:          bounds,
 		ExerciseCatalog: catalog,
 	})

@@ -29,6 +29,7 @@ const moduleSetIntro = "The set below is every module that reaches a released bi
 const (
 	spdxMIT       = "MIT"
 	spdxBSD3      = "BSD-3-Clause"
+	spdxBSD2      = "BSD-2-Clause"
 	spdxApache2   = "Apache-2.0"
 	spdxSDKMixed  = "Apache-2.0 AND MIT"
 	spdxYAMLMixed = "MIT AND Apache-2.0"
@@ -95,6 +96,9 @@ var moduleNotices = map[string]moduleNotice{
 	"github.com/yosida95/uritemplate/v3":  licenseOnly(spdxBSD3),
 	"golang.org/x/oauth2":                 licenseOnly(spdxBSD3),
 	"modernc.org/mathutil":                licenseOnly(spdxBSD3),
+	"github.com/tamcore/garminstatus":     licenseOnly(spdxMIT),
+	"github.com/PuerkitoBio/goquery":      licenseOnly(spdxBSD3),
+	"github.com/andybalholm/cascadia":     licenseOnly(spdxBSD2),
 
 	"github.com/muktihari/fit": {
 		SPDX: spdxBSD3,
@@ -141,6 +145,7 @@ var moduleNotices = map[string]moduleNotice{
 
 	// The x/ repositories ship a PATENTS grant beside the licence. It is a term
 	// of use, not authorship metadata, so it is reproduced too.
+	"golang.org/x/net":  {SPDX: spdxBSD3, Files: []string{fileLicense, filePatents}},
 	"golang.org/x/sync": {SPDX: spdxBSD3, Files: []string{fileLicense, filePatents}},
 	"golang.org/x/sys":  {SPDX: spdxBSD3, Files: []string{fileLicense, filePatents}},
 	"golang.org/x/text": {SPDX: spdxBSD3, Files: []string{fileLicense, filePatents}},

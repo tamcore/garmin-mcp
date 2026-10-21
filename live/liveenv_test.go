@@ -218,7 +218,8 @@ func gatedExerciseCatalog(
 // request layer.
 func (e *env) buildMCPSession(rest *client.Client, caller client.Caller) error {
 	registrar, err := tools.New(tools.Deps{
-		Client: rest, Caller: caller, ExerciseCatalog: liveExerciseCatalog(),
+		Client: rest, Caller: caller, StatusClient: liveStatusClient(),
+		ExerciseCatalog: liveExerciseCatalog(),
 	})
 	if err != nil {
 		return fmt.Errorf("building the tool registrar: %w", err)
@@ -279,3 +280,12 @@ func (e *env) connect(server *mcpserver.Server) error {
 }
 
 // call invokes one tool over the MCP session and requires a successful result. It
+
+// liveStatusClient reads Garmin's public status page. It carries no credential and
+// follows no redirect.
+func liveStatusClient() *http.Client {
+	return &http.Client{
+		Timeout:       requestTimeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+}

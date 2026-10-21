@@ -108,7 +108,8 @@ not open.
 2. **Browser to server.** Crossed by the login, MFA, and consent forms. Requests
    are untrusted and need the transaction cookie plus the form CSRF token.
 3. **Server to Garmin.** Crossed by outbound HTTPS. Garmin responses are
-   untrusted input.
+   untrusted input. `get_garmin_service_status` reads the public status page on
+   the connect host without a token, cookie, or redirect.
 4. **Server to store and key material.** Crossed by local file and SQLite
    access. Protected by owner-only modes and envelope encryption.
 5. **Reverse proxy to server.** Crossed by forwarded headers. Untrusted unless

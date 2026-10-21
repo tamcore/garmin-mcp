@@ -88,6 +88,7 @@ func (d *dependencies) toolDeps() (ToolDeps, error) {
 	return ToolDeps{
 		Client:          d.rest,
 		Caller:          d.refresher,
+		StatusClient:    d.httpClient,
 		Activities:      activities,
 		ActivityDetails: details,
 		Devices:         devices,

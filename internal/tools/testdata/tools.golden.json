@@ -9074,6 +9074,103 @@
     }
   },
   {
+    "name": "get_garmin_service_status",
+    "tier": "read-only",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Garmin service status"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "features": {
+          "description": "feature services, such as sync or activity upload",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "description": "the service name as Garmin's status page lists it",
+                "type": "string"
+              },
+              "reasons": {
+                "description": "Garmin's stated reasons, when a service is degraded",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "status": {
+                "description": "up or down",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "status"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "platforms": {
+          "description": "platform services, such as Garmin Connect",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "description": "the service name as Garmin's status page lists it",
+                "type": "string"
+              },
+              "reasons": {
+                "description": "Garmin's stated reasons, when a service is degraded",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "status": {
+                "description": "up or down",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "status"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "platforms",
+        "features"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "get_gear",
     "tier": "read-only",
     "annotations": {

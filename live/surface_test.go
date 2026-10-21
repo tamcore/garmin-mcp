@@ -100,6 +100,7 @@ func accountCalls(now time.Time) []sweepCall {
 
 	return []sweepCall{
 		{tools.ToolGarminAuthStatus, nil},
+		{tools.ToolGetGarminServiceStatus, nil},
 		{tools.ToolGetUserProfile, nil},
 		{tools.ToolGetFullName, nil},
 		{tools.ToolGetUnitSystem, nil},

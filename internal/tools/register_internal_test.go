@@ -33,7 +33,7 @@ func testDeps(t *testing.T) Deps {
 	if err != nil {
 		t.Fatalf("client.New() = %v", err)
 	}
-	return Deps{Client: rc, Caller: nopCaller{}}
+	return Deps{Client: rc, Caller: nopCaller{}, StatusClient: &http.Client{}}
 }
 
 // startServer registers lists through the real server, which is where the tier lists
@@ -121,8 +121,9 @@ func TestNewRefusesIncompleteDependencies(t *testing.T) {
 	rc := testDeps(t).Client
 
 	cases := map[string]Deps{
-		"no request layer": {Caller: nopCaller{}},
-		"no caller":        {Client: rc},
+		"no request layer":      {Caller: nopCaller{}, StatusClient: &http.Client{}},
+		"no caller":             {Client: rc, StatusClient: &http.Client{}},
+		"no status-page client": {Client: rc, Caller: nopCaller{}},
 	}
 	for name, deps := range cases {
 		t.Run(name, func(t *testing.T) {

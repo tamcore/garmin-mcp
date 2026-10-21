@@ -250,7 +250,8 @@ func (w *writeEnv) buildDomainClients(rest *client.Client) error {
 // be reached through the read-only session even by mistake.
 func (w *writeEnv) buildMCPSession(rest *client.Client, caller client.Caller) error {
 	registrar, err := tools.New(tools.Deps{
-		Client: rest, Caller: caller, ExerciseCatalog: liveExerciseCatalog(),
+		Client: rest, Caller: caller, StatusClient: liveStatusClient(),
+		ExerciseCatalog: liveExerciseCatalog(),
 	})
 	if err != nil {
 		return fmt.Errorf("building the write tool registrar: %w", err)

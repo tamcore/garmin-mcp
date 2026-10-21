@@ -79,7 +79,10 @@ func coachService(t *testing.T, body string, status int) (*service, *testkit.Ser
 	if err != nil {
 		t.Fatalf("client.New() = %v", err)
 	}
-	svc, err := newService(Deps{Client: rc, Caller: coachCaller{doer: fake.Doer()}})
+	svc, err := newService(Deps{
+		Client: rc, Caller: coachCaller{doer: fake.Doer()},
+		StatusClient: fakeStatusClient(fake),
+	})
 	if err != nil {
 		t.Fatalf("newService() = %v", err)
 	}

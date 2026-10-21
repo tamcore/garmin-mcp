@@ -87,6 +87,7 @@ type registration struct {
 func readOnlyRegistrations() []registration {
 	return []registration{
 		{garminAuthStatusContract, registerGarminAuthStatus},
+		{getGarminServiceStatusContract, registerGetGarminServiceStatus},
 		{getUserProfileContract, registerGetUserProfile},
 		{getFullNameContract, registerGetFullName},
 		{getUnitSystemContract, registerGetUnitSystem},
