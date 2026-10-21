@@ -48,6 +48,9 @@ const (
 	// PathPortalService is the portal CAS service path on the connect host.
 	// Source: PORTAL_SSO_SERVICE_URL / Client._portal_service_url.
 	PathPortalService = "/app"
+	// PathSiteStatus is the public, unauthenticated service-status fragment on the
+	// connect host. Source: GarminConnectStatusURI in tamcore/garminstatus v0.4.0.
+	PathSiteStatus = "/site-status/garmin-connect-status-content.html"
 )
 
 // Endpoint is a sanitized endpoint label for logs, metrics and errors. Only the
