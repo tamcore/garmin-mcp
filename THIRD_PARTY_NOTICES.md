@@ -123,7 +123,7 @@ artifact.
 | `github.com/modelcontextprotocol/go-sdk` | `v1.8.0` | `Apache-2.0 AND MIT` |
 | `github.com/muktihari/fit` | `v0.28.5` | `BSD-3-Clause` |
 | `github.com/munnerz/goautoneg` | `v0.0.0-20191010083416-a7dc8b61c822` | `BSD-3-Clause` |
-| `github.com/ncruces/go-strftime` | `v1.0.0` | `MIT` |
+| `github.com/ncruces/go-strftime` | `v1.1.0` | `MIT` |
 | `github.com/pelletier/go-toml/v2` | `v2.4.3` | `MIT` |
 | `github.com/prometheus/client_golang` | `v1.25.0` | `Apache-2.0` |
 | `github.com/prometheus/client_model` | `v0.6.3` | `Apache-2.0` |
@@ -149,10 +149,10 @@ artifact.
 | `golang.org/x/text` | `v0.43.0` | `BSD-3-Clause` |
 | `golang.org/x/time` | `v0.16.0` | `BSD-3-Clause` |
 | `google.golang.org/protobuf` | `v1.36.12` | `BSD-3-Clause` |
-| `modernc.org/libc` | `v1.77.1` | `BSD-3-Clause` |
+| `modernc.org/libc` | `v1.79.0` | `BSD-3-Clause` |
 | `modernc.org/mathutil` | `v1.7.1` | `BSD-3-Clause` |
 | `modernc.org/memory` | `v1.12.1` | `BSD-3-Clause` |
-| `modernc.org/sqlite` | `v1.60.1` | `BSD-3-Clause` |
+| `modernc.org/sqlite` | `v1.61.0` | `BSD-3-Clause` |
 
 43 modules. Every licence was read from the module cache;
 none was inferred.
@@ -836,7 +836,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### `github.com/ncruces/go-strftime` v1.0.0
+### `github.com/ncruces/go-strftime` v1.1.0
 
 SPDX identifier: `MIT`
 
@@ -2961,7 +2961,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 ```
 
-### `modernc.org/libc` v1.77.1
+### `modernc.org/libc` v1.79.0
 
 SPDX identifier: `BSD-3-Clause`
 
@@ -3450,7 +3450,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 https://commons.wikimedia.org/wiki/File:Memory_infra_logo.png
 ```
 
-### `modernc.org/sqlite` v1.60.1
+### `modernc.org/sqlite` v1.61.0
 
 SPDX identifier: `BSD-3-Clause`
 
@@ -3529,18 +3529,18 @@ and license texts it points at are the ones you have to carry with you.
 
 | Component | Version | License | Reached via | Text |
 | --- | --- | --- | --- | --- |
-| [github.com/dustin/go-humanize](https://pkg.go.dev/github.com/dustin/go-humanize) | v1.0.1 | MIT | modernc.org/libc, `go.mod` | [L1](#L1) |
+| [github.com/dustin/go-humanize](https://pkg.go.dev/github.com/dustin/go-humanize) | v1.1.0 | MIT | modernc.org/libc, `go.mod` | [L1](#L1) |
 | [github.com/google/uuid](https://pkg.go.dev/github.com/google/uuid) | v1.6.0 | BSD-3-Clause | modernc.org/libc, `go.mod` | [L2](#L2) |
 | [github.com/remyoudompheng/bigfft](https://pkg.go.dev/github.com/remyoudompheng/bigfft) | v0.0.0-20230129092748-24d4a6f8daec | BSD-3-Clause | modernc.org/fileutil, modernc.org/libc, modernc.org/mathutil, modernc.org/memory, `go.mod` | [L2](#L2) |
 | [Go](https://github.com/golang/go) | -- | BSD-3-Clause | modernc.org/libc | [N1](#N1) |
 | [go-netdb](https://github.com/dominikh/go-netdb) | -- | MIT | modernc.org/libc | [N1](#N1) |
-| [golang.org/x/sys](https://pkg.go.dev/golang.org/x/sys) | v0.48.0 | BSD-3-Clause | github.com/google/pprof, github.com/mattn/go-isatty, modernc.org/libc, modernc.org/memory, `go.mod` | [L3](#L3) |
-| [modernc.org/libc](https://pkg.go.dev/modernc.org/libc) | v1.77.1 | BSD-3-Clause | `go.mod` | [L4](#L4) |
+| [golang.org/x/sys](https://pkg.go.dev/golang.org/x/sys) | v0.49.0 | BSD-3-Clause | github.com/google/pprof, github.com/mattn/go-isatty, modernc.org/libc, modernc.org/memory, `go.mod` | [L3](#L3) |
+| [modernc.org/libc](https://pkg.go.dev/modernc.org/libc) | v1.79.0 | BSD-3-Clause | `go.mod` | [L4](#L4) |
 | [modernc.org/mathutil](https://pkg.go.dev/modernc.org/mathutil) | v1.7.1 | BSD-3-Clause | modernc.org/fileutil, modernc.org/libc, modernc.org/memory, `go.mod` | [L4](#L4) |
 | [modernc.org/memory](https://pkg.go.dev/modernc.org/memory) | v1.12.1 | BSD-3-Clause, attribution reference | modernc.org/libc, `go.mod` | [L4](#L4), [L2](#L2), [L5](#L5), [L6](#L6) |
 | [musl libc](https://musl.libc.org/) | -- | MIT | modernc.org/libc | [N1](#N1) |
 | [NixOS/nixpkgs](https://github.com/NixOS/nixpkgs) | -- | MIT | modernc.org/libc | [N1](#N1) |
-| [SQLite](https://sqlite.org/) | 3.53.4 | public domain | transpiled into `lib/` | [L7](#L7) |
+| [SQLite](https://sqlite.org/) | 3.54.1 | public domain | transpiled into `lib/` | [L7](#L7) |
 | [sqlite-vec](https://github.com/asg017/sqlite-vec) | v0.1.9 | MIT | transpiled into `vec/` | [L8](#L8) |
 | [SQLite `test_demovfs.c`](https://www.sqlite.org/src/doc/trunk/src/test_demovfs.c) | -- | public domain | `vfs/c/vfs.c`, transpiled into `vfs/` | [L7](#L7) |
 
@@ -3555,7 +3555,7 @@ not reach a program that imports `modernc.org/sqlite`.
 
 | Component | Version | License | Reached via | Text |
 | --- | --- | --- | --- | --- |
-| [github.com/google/pprof](https://pkg.go.dev/github.com/google/pprof) | v0.0.0-20260802141513-ef3492d7dac3 | Apache-2.0, BSD-3-Clause | `go.mod` | [L9](#L9), [L10](#L10) |
+| [github.com/google/pprof](https://pkg.go.dev/github.com/google/pprof) | v0.0.0-20261016150608-1facf8f91b50 | Apache-2.0, BSD-3-Clause | `go.mod` | [L9](#L9), [L10](#L10) |
 | [modernc.org/fileutil](https://pkg.go.dev/modernc.org/fileutil) | v1.4.0 | BSD-3-Clause | modernc.org/libc, `go.mod` | [L4](#L4), [L11](#L11) |
 
 ## 3. Components in the module graph, not compiled into anything
@@ -3576,14 +3576,14 @@ this one.
 | [github.com/hashicorp/golang-lru/v2](https://pkg.go.dev/github.com/hashicorp/golang-lru/v2) | v2.0.7 | MPL-2.0, BSD-3-Clause | modernc.org/libc | [L13](#L13), [L14](#L14) |
 | [github.com/ianlancetaylor/demangle](https://pkg.go.dev/github.com/ianlancetaylor/demangle) | v0.0.0-20250417193237-f615e6bd150b | BSD-3-Clause | github.com/google/pprof | [L2](#L2) |
 | [github.com/mattn/go-isatty](https://pkg.go.dev/github.com/mattn/go-isatty) | v0.0.24 | MIT | modernc.org/libc, `go.mod` | [L15](#L15) |
-| [github.com/ncruces/go-strftime](https://pkg.go.dev/github.com/ncruces/go-strftime) | v1.0.0 | MIT | modernc.org/libc, `go.mod` | [L8](#L8) |
-| [golang.org/x/mod](https://pkg.go.dev/golang.org/x/mod) | v0.41.0 | BSD-3-Clause | modernc.org/libc | [L3](#L3) |
-| [golang.org/x/sync](https://pkg.go.dev/golang.org/x/sync) | v0.23.0 | BSD-3-Clause | modernc.org/libc | [L3](#L3) |
-| [golang.org/x/tools](https://pkg.go.dev/golang.org/x/tools) | v0.50.0 | BSD-3-Clause | modernc.org/libc | [L3](#L3) |
-| [modernc.org/cc/v4](https://pkg.go.dev/modernc.org/cc/v4) | v4.29.7 | BSD-3-Clause | modernc.org/libc | [L4](#L4) |
-| [modernc.org/ccgo/v4](https://pkg.go.dev/modernc.org/ccgo/v4) | v4.36.1 | BSD-3-Clause | modernc.org/libc | [L4](#L4) |
+| [github.com/ncruces/go-strftime](https://pkg.go.dev/github.com/ncruces/go-strftime) | v1.1.0 | MIT | modernc.org/libc, `go.mod` | [L8](#L8) |
+| [golang.org/x/mod](https://pkg.go.dev/golang.org/x/mod) | v0.42.0 | BSD-3-Clause | modernc.org/libc | [L3](#L3) |
+| [golang.org/x/sync](https://pkg.go.dev/golang.org/x/sync) | v0.24.0 | BSD-3-Clause | modernc.org/libc | [L3](#L3) |
+| [golang.org/x/tools](https://pkg.go.dev/golang.org/x/tools) | v0.52.0 | BSD-3-Clause | modernc.org/libc | [L3](#L3) |
+| [modernc.org/cc/v4](https://pkg.go.dev/modernc.org/cc/v4) | v4.30.3 | BSD-3-Clause | modernc.org/libc | [L4](#L4) |
+| [modernc.org/ccgo/v4](https://pkg.go.dev/modernc.org/ccgo/v4) | v4.37.0 | BSD-3-Clause | modernc.org/libc | [L4](#L4) |
 | [modernc.org/gc/v2](https://pkg.go.dev/modernc.org/gc/v2) | v2.6.5 | BSD-3-Clause | modernc.org/libc | [L16](#L16) |
-| [modernc.org/gc/v3](https://pkg.go.dev/modernc.org/gc/v3) | v3.1.5 | BSD-3-Clause | modernc.org/libc | [L16](#L16) |
+| [modernc.org/gc/v3](https://pkg.go.dev/modernc.org/gc/v3) | v3.2.0 | BSD-3-Clause | modernc.org/libc | [L16](#L16) |
 | [modernc.org/goabi0](https://pkg.go.dev/modernc.org/goabi0) | v0.2.0 | BSD-3-Clause | modernc.org/libc | [L17](#L17) |
 | [modernc.org/opt](https://pkg.go.dev/modernc.org/opt) | v0.2.0 | BSD-3-Clause | modernc.org/libc | [L4](#L4) |
 | [modernc.org/sortutil](https://pkg.go.dev/modernc.org/sortutil) | v1.2.1 | BSD-3-Clause | modernc.org/libc | [L4](#L4) |
@@ -3842,7 +3842,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Applies to:
 
-- SQLite 3.53.4 (`LICENSE-SQLITE`)
+- SQLite 3.54.1 (`LICENSE-SQLITE`)
 - SQLite `test_demovfs.c`
 - SQLite test suite (`testdata/`)
 
