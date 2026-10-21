@@ -58,3 +58,16 @@ func (d guardedDoer) Do(req *http.Request) (*http.Response, error) {
 	}
 	return d.client.Do(req)
 }
+
+// RoundTripper adapts d for code that takes an *http.Client. Every request still
+// passes d's origin guard: wrap it as &http.Client{Transport: RoundTripper(d)}.
+func RoundTripper(d Doer) http.RoundTripper { return doerRoundTripper{doer: d} }
+
+type doerRoundTripper struct {
+	doer Doer
+}
+
+// RoundTrip implements http.RoundTripper.
+func (rt doerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return rt.doer.Do(req)
+}

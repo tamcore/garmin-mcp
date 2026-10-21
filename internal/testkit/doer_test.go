@@ -137,3 +137,24 @@ func TestDoerRefusesNilRequest(t *testing.T) {
 		t.Fatal("Do(nil) succeeded, want an error")
 	}
 }
+
+func TestRoundTripperKeepsTheOriginGuard(t *testing.T) {
+	t.Parallel()
+
+	srv := NewServer(t, NewScript().With("/ok", HTML(http.StatusOK, "<p>ok</p>")))
+	httpClient := &http.Client{Transport: RoundTripper(srv.Doer())}
+
+	resp, err := httpClient.Get(srv.BaseURL() + "/ok")
+	if err != nil {
+		t.Fatalf("on-origin Get() = %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("on-origin status = %d, want 200", resp.StatusCode)
+	}
+
+	_, err = httpClient.Get("https://connect.garmin.com/ok")
+	if _, ok := errors.AsType[*OffOriginError](err); !ok {
+		t.Errorf("off-origin Get() = %v, want *OffOriginError", err)
+	}
+}
