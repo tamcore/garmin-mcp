@@ -55,7 +55,10 @@ func newToolsService(t *testing.T, script testkit.Script) (*service, *testkit.Se
 	if err != nil {
 		t.Fatalf("client.New() = %v", err)
 	}
-	svc, err := newService(Deps{Client: rc, Caller: newToolsCaller{doer: fake.Doer()}})
+	svc, err := newService(Deps{
+		Client: rc, Caller: newToolsCaller{doer: fake.Doer()},
+		StatusClient: fakeStatusClient(fake),
+	})
 	if err != nil {
 		t.Fatalf("newService() = %v", err)
 	}

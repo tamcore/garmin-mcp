@@ -110,6 +110,8 @@ artifact.
 
 | Module | Version | SPDX |
 |--------|---------|------|
+| `github.com/PuerkitoBio/goquery` | `v1.13.0` | `BSD-3-Clause` |
+| `github.com/andybalholm/cascadia` | `v1.3.4` | `BSD-2-Clause` |
 | `github.com/beorn7/perks` | `v1.0.1` | `MIT` |
 | `github.com/cespare/xxhash/v2` | `v2.3.0` | `MIT` |
 | `github.com/dustin/go-humanize` | `v1.1.0` | `MIT` |
@@ -137,12 +139,14 @@ artifact.
 | `github.com/spf13/pflag` | `v1.0.10` | `BSD-3-Clause` |
 | `github.com/spf13/viper` | `v1.21.0` | `MIT` |
 | `github.com/subosito/gotenv` | `v1.6.0` | `MIT` |
+| `github.com/tamcore/garminstatus` | `v0.4.0` | `MIT` |
 | `github.com/yosida95/uritemplate/v3` | `v3.0.2` | `BSD-3-Clause` |
 | `go.yaml.in/yaml/v3` | `v3.0.5` | `MIT AND Apache-2.0` |
+| `golang.org/x/net` | `v0.60.0` | `BSD-3-Clause` |
 | `golang.org/x/oauth2` | `v0.37.0` | `BSD-3-Clause` |
-| `golang.org/x/sync` | `v0.23.0` | `BSD-3-Clause` |
+| `golang.org/x/sync` | `v0.24.0` | `BSD-3-Clause` |
 | `golang.org/x/sys` | `v0.49.0` | `BSD-3-Clause` |
-| `golang.org/x/text` | `v0.42.0` | `BSD-3-Clause` |
+| `golang.org/x/text` | `v0.43.0` | `BSD-3-Clause` |
 | `golang.org/x/time` | `v0.16.0` | `BSD-3-Clause` |
 | `google.golang.org/protobuf` | `v1.36.12` | `BSD-3-Clause` |
 | `modernc.org/libc` | `v1.77.1` | `BSD-3-Clause` |
@@ -150,10 +154,64 @@ artifact.
 | `modernc.org/memory` | `v1.12.1` | `BSD-3-Clause` |
 | `modernc.org/sqlite` | `v1.60.1` | `BSD-3-Clause` |
 
-39 modules. Every licence was read from the module cache;
+43 modules. Every licence was read from the module cache;
 none was inferred.
 
 ## Full licence texts
+
+### `github.com/PuerkitoBio/goquery` v1.13.0
+
+SPDX identifier: `BSD-3-Clause`
+
+`LICENSE`:
+
+```text
+Copyright (c) 2012-2021, Martin Angers & Contributors
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+* Neither the name of the author nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### `github.com/andybalholm/cascadia` v1.3.4
+
+SPDX identifier: `BSD-2-Clause`
+
+`LICENSE`:
+
+```text
+Copyright (c) 2011 Andy Balholm. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
 
 ### `github.com/beorn7/perks` v1.0.1
 
@@ -2346,6 +2404,36 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
+### `github.com/tamcore/garminstatus` v0.4.0
+
+SPDX identifier: `MIT`
+
+`LICENSE`:
+
+```text
+MIT License
+
+Copyright (c) 2026 Philipp Born
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### `github.com/yosida95/uritemplate/v3` v3.0.2
 
 SPDX identifier: `BSD-3-Clause`
@@ -2459,6 +2547,69 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
+### `golang.org/x/net` v0.60.0
+
+SPDX identifier: `BSD-3-Clause`
+
+`LICENSE`:
+
+```text
+Copyright 2009 The Go Authors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+`PATENTS`:
+
+```text
+Additional IP Rights Grant (Patents)
+
+"This implementation" means the copyrightable works distributed by
+Google as part of the Go project.
+
+Google hereby grants to You a perpetual, worldwide, non-exclusive,
+no-charge, royalty-free, irrevocable (except as stated in this section)
+patent license to make, have made, use, offer to sell, sell, import,
+transfer and otherwise run, modify and propagate the contents of this
+implementation of Go, where such license applies only to those patent
+claims, both currently owned or controlled by Google and acquired in
+the future, licensable by Google that are necessarily infringed by this
+implementation of Go.  This grant does not include claims that would be
+infringed only as a consequence of further modification of this
+implementation.  If you or your agent or exclusive licensee institute or
+order or agree to the institution of patent litigation against any
+entity (including a cross-claim or counterclaim in a lawsuit) alleging
+that this implementation of Go or any code incorporated within this
+implementation of Go constitutes direct or contributory patent
+infringement, or inducement of patent infringement, then any patent
+rights granted to you under this License for this implementation of Go
+shall terminate as of the date such litigation is filed.
+```
+
 ### `golang.org/x/oauth2` v0.37.0
 
 SPDX identifier: `BSD-3-Clause`
@@ -2495,7 +2646,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### `golang.org/x/sync` v0.23.0
+### `golang.org/x/sync` v0.24.0
 
 SPDX identifier: `BSD-3-Clause`
 
@@ -2621,7 +2772,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 ```
 
-### `golang.org/x/text` v0.42.0
+### `golang.org/x/text` v0.43.0
 
 SPDX identifier: `BSD-3-Clause`
 

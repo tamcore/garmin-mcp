@@ -142,6 +142,9 @@ func (h Hosts) DITokenURL() string { return join(h.diAuth, PathDIToken) }
 // SocialProfileURL validates a candidate session against the API tier.
 func (h Hosts) SocialProfileURL() string { return join(h.connectAPI, PathSocialProfile) }
 
+// SiteStatusURL is Garmin's public service-status page. It takes no credential.
+func (h Hosts) SiteStatusURL() string { return join(h.connect, PathSiteStatus) }
+
 // IOSServiceURL is the CAS service URL presented by the iOS login flow.
 func (h Hosts) IOSServiceURL() string { return join(h.mobileIntegration, PathIOSService) }
 

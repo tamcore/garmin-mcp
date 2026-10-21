@@ -112,7 +112,10 @@ func cardioService(t *testing.T, script testkit.Script) (*service, *testkit.Serv
 		t.Fatalf("client.New() = %v", err)
 	}
 
-	svc, err := newService(Deps{Client: rc, Caller: cardioCaller{doer: fake.Doer()}})
+	svc, err := newService(Deps{
+		Client: rc, Caller: cardioCaller{doer: fake.Doer()},
+		StatusClient: fakeStatusClient(fake),
+	})
 	if err != nil {
 		t.Fatalf("newService() = %v", err)
 	}

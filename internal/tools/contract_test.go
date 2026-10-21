@@ -59,6 +59,7 @@ func loadManifest(t *testing.T) map[string]manifestTool {
 func additionsBeyondTheManifest() map[string]string {
 	return map[string]string{
 		tools.ToolGarminAuthStatus:                "legacy runtime-auth status; absent from the pinned surface",
+		tools.ToolGetGarminServiceStatus:          "public Garmin service-status page via tamcore/garminstatus",
 		"update_workout":                          "unmerged upstream proposal: in-place workout update",
 		"get_exercise_types":                      "unmerged upstream proposal: strength catalog read",
 		"set_activity_strength_exercise_sets":     "unmerged upstream proposal: verified set replace",

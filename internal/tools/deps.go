@@ -32,6 +32,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/api"
@@ -144,7 +145,7 @@ func pick[T int | int64](target *T, candidate T) {
 	}
 }
 
-// Deps is the injected dependency set. Both clients are required: a tool that could
+// Deps is the injected dependency set. Every client is required: a tool that could
 // not name whose tokens it uses would be reaching Garmin as somebody.
 type Deps struct {
 	// Client is the authenticated request layer every domain client is built on.
@@ -153,6 +154,10 @@ type Deps struct {
 	// Caller performs one authenticated request for one principal. In production
 	// this is *auth.Refresher, which owns the token lifecycle.
 	Caller client.Caller
+
+	// StatusClient reads Garmin's public service-status page. It carries no
+	// credential, so the status stays readable when the account's session is not.
+	StatusClient *http.Client
 
 	// Bounds are the per-tool result bounds. The zero value means the defaults.
 	Bounds Bounds
@@ -177,6 +182,9 @@ func (d Deps) validate() error {
 	if d.Caller == nil {
 		return fmt.Errorf("no authenticated caller: %w", ErrMissingDependency)
 	}
+	if d.StatusClient == nil {
+		return fmt.Errorf("no status-page client: %w", ErrMissingDependency)
+	}
 	return nil
 }
 
@@ -185,6 +193,8 @@ func (d Deps) validate() error {
 // the per-principal session is built fresh from the request context on every call.
 type service struct {
 	caller         client.Caller
+	statusClient   *http.Client
+	statusURL      string
 	now            func() time.Time
 	bounds         Bounds
 	limits         client.Limits
@@ -218,11 +228,13 @@ func newService(deps Deps) (*service, error) {
 		now = time.Now
 	}
 	built := &service{
-		caller:  deps.Caller,
-		now:     now,
-		bounds:  deps.Bounds.resolved(),
-		limits:  deps.Client.Limits(),
-		catalog: deps.ExerciseCatalog,
+		caller:       deps.Caller,
+		statusClient: deps.StatusClient,
+		statusURL:    deps.Client.Hosts().SiteStatusURL(),
+		now:          now,
+		bounds:       deps.Bounds.resolved(),
+		limits:       deps.Client.Limits(),
+		catalog:      deps.ExerciseCatalog,
 	}
 	if err := built.buildClients(deps.Client); err != nil {
 		return nil, err

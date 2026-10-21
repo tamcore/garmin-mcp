@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/tamcore/garmin-mcp/internal/garmin/client"
+	"github.com/tamcore/garmin-mcp/internal/garmin/protocol"
 	"github.com/tamcore/garmin-mcp/internal/testkit"
 	"github.com/tamcore/garmin-mcp/internal/tools"
 )
@@ -25,6 +26,7 @@ func TestWholeReadOnlyToolSurfaceAgainstOneFakeAccount(t *testing.T) {
 		args map[string]any
 	}{
 		{tools.ToolGarminAuthStatus, nil},
+		{tools.ToolGetGarminServiceStatus, nil},
 		{tools.ToolGetUserProfile, nil},
 		{tools.ToolGetFullName, nil},
 		{tools.ToolGetUnitSystem, nil},
@@ -65,6 +67,7 @@ func TestWholeReadOnlyToolSurfaceAgainstOneFakeAccount(t *testing.T) {
 func wholeReadScript() testkit.Script {
 	script := readScript()
 	for path, behavior := range map[string]testkit.Behavior{
+		protocol.PathSiteStatus:                            testkit.HTML(http.StatusOK, siteStatusBody),
 		client.PathUserProfileSettings:                     testkit.JSON(http.StatusOK, profileSettingsBody),
 		client.PathPersonalRecords + "/" + testDisplayName: testkit.JSON(http.StatusOK, personalRecordsBody),
 		activityDetailPath(client.SegmentSplits):           testkit.JSON(http.StatusOK, `{"lapDTOs":[`+splitEntry+`]}`),
@@ -117,3 +120,6 @@ func TestARateLimitedGarminBecomesAnActionableRefusal(t *testing.T) {
 		t.Errorf("the refusal %q does not name the rate limit", text)
 	}
 }
+
+const siteStatusBody = `<div id="platforms"><div class="service green">` +
+	`<span class="item">Garmin Connect</span></div></div>`

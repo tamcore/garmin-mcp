@@ -82,7 +82,10 @@ func newChallengesHarnessWith(
 	if err != nil {
 		t.Fatalf("client.New() = %v", err)
 	}
-	svc, err := newService(Deps{Client: rc, Caller: harnessCaller{doer: fake.Doer()}})
+	svc, err := newService(Deps{
+		Client: rc, Caller: harnessCaller{doer: fake.Doer()},
+		StatusClient: fakeStatusClient(fake),
+	})
 	if err != nil {
 		t.Fatalf("newService() = %v", err)
 	}

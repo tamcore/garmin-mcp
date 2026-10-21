@@ -60,7 +60,10 @@ func newFITHarness(t *testing.T, script testkit.Script, bounds Bounds) fitHarnes
 	if err != nil {
 		t.Fatalf("client.New() = %v", err)
 	}
-	svc, err := newService(Deps{Client: rc, Caller: fitCaller{doer: fake.Doer()}, Bounds: bounds})
+	svc, err := newService(Deps{
+		Client: rc, Caller: fitCaller{doer: fake.Doer()},
+		StatusClient: fakeStatusClient(fake), Bounds: bounds,
+	})
 	if err != nil {
 		t.Fatalf("newService() = %v", err)
 	}

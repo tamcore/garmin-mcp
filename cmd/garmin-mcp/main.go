@@ -66,7 +66,8 @@ func garminTools(deps cmd.ToolDeps) (cmd.ToolSet, error) {
 	catalog := api.LoadExerciseCatalog(context.Background())
 
 	registrar, err := tools.New(tools.Deps{
-		Client: deps.Client, Caller: deps.Caller, ExerciseCatalog: catalog,
+		Client: deps.Client, Caller: deps.Caller, StatusClient: deps.StatusClient,
+		ExerciseCatalog: catalog,
 	})
 	if err != nil {
 		return cmd.ToolSet{}, err

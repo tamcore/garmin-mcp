@@ -132,6 +132,7 @@ func assertZeroHosts(t *testing.T, h Hosts) {
 		"SocialProfileURL":        h.SocialProfileURL(),
 		"IOSServiceURL":           h.IOSServiceURL(),
 		"PortalServiceURL":        h.PortalServiceURL(),
+		"SiteStatusURL":           h.SiteStatusURL(),
 	}
 	for name, got := range urls {
 		if got != "" {
@@ -163,6 +164,7 @@ func TestHostsEndpointURLs(t *testing.T) {
 		{"di token", h.DITokenURL(), "https://diauth.garmin.com/di-oauth2-service/oauth/token"},
 		{"portal service", h.PortalServiceURL(), "https://connect.garmin.com/app"},
 		{"social profile", h.SocialProfileURL(), "https://connectapi.garmin.com/userprofile-service/socialProfile"},
+		{"site status", h.SiteStatusURL(), "https://connect.garmin.com/site-status/garmin-connect-status-content.html"},
 	}
 
 	for _, tc := range tests {
@@ -192,6 +194,8 @@ func TestHostsWithOverridesDoesNotMutateReceiver(t *testing.T) {
 		"http://127.0.0.1:1/api-host/userprofile-service/socialProfile")
 	assertEqual(t, "override ios service", fake.IOSServiceURL(), "http://127.0.0.1:1/mobile-host/gcm/ios")
 	assertEqual(t, "override portal service", fake.PortalServiceURL(), "http://127.0.0.1:1/connect-host/app")
+	assertEqual(t, "override site status", fake.SiteStatusURL(),
+		"http://127.0.0.1:1/connect-host/site-status/garmin-connect-status-content.html")
 }
 
 // Overrides is the one documented escape hatch for a non-Garmin host, and it

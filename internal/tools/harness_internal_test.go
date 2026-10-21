@@ -124,7 +124,10 @@ func newHarnessServer(
 	if err != nil {
 		t.Fatalf("client.New() = %v", err)
 	}
-	registrar, err := New(Deps{Client: rc, Caller: harnessCaller{doer: fake.Doer()}, Now: now})
+	registrar, err := New(Deps{
+		Client: rc, Caller: harnessCaller{doer: fake.Doer()},
+		StatusClient: fakeStatusClient(fake), Now: now,
+	})
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -333,4 +336,9 @@ func newDomainToolServer(
 		t.Fatalf("mcpserver.New() = %v", err)
 	}
 	return server
+}
+
+// fakeStatusClient reaches only the fake server, through its origin guard.
+func fakeStatusClient(fake *testkit.Server) *http.Client {
+	return &http.Client{Transport: testkit.RoundTripper(fake.Doer())}
 }
