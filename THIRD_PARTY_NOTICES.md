@@ -142,7 +142,7 @@ artifact.
 | `github.com/tamcore/garminstatus` | `v0.4.0` | `MIT` |
 | `github.com/yosida95/uritemplate/v3` | `v3.0.2` | `BSD-3-Clause` |
 | `go.yaml.in/yaml/v3` | `v3.0.5` | `MIT AND Apache-2.0` |
-| `golang.org/x/net` | `v0.60.0` | `BSD-3-Clause` |
+| `golang.org/x/net` | `v0.62.0` | `BSD-3-Clause` |
 | `golang.org/x/oauth2` | `v0.37.0` | `BSD-3-Clause` |
 | `golang.org/x/sync` | `v0.24.0` | `BSD-3-Clause` |
 | `golang.org/x/sys` | `v0.49.0` | `BSD-3-Clause` |
@@ -2547,7 +2547,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### `golang.org/x/net` v0.60.0
+### `golang.org/x/net` v0.62.0
 
 SPDX identifier: `BSD-3-Clause`
 
