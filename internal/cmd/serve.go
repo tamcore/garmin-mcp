@@ -18,13 +18,19 @@ const (
 	serverTitle = "Garmin Connect"
 )
 
+// toolRouting steers clients away from paging the whole activity history to derive a
+// figure a single summary tool already returns.
+const toolRouting = " Prefer a summary tool to paging get_activities: get_personal_record " +
+	"for personal bests, get_race_predictions for predicted times, and count_activities or " +
+	"get_progress_summary_between_dates for totals."
+
 // serverInstructions are the MCP server instructions connected clients receive.
-// They state the two facts a client cannot infer: the API is unofficial, and this
-// process serves exactly one account.
+// They state the two facts a client cannot infer, the API is unofficial and this
+// process serves exactly one account, plus toolRouting.
 const serverInstructions = "Garmin Connect data for one local account. " +
 	"Garmin's API is unofficial and undocumented, so a call can fail or change shape " +
 	"without notice. The account is bound to this process: no tool accepts a user, an " +
-	"email, or a token path."
+	"email, or a token path." + toolRouting
 
 // NewServeCommand runs the MCP server.
 //

@@ -73,7 +73,9 @@ func getActivitiesContract() Contract {
 			Title: "Get activities",
 			Description: "read a page of the account's activities, newest first. Use this " +
 				"to browse a large history without a date filter; use get_activities_by_date " +
-				"when the question names a period. Start coordinates are not returned",
+				"when the question names a period. Do not page the whole history to find personal " +
+				"bests or totals: get_personal_record and get_progress_summary_between_dates " +
+				"return them in one call. Start coordinates are not returned",
 			Tier:        policy.TierReadOnly,
 			Category:    categoryLocation,
 			Annotations: readOnlyAnnotations(),
