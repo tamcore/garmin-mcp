@@ -119,7 +119,7 @@ func getPersonalRecordContract() Contract {
 		Spec: mcpserver.ToolSpec{
 			Name:  ToolGetPersonalRecord,
 			Title: "Get personal records",
-			Description: "read the account's personal records (personal bests, PRs, PBs): the " +
+			Description: "read the account's personal records (personal best or PB, personal record or PR): the " +
 				"fastest actual 1K, mile, 5K, 10K, half marathon and marathon times, the longest " +
 				"run and ride, and step and goal-streak records, with the activity each one came from",
 			Tier:        policy.TierReadOnly,
