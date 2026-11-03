@@ -90,10 +90,13 @@ func newProfileSettingsResult(settings api.ProfileSettings) ProfileSettingsResul
 // A PersonalRecord is one recorded best performance. It is health data.
 type PersonalRecord struct {
 	TypeID       *int64   `json:"type_id,omitempty" jsonschema:"Garmin's record type identifier"`
+	RecordType   *string  `json:"record_type,omitempty" jsonschema:"the record, such as Fastest 5K; estimated"`
+	Unit         *string  `json:"unit,omitempty" jsonschema:"seconds, meters, count or days; absent for an unknown type"`
+	Display      *string  `json:"display,omitempty" jsonschema:"value formatted for reading, such as 18:53"`
 	ActivityID   *int64   `json:"activity_id,omitempty" jsonschema:"the activity that set the record"`
 	ActivityName *string  `json:"activity_name,omitempty" jsonschema:"the name of that activity"`
-	Value        *float64 `json:"value,omitempty" jsonschema:"the recorded value, in Garmin's own unit"`
-	StartGMT     *string  `json:"start_time_gmt,omitempty" jsonschema:"when the record was set, in UTC"`
+	Value        *float64 `json:"value,omitempty" jsonschema:"the recorded value, in the unit unit names"`
+	StartGMT     *string  `json:"start_time_gmt,omitempty" jsonschema:"when the record was set, RFC 3339 in UTC"`
 }
 
 // A PersonalRecordList is the bounded personal-record collection.
@@ -156,13 +159,27 @@ func newPersonalRecordList(records []api.PersonalRecord, limit int) PersonalReco
 
 	out := make([]PersonalRecord, 0, len(records))
 	for _, record := range records {
-		out = append(out, PersonalRecord{
-			TypeID:       optionalInt64(record.TypeID),
-			ActivityID:   optionalInt64(record.ActivityID),
-			ActivityName: optionalText(record.ActivityName),
-			Value:        optionalFloat(record.Value),
-			StartGMT:     optionalText(record.StartGMT),
-		})
+		out = append(out, newPersonalRecord(record))
 	}
 	return PersonalRecordList{Records: out, Count: len(out), Truncated: truncated}
+}
+
+func newPersonalRecord(record api.PersonalRecord) PersonalRecord {
+	recordType, known := lookupPersonalRecordType(record.TypeID)
+	out := PersonalRecord{
+		TypeID:       optionalInt64(record.TypeID),
+		RecordType:   new(recordType.name),
+		ActivityID:   optionalInt64(record.ActivityID),
+		ActivityName: optionalText(record.ActivityName),
+		Value:        optionalFloat(record.Value),
+		StartGMT:     personalRecordStart(record.StartGMT),
+	}
+	if !known {
+		return out
+	}
+	out.Unit = new(recordType.unit)
+	if out.Value != nil {
+		out.Display = new(displayPersonalRecord(recordType.unit, *out.Value))
+	}
+	return out
 }

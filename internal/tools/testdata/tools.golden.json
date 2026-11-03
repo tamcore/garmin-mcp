@@ -11684,8 +11684,22 @@
                   "string"
                 ]
               },
+              "display": {
+                "description": "value formatted for reading, such as 18:53",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "record_type": {
+                "description": "the record, such as Fastest 5K; estimated",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
               "start_time_gmt": {
-                "description": "when the record was set, in UTC",
+                "description": "when the record was set, RFC 3339 in UTC",
                 "type": [
                   "null",
                   "string"
@@ -11698,8 +11712,15 @@
                   "integer"
                 ]
               },
+              "unit": {
+                "description": "seconds, meters, count or days; absent for an unknown type",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
               "value": {
-                "description": "the recorded value, in Garmin's own unit",
+                "description": "the recorded value, in the unit unit names",
                 "type": [
                   "null",
                   "number"
