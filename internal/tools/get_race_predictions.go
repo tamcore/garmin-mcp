@@ -59,7 +59,8 @@ func getRacePredictionsContract() Contract {
 			Name:  ToolGetRacePredictions,
 			Title: "Get race predictions",
 			Description: "read Garmin's predicted finish times for 5K, 10K, half " +
-				"marathon and marathon, based on the account's recent training and VO2 max",
+				"marathon and marathon, based on the account's recent training and VO2 max. " +
+				"These are estimates; get_personal_record has the actual best times",
 			Tier:        policy.TierReadOnly,
 			Category:    categoryHealth,
 			Annotations: readOnlyAnnotations(),

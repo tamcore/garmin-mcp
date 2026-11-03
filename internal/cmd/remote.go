@@ -23,12 +23,12 @@ import (
 const resourceName = "Garmin Connect MCP"
 
 // remoteInstructions are the MCP server instructions a remote client receives.
-// They state the two facts a client cannot infer: the API is unofficial, and each
-// caller sees only the Garmin account its own authorization linked.
+// They state the two facts a client cannot infer, the API is unofficial and each
+// caller sees only the Garmin account its own authorization linked, plus toolRouting.
 const remoteInstructions = "Garmin Connect data for the account this authorization linked. " +
 	"Garmin's API is unofficial and undocumented, so a call can fail or change shape " +
 	"without notice. The account is bound to the access token: no tool accepts a user, " +
-	"an email, or a token path."
+	"an email, or a token path." + toolRouting
 
 // A remoteDeployment is the assembled multi-user server.
 //
