@@ -136,7 +136,7 @@ artifact.
 | `github.com/spf13/afero` | `v1.15.0` | `Apache-2.0` |
 | `github.com/spf13/cast` | `v1.10.0` | `MIT` |
 | `github.com/spf13/cobra` | `v1.10.2` | `Apache-2.0` |
-| `github.com/spf13/pflag` | `v1.0.10` | `BSD-3-Clause` |
+| `github.com/spf13/pflag` | `v1.1.0` | `BSD-3-Clause` |
 | `github.com/spf13/viper` | `v1.21.0` | `MIT` |
 | `github.com/subosito/gotenv` | `v1.6.0` | `MIT` |
 | `github.com/tamcore/garminstatus` | `v0.4.0` | `MIT` |
@@ -2307,7 +2307,7 @@ SPDX identifier: `Apache-2.0`
       of your accepting any such warranty or additional liability.
 ```
 
-### `github.com/spf13/pflag` v1.0.10
+### `github.com/spf13/pflag` v1.1.0
 
 SPDX identifier: `BSD-3-Clause`
 
