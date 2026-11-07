@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/muktihari/fit v0.28.5
+	github.com/muktihari/fit v0.28.6
 	github.com/prometheus/client_golang v1.25.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.1.0
