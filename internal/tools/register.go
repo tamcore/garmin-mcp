@@ -263,6 +263,9 @@ func writeRegistrations() []registration {
 		{setPerceivedEffortContract, registerSetPerceivedEffort},
 		{addGearToActivityContract, registerAddGearToActivity},
 		{removeGearFromActivityContract, registerRemoveGearFromActivity},
+		{createGearContract, registerCreateGear},
+		{updateGearContract, registerUpdateGear},
+		{setGearStatusContract, registerSetGearStatus},
 		{createManualActivityContract, registerCreateManualActivity},
 		{setActivityStrengthExerciseSetsContract, registerSetActivityStrengthExerciseSets},
 		{createStrengthTrainingActivityContract, registerCreateStrengthTrainingActivity},
@@ -297,6 +300,9 @@ func destructiveRegistrations() []registration {
 
 		// Courses: the removal.
 		{deleteCourseContract, registerDeleteCourse},
+
+		// Gear: the removal.
+		{deleteGearContract, registerDeleteGear},
 
 		{deleteActivityContract, registerDeleteActivity},
 		{deleteWorkoutContract, registerDeleteWorkout},

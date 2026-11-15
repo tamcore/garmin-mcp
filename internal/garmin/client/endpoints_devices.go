@@ -40,6 +40,14 @@ const (
 	// signed-in account. Source: GEAR_V2_LIST_ENDPOINT in gear_management.py
 	// ("/gear-service/gear/v2/list").
 	PathGearV2List = "/gear-service/gear/v2/list"
+	// PathGearV2 is the v2 gear create path, and precedes a gear UUID in the v2
+	// detail, update, status and delete paths. Source: python-garminconnect
+	// db0ddaa441 garminconnect/api/gear.py: create_gear, get_gear_details,
+	// update_gear, set_gear_status and delete_gear.
+	PathGearV2 = "/gear-service/gear/v2"
+	// GearStatusSegment precedes ACTIVE or RETIRED in the v2 status path.
+	// Source: set_gear_status's f"{...}/gear/v2/{gear_uuid}/status/{status}".
+	GearStatusSegment = "status"
 )
 
 // Query parameter names and fixed wire values the device-and-gear reads add.
@@ -69,6 +77,8 @@ const (
 	EndpointGearDefaults          = Endpoint("connectapi.gear.defaults")
 	EndpointGearStats             = Endpoint("connectapi.gear.stats")
 	EndpointGearV2List            = Endpoint("connectapi.gear.v2_list")
+	EndpointGearV2                = Endpoint("connectapi.gear.v2")
+	EndpointGearV2Status          = Endpoint("connectapi.gear.v2_status")
 )
 
 // devicesEndpoints returns the device-and-gear labels declared here.
@@ -85,10 +95,12 @@ func devicesEndpoints() []Endpoint {
 		EndpointGearDefaults,
 		EndpointGearStats,
 		EndpointGearV2List,
+		EndpointGearV2,
+		EndpointGearV2Status,
 	}
 }
 
-// Sanitized operation labels, one per read this tier adds.
+// Sanitized operation labels, one per call this tier adds.
 const (
 	OpGetDeviceSettings        = Op("get_device_settings")
 	OpGetDeviceLastUsed        = Op("get_device_last_used")
@@ -97,6 +109,11 @@ const (
 	OpGetGear                  = Op("get_gear")
 	OpGetGearDefaults          = Op("get_gear_defaults")
 	OpGetGearStats             = Op("get_gear_stats")
+	OpGetGearDetails           = Op("get_gear_details")
+	OpCreateGear               = Op("create_gear")
+	OpUpdateGear               = Op("update_gear")
+	OpSetGearStatus            = Op("set_gear_status")
+	OpDeleteGear               = Op("delete_gear")
 )
 
 // devicesOps returns the device-and-gear operations declared here. OpListDevices
@@ -111,5 +128,10 @@ func devicesOps() []Op {
 		OpGetGear,
 		OpGetGearDefaults,
 		OpGetGearStats,
+		OpGetGearDetails,
+		OpCreateGear,
+		OpUpdateGear,
+		OpSetGearStatus,
+		OpDeleteGear,
 	}
 }
