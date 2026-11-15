@@ -27,14 +27,19 @@ type gearLinkInput struct {
 
 // gearLinkSchema declares the argument set both gear tools take.
 func gearLinkSchema(action string) Schema {
-	return NewSchema(activityIDIntegerProperty(), Property{
+	return NewSchema(activityIDIntegerProperty(), gearUUIDProperty(action))
+}
+
+// gearUUIDProperty declares the gear identifier every gear write takes.
+func gearUUIDProperty(action string) Property {
+	return Property{
 		Name:        "gear_uuid",
 		Types:       []string{typeString},
 		Description: "the UUID of the gear to " + action + ", as get_gear returns it, with or without hyphens",
 		Pattern:     `^([0-9a-fA-F]{32}|[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$`,
 		MaxLength:   new(maxGearUUIDLen),
 		Required:    true,
-	})
+	}
 }
 
 func addGearToActivityContract() Contract {

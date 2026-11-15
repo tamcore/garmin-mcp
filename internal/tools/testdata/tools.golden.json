@@ -573,6 +573,177 @@
     }
   },
   {
+    "name": "create_gear",
+    "tier": "write",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Create gear"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "activity_type_keys": {
+          "description": "lowercase activity type keys, for example running, this gear is the default for. It replaces the current list; an empty list clears it",
+          "items": {
+            "maxLength": 32,
+            "pattern": "^[a-z0-9_]+$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "type": "array"
+        },
+        "brand": {
+          "description": "the brand, for example the shoe maker",
+          "maxLength": 256,
+          "type": "string"
+        },
+        "first_use_date": {
+          "description": "the date the gear was first used, in YYYY-MM-DD form",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "gear_type": {
+          "description": "the gear type, for example SHOES or BIKE",
+          "maxLength": 32,
+          "pattern": "^[A-Za-z_]+$",
+          "type": "string"
+        },
+        "max_usage_distance_km": {
+          "description": "the retirement distance in kilometers; 0 removes it",
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "number"
+        },
+        "max_usage_duration_min": {
+          "description": "the retirement duration in minutes; 0 removes it",
+          "maximum": 16000000,
+          "minimum": 0,
+          "type": "number"
+        },
+        "model": {
+          "description": "the model name",
+          "maxLength": 256,
+          "type": "string"
+        },
+        "name": {
+          "description": "the name shown in Garmin Connect",
+          "maxLength": 256,
+          "type": "string"
+        },
+        "notes": {
+          "description": "the free-text note; an empty string clears it",
+          "maxLength": 1024,
+          "type": "string"
+        },
+        "usage_type": {
+          "description": "how usage is tracked, for example DISTANCE or TIME",
+          "maxLength": 32,
+          "pattern": "^[A-Za-z_]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "brand",
+        "first_use_date",
+        "gear_type",
+        "model",
+        "name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "brand": {
+          "description": "the brand",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "default_activity_types": {
+          "description": "its default activity types",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "first_use_date": {
+          "description": "the first use date",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "gear_type": {
+          "description": "the gear type",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "max_usage_distance_km": {
+          "description": "retirement distance, when set",
+          "type": [
+            "null",
+            "number"
+          ]
+        },
+        "max_usage_duration_min": {
+          "description": "retirement duration, when set",
+          "type": [
+            "null",
+            "number"
+          ]
+        },
+        "model": {
+          "description": "the model",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "description": "the name shown in Garmin Connect",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "notes": {
+          "description": "the note, when set",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "usage_type": {
+          "description": "how usage is tracked",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "uuid": {
+          "description": "the gear identifier",
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
     "name": "create_manual_activity",
     "tier": "write",
     "annotations": {
@@ -1539,6 +1710,55 @@
       "required": [
         "log_id",
         "message",
+        "status"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "delete_gear",
+    "tier": "destructive",
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Delete gear"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "gear_uuid": {
+          "description": "the UUID of the gear to delete, as get_gear returns it, with or without hyphens",
+          "maxLength": 36,
+          "pattern": "^([0-9a-fA-F]{32}|[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "gear_uuid"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "gear_uuid": {
+          "description": "the gear identifier",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "what happened, for example gear_retired",
+          "type": "string"
+        },
+        "status": {
+          "description": "the HTTP status Garmin answered with",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "gear_uuid",
+        "outcome",
         "status"
       ],
       "type": "object"
@@ -18678,6 +18898,64 @@
     }
   },
   {
+    "name": "set_gear_status",
+    "tier": "write",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Retire or reactivate gear"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "gear_uuid": {
+          "description": "the UUID of the gear to change, as get_gear returns it, with or without hyphens",
+          "maxLength": 36,
+          "pattern": "^([0-9a-fA-F]{32}|[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$",
+          "type": "string"
+        },
+        "status": {
+          "description": "the new gear status",
+          "enum": [
+            "active",
+            "retired"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "gear_uuid",
+        "status"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "gear_uuid": {
+          "description": "the gear identifier",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "what happened, for example gear_retired",
+          "type": "string"
+        },
+        "status": {
+          "description": "the HTTP status Garmin answered with",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "gear_uuid",
+        "outcome",
+        "status"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "set_heart_rate_zones",
     "tier": "write",
     "annotations": {
@@ -19263,6 +19541,179 @@
         },
         "serving_id": {
           "description": "the serving identifier, for log_custom_food",
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "update_gear",
+    "tier": "write",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Update gear"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "activity_type_keys": {
+          "description": "lowercase activity type keys, for example running, this gear is the default for. It replaces the current list; an empty list clears it",
+          "items": {
+            "maxLength": 32,
+            "pattern": "^[a-z0-9_]+$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "type": "array"
+        },
+        "brand": {
+          "description": "the brand, for example the shoe maker",
+          "maxLength": 256,
+          "type": "string"
+        },
+        "first_use_date": {
+          "description": "the date the gear was first used, in YYYY-MM-DD form",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "gear_type": {
+          "description": "the gear type, for example SHOES or BIKE",
+          "maxLength": 32,
+          "pattern": "^[A-Za-z_]+$",
+          "type": "string"
+        },
+        "gear_uuid": {
+          "description": "the UUID of the gear to update, as get_gear returns it, with or without hyphens",
+          "maxLength": 36,
+          "pattern": "^([0-9a-fA-F]{32}|[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$",
+          "type": "string"
+        },
+        "max_usage_distance_km": {
+          "description": "the retirement distance in kilometers; 0 removes it",
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "number"
+        },
+        "max_usage_duration_min": {
+          "description": "the retirement duration in minutes; 0 removes it",
+          "maximum": 16000000,
+          "minimum": 0,
+          "type": "number"
+        },
+        "model": {
+          "description": "the model name",
+          "maxLength": 256,
+          "type": "string"
+        },
+        "name": {
+          "description": "the name shown in Garmin Connect",
+          "maxLength": 256,
+          "type": "string"
+        },
+        "notes": {
+          "description": "the free-text note; an empty string clears it",
+          "maxLength": 1024,
+          "type": "string"
+        },
+        "usage_type": {
+          "description": "how usage is tracked, for example DISTANCE or TIME",
+          "maxLength": 32,
+          "pattern": "^[A-Za-z_]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "gear_uuid"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "brand": {
+          "description": "the brand",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "default_activity_types": {
+          "description": "its default activity types",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "first_use_date": {
+          "description": "the first use date",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "gear_type": {
+          "description": "the gear type",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "max_usage_distance_km": {
+          "description": "retirement distance, when set",
+          "type": [
+            "null",
+            "number"
+          ]
+        },
+        "max_usage_duration_min": {
+          "description": "retirement duration, when set",
+          "type": [
+            "null",
+            "number"
+          ]
+        },
+        "model": {
+          "description": "the model",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "description": "the name shown in Garmin Connect",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "notes": {
+          "description": "the note, when set",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "usage_type": {
+          "description": "how usage is tracked",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "uuid": {
+          "description": "the gear identifier",
           "type": [
             "null",
             "string"

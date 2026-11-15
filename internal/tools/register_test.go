@@ -160,6 +160,9 @@ var wantWriteToolNames = []string{
 	"set_perceived_effort",
 	"add_gear_to_activity",
 	"remove_gear_from_activity",
+	tools.ToolCreateGear,
+	tools.ToolUpdateGear,
+	tools.ToolSetGearStatus,
 	"create_manual_activity",
 	"set_activity_strength_exercise_sets",
 	tools.ToolCreateStrengthTrainingActivity,
@@ -184,6 +187,7 @@ var wantDestructiveToolNames = []string{
 	tools.ToolDeleteWeighIns,
 	tools.ToolDeleteCustomFood,
 	tools.ToolDeleteFoodLog,
+	tools.ToolDeleteGear,
 	"delete_activity",
 	"delete_workout",
 	"delete_workouts",
@@ -202,6 +206,7 @@ func wantToolNames() []string {
 // duplicate pre-check fails open.
 var nonIdempotentTools = []string{
 	"create_manual_activity",
+	tools.ToolCreateGear,
 	tools.ToolCreateStrengthTrainingActivity,
 	"upload_workout",
 	"upload_workouts",

@@ -320,4 +320,13 @@ var writesCoveredElsewhere = map[string]string{
 	tools.ToolUploadWorkout: "upload_workouts sends the same document to the same endpoint " +
 		"through the same api-layer method, and the batch form additionally proves the " +
 		"per-item reporting the single form has none of",
+	tools.ToolCreateGear:    gearLifecycleNotDriven,
+	tools.ToolUpdateGear:    gearLifecycleNotDriven,
+	tools.ToolSetGearStatus: gearLifecycleNotDriven,
+	tools.ToolDeleteGear:    gearLifecycleNotDriven,
 }
+
+// gearLifecycleNotDriven excuses the gear lifecycle tools: the write guard has no
+// ownership class for a gear item yet, so it refuses their paths. Until it has
+// one, they are verified by hand against a dedicated account.
+const gearLifecycleNotDriven = "the write guard has no gear-item ownership class yet"

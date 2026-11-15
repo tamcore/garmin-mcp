@@ -79,6 +79,10 @@ func additionsBeyondTheManifest() map[string]string {
 		tools.ToolGetStatsRange:                   "post-pin upstream addition: per-day calories and steps over a window",
 		tools.ToolCreateRunIntervalWorkout:        "post-pin upstream addition: repeat-based interval run builder",
 		tools.ToolGetRecoveryTimeRemaining:        "post-pin upstream addition: remaining recovery hours with fallbacks",
+		tools.ToolCreateGear:                      "python-garminconnect create_gear; absent from the pinned surface",
+		tools.ToolUpdateGear:                      "python-garminconnect update_gear; absent from the pinned surface",
+		tools.ToolSetGearStatus:                   "python-garminconnect set_gear_status; absent from the pinned surface",
+		tools.ToolDeleteGear:                      "python-garminconnect delete_gear; absent from the pinned surface",
 	}
 }
 
