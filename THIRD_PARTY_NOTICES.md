@@ -145,7 +145,7 @@ artifact.
 | `golang.org/x/net` | `v0.62.0` | `BSD-3-Clause` |
 | `golang.org/x/oauth2` | `v0.37.0` | `BSD-3-Clause` |
 | `golang.org/x/sync` | `v0.24.0` | `BSD-3-Clause` |
-| `golang.org/x/sys` | `v0.49.0` | `BSD-3-Clause` |
+| `golang.org/x/sys` | `v0.50.0` | `BSD-3-Clause` |
 | `golang.org/x/text` | `v0.43.0` | `BSD-3-Clause` |
 | `golang.org/x/time` | `v0.16.0` | `BSD-3-Clause` |
 | `google.golang.org/protobuf` | `v1.36.12` | `BSD-3-Clause` |
@@ -2709,7 +2709,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 ```
 
-### `golang.org/x/sys` v0.49.0
+### `golang.org/x/sys` v0.50.0
 
 SPDX identifier: `BSD-3-Clause`
 
