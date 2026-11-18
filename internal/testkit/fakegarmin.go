@@ -148,6 +148,7 @@ func (s *Server) Overrides() protocol.Overrides {
 		ConnectAPI:        base,
 		DIAuth:            base,
 		MobileIntegration: base,
+		GCX:               base,
 	}
 }
 

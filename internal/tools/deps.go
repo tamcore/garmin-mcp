@@ -207,6 +207,7 @@ type service struct {
 	challenges     *api.Challenges
 	writes         *api.ActivityWrites
 	gear           *api.Gear
+	dogs           *api.Dogs
 	workouts       *api.Workouts
 	calendar       *api.Calendar
 	strength       *api.StrengthWrites
@@ -295,6 +296,9 @@ func (s *service) buildWriteClients(rc *client.Client) error {
 	}
 	if s.gear, err = api.NewGear(rc); err != nil {
 		return fmt.Errorf("building the gear client: %w", err)
+	}
+	if s.dogs, err = api.NewDogs(rc); err != nil {
+		return fmt.Errorf("building the dog client: %w", err)
 	}
 	if s.workouts, err = api.NewWorkouts(rc); err != nil {
 		return fmt.Errorf("building the workout client: %w", err)

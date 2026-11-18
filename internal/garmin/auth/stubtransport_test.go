@@ -131,6 +131,7 @@ func offlineHosts(t *testing.T) protocol.Hosts {
 		ConnectAPI:        "https://connectapi.example.invalid",
 		DIAuth:            "https://diauth.example.invalid",
 		MobileIntegration: "https://mobile.example.invalid",
+		GCX:               "https://gcx.example.invalid",
 	})
 }
 

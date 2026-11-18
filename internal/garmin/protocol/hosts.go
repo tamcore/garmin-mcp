@@ -15,6 +15,7 @@ type Overrides struct {
 	ConnectAPI        string
 	DIAuth            string
 	MobileIntegration string
+	GCX               string
 }
 
 // Hosts builds absolute Garmin URLs for one domain. Construct it with NewHosts or
@@ -27,6 +28,7 @@ type Hosts struct {
 	connectAPI        string
 	diAuth            string
 	mobileIntegration string
+	gcx               string
 }
 
 // NewHosts derives the SSO, connect, connectapi, diauth and mobile-integration
@@ -72,6 +74,7 @@ func NewHostsForValidatedDomain(validated ValidatedDomain) Hosts {
 		connectAPI:        "https://connectapi." + string(d),
 		diAuth:            "https://diauth." + string(d),
 		mobileIntegration: "https://mobile.integration." + string(d),
+		gcx:               "https://gcx." + string(d),
 	}
 }
 
@@ -85,6 +88,7 @@ func (h Hosts) WithOverrides(o Overrides) Hosts {
 	out.connectAPI = pick(o.ConnectAPI, h.connectAPI)
 	out.diAuth = pick(o.DIAuth, h.diAuth)
 	out.mobileIntegration = pick(o.MobileIntegration, h.mobileIntegration)
+	out.gcx = pick(o.GCX, h.gcx)
 	return out
 }
 
@@ -106,6 +110,11 @@ func (h Hosts) DIAuthBase() string { return h.diAuth }
 
 // MobileIntegrationBase is the CAS service host for the mobile app flows.
 func (h Hosts) MobileIntegrationBase() string { return h.mobileIntegration }
+
+// GCXBase is the family and pet profile API base. Source: the web app's gcx
+// client (connect.garmin.com 5.31.2.3), which the browser reaches through the
+// /gcx-api/ proxy.
+func (h Hosts) GCXBase() string { return h.gcx }
 
 // MobileLoginURL is the iOS JSON login endpoint. Credentials belong in the JSON
 // body, never in the query string.

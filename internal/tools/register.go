@@ -205,6 +205,11 @@ func readOnlyRegistrations() []registration {
 		{getPrimaryTrainingDeviceContract, registerGetPrimaryTrainingDevice},
 		{getDeviceSolarDataContract, registerGetDeviceSolarData},
 		{getDeviceAlarmsContract, registerGetDeviceAlarms},
+
+		// Dogs.
+		{getDogsContract, registerGetDogs},
+		{getDogBreedsContract, registerGetDogBreeds},
+		{getDogActivityStatsContract, registerGetDogActivityStats},
 		{getGearContract, registerGetGear},
 
 		// Women's health.
@@ -266,6 +271,10 @@ func writeRegistrations() []registration {
 		{createGearContract, registerCreateGear},
 		{updateGearContract, registerUpdateGear},
 		{setGearStatusContract, registerSetGearStatus},
+		{createDogContract, registerCreateDog},
+		{updateDogContract, registerUpdateDog},
+		{setDogStatusContract, registerSetDogStatus},
+		{setActivityDogsContract, registerSetActivityDogs},
 		{createManualActivityContract, registerCreateManualActivity},
 		{setActivityStrengthExerciseSetsContract, registerSetActivityStrengthExerciseSets},
 		{createStrengthTrainingActivityContract, registerCreateStrengthTrainingActivity},
@@ -303,6 +312,9 @@ func destructiveRegistrations() []registration {
 
 		// Gear: the removal.
 		{deleteGearContract, registerDeleteGear},
+
+		// Dogs: the removal.
+		{deleteDogContract, registerDeleteDog},
 
 		{deleteActivityContract, registerDeleteActivity},
 		{deleteWorkoutContract, registerDeleteWorkout},

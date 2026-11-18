@@ -17,6 +17,7 @@ func TestNewHostsBases(t *testing.T) {
 		wantConnectAPI string
 		wantDIAuth     string
 		wantIOSService string
+		wantGCX        string
 	}{
 		{
 			name:           "global",
@@ -26,6 +27,7 @@ func TestNewHostsBases(t *testing.T) {
 			wantConnectAPI: "https://connectapi.garmin.com",
 			wantDIAuth:     "https://diauth.garmin.com",
 			wantIOSService: "https://mobile.integration.garmin.com/gcm/ios",
+			wantGCX:        "https://gcx.garmin.com",
 		},
 		{
 			name:           "china",
@@ -35,6 +37,7 @@ func TestNewHostsBases(t *testing.T) {
 			wantConnectAPI: "https://connectapi.garmin.cn",
 			wantDIAuth:     "https://diauth.garmin.cn",
 			wantIOSService: "https://mobile.integration.garmin.cn/gcm/ios",
+			wantGCX:        "https://gcx.garmin.cn",
 		},
 	}
 
@@ -50,6 +53,7 @@ func TestNewHostsBases(t *testing.T) {
 			assertEqual(t, "ConnectAPIBase", h.ConnectAPIBase(), tc.wantConnectAPI)
 			assertEqual(t, "DIAuthBase", h.DIAuthBase(), tc.wantDIAuth)
 			assertEqual(t, "IOSServiceURL", h.IOSServiceURL(), tc.wantIOSService)
+			assertEqual(t, "GCXBase", h.GCXBase(), tc.wantGCX)
 		})
 	}
 }
@@ -118,6 +122,7 @@ func assertZeroHosts(t *testing.T, h Hosts) {
 		"ConnectAPIBase":          h.ConnectAPIBase(),
 		"DIAuthBase":              h.DIAuthBase(),
 		"MobileIntegrationBase":   h.MobileIntegrationBase(),
+		"GCXBase":                 h.GCXBase(),
 		"MobileLoginURL":          h.MobileLoginURL(),
 		"PortalLoginURL":          h.PortalLoginURL(),
 		"PortalSignInPageURL":     h.PortalSignInPageURL(),

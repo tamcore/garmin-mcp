@@ -130,3 +130,32 @@ func TestDoSendsSecFetchSiteOnlyForASameOriginRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestDoSendsAGCXRequestToTheGCXHost(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		gcx  bool
+		want string
+	}{
+		{name: "default", gcx: false, want: "connectapi.garmin.com"},
+		{name: "gcx", gcx: true, want: "gcx.garmin.com"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ok := stubOutcome{status: http.StatusOK, header: jsonHeader(), body: []byte(profileBody)}
+			caller := &stubCaller{outcomes: []stubOutcome{ok}}
+			req := profileRequest()
+			req.GCX = tc.gcx
+			if _, err := newTestClient(t, client.Limits{}).Do(t.Context(), mustSession(t, caller), req); err != nil {
+				t.Fatalf("Do() = %v", err)
+			}
+			if got := caller.lastRequest(t).URL.Host; got != tc.want {
+				t.Errorf("host = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

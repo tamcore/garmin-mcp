@@ -56,6 +56,10 @@ func loadManifest(t *testing.T) map[string]manifestTool {
 // unmerged upstream proposals, while others preserve useful behavior from the legacy
 // server or python-garminconnect. Naming them here is what keeps the drift test honest:
 // any other unlisted name is still a failure.
+// webAppDogs excuses the dog tools: Garmin added dog profiles after the pin, and
+// no upstream project carries them yet.
+const webAppDogs = "Garmin Connect web app dog profiles; absent from every upstream"
+
 func additionsBeyondTheManifest() map[string]string {
 	return map[string]string{
 		tools.ToolGarminAuthStatus:                "legacy runtime-auth status; absent from the pinned surface",
@@ -83,6 +87,14 @@ func additionsBeyondTheManifest() map[string]string {
 		tools.ToolUpdateGear:                      "python-garminconnect update_gear; absent from the pinned surface",
 		tools.ToolSetGearStatus:                   "python-garminconnect set_gear_status; absent from the pinned surface",
 		tools.ToolDeleteGear:                      "python-garminconnect delete_gear; absent from the pinned surface",
+		tools.ToolGetDogs:                         webAppDogs,
+		tools.ToolGetDogBreeds:                    webAppDogs,
+		tools.ToolGetDogActivityStats:             webAppDogs,
+		tools.ToolCreateDog:                       webAppDogs,
+		tools.ToolUpdateDog:                       webAppDogs,
+		tools.ToolSetDogStatus:                    webAppDogs,
+		tools.ToolDeleteDog:                       webAppDogs,
+		tools.ToolSetActivityDogs:                 webAppDogs,
 	}
 }
 

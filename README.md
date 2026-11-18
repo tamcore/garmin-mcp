@@ -175,7 +175,7 @@ It needs no Garmin account, no token and no database:
 
 ```console
 $ garmin-mcp tools list | grep ' tools:'
-163 tools: 112 read-only, 41 write, 10 destructive
+171 tools: 115 read-only, 45 write, 11 destructive
 ```
 
 ## Safety defaults

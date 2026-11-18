@@ -573,6 +573,151 @@
     }
   },
   {
+    "name": "create_dog",
+    "tier": "write",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Create a dog"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "birthdate": {
+          "description": "the birth date, in YYYY-MM-DD form",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "gender": {
+          "description": "the dog's sex",
+          "enum": [
+            "male",
+            "female"
+          ],
+          "type": "string"
+        },
+        "is_neutered": {
+          "description": "whether the dog is neutered",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "the dog's name",
+          "maxLength": 64,
+          "type": "string"
+        },
+        "primary_breed_id": {
+          "description": "the primary breed identifier from get_dog_breeds",
+          "maximum": 1000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "secondary_breed_ids": {
+          "description": "other breed identifiers from get_dog_breeds. It replaces the current list; an empty list clears it",
+          "items": {
+            "maximum": 1000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 16,
+          "type": "array"
+        },
+        "weight_kg": {
+          "description": "the weight in kilograms",
+          "maximum": 200,
+          "minimum": 0.1,
+          "type": "number"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "birthdate": {
+          "description": "the birth date, YYYY-MM-DD",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "birthdate_precision": {
+          "description": "day or month",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "dog_id": {
+          "description": "the dog profile identifier",
+          "type": "integer"
+        },
+        "gender": {
+          "description": "male or female, when set",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "is_neutered": {
+          "description": "whether the dog is neutered, when set",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "name": {
+          "description": "the dog's name",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "primary_breed_id": {
+          "description": "the primary breed, from get_dog_breeds",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "secondary_breed_ids": {
+          "description": "other breeds",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "description": "active or retired",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "weight_kg": {
+          "description": "the weight in kilograms, when set",
+          "type": [
+            "null",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "dog_id"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "create_gear",
     "tier": "write",
     "annotations": {
@@ -1655,6 +1800,54 @@
       "required": [
         "food_id",
         "message",
+        "status"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "delete_dog",
+    "tier": "destructive",
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Delete a dog"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "dog_id": {
+          "description": "the dog profile identifier to delete, from get_dogs",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dog_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "dog_id": {
+          "description": "the dog profile identifier",
+          "type": "integer"
+        },
+        "outcome": {
+          "description": "what happened, for example dog_retired",
+          "type": "string"
+        },
+        "status": {
+          "description": "the HTTP status Garmin answered with",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dog_id",
+        "outcome",
         "status"
       ],
       "type": "object"
@@ -8269,6 +8462,295 @@
         "devices",
         "count",
         "truncated"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_dog_activity_stats",
+    "tier": "read-only",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Get dog activity stats"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "dogs": {
+          "description": "per dog",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "activities": {
+                "description": "the number of activities",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "distance_meters": {
+                "description": "the total distance in meters",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              },
+              "dog_id": {
+                "description": "the dog; absent on the all-dogs total",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "duration_seconds": {
+                "description": "the total duration in seconds",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              },
+              "last_activity_gmt": {
+                "description": "the most recent activity start, GMT",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "total": {
+          "additionalProperties": false,
+          "description": "all activities with any dog",
+          "properties": {
+            "activities": {
+              "description": "the number of activities",
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "distance_meters": {
+              "description": "the total distance in meters",
+              "type": [
+                "null",
+                "number"
+              ]
+            },
+            "dog_id": {
+              "description": "the dog; absent on the all-dogs total",
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "duration_seconds": {
+              "description": "the total duration in seconds",
+              "type": [
+                "null",
+                "number"
+              ]
+            },
+            "last_activity_gmt": {
+              "description": "the most recent activity start, GMT",
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "total",
+        "dogs"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_dog_breeds",
+    "tier": "read-only",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Get dog breeds"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "breeds": {
+          "description": "the breed catalog, by identifier",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "breed_id": {
+                "description": "the breed identifier",
+                "type": "integer"
+              },
+              "key": {
+                "description": "the breed key, for example DOG_BREED_BEAGLE",
+                "type": "string"
+              }
+            },
+            "required": [
+              "breed_id",
+              "key"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "breeds"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_dogs",
+    "tier": "read-only",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Get dogs"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "description": "only dogs with this status; omit for all",
+          "enum": [
+            "active",
+            "retired"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "dogs": {
+          "description": "the dog profiles",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "birthdate": {
+                "description": "the birth date, YYYY-MM-DD",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "birthdate_precision": {
+                "description": "day or month",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "dog_id": {
+                "description": "the dog profile identifier",
+                "type": "integer"
+              },
+              "gender": {
+                "description": "male or female, when set",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "is_neutered": {
+                "description": "whether the dog is neutered, when set",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "name": {
+                "description": "the dog's name",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "primary_breed_id": {
+                "description": "the primary breed, from get_dog_breeds",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "secondary_breed_ids": {
+                "description": "other breeds",
+                "items": {
+                  "type": "integer"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "status": {
+                "description": "active or retired",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "weight_kg": {
+                "description": "the weight in kilograms, when set",
+                "type": [
+                  "null",
+                  "number"
+                ]
+              }
+            },
+            "required": [
+              "dog_id"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "dogs"
       ],
       "type": "object"
     }
@@ -18346,6 +18828,72 @@
     }
   },
   {
+    "name": "set_activity_dogs",
+    "tier": "write",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Set the dogs on an activity"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "activity_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "the Garmin activity identifier, as a positive number or decimal string",
+          "maxLength": 19,
+          "minimum": 1
+        },
+        "dog_ids": {
+          "description": "the dog profile identifiers, from get_dogs; empty for none",
+          "items": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 10,
+          "type": "array"
+        }
+      },
+      "required": [
+        "activity_id",
+        "dog_ids"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "activity_id": {
+          "description": "the activity that was updated",
+          "type": "integer"
+        },
+        "status": {
+          "description": "the HTTP status Garmin answered the write with",
+          "type": "integer"
+        },
+        "updated": {
+          "description": "which field of the activity was written",
+          "type": "string"
+        }
+      },
+      "required": [
+        "activity_id",
+        "updated",
+        "status"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "set_activity_event_type",
     "tier": "write",
     "annotations": {
@@ -18893,6 +19441,63 @@
         "pulse",
         "status",
         "message"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "set_dog_status",
+    "tier": "write",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Retire or reactivate a dog"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "dog_id": {
+          "description": "the dog profile identifier to change, from get_dogs",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "status": {
+          "description": "the new dog status",
+          "enum": [
+            "active",
+            "retired"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "dog_id",
+        "status"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "dog_id": {
+          "description": "the dog profile identifier",
+          "type": "integer"
+        },
+        "outcome": {
+          "description": "what happened, for example dog_retired",
+          "type": "string"
+        },
+        "status": {
+          "description": "the HTTP status Garmin answered with",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dog_id",
+        "outcome",
+        "status"
       ],
       "type": "object"
     }
@@ -19547,6 +20152,156 @@
           ]
         }
       },
+      "type": "object"
+    }
+  },
+  {
+    "name": "update_dog",
+    "tier": "write",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Update a dog"
+    },
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "birthdate": {
+          "description": "the birth date, in YYYY-MM-DD form",
+          "format": "date",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "dog_id": {
+          "description": "the dog profile identifier to update, from get_dogs",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "gender": {
+          "description": "the dog's sex",
+          "enum": [
+            "male",
+            "female"
+          ],
+          "type": "string"
+        },
+        "is_neutered": {
+          "description": "whether the dog is neutered",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "the dog's name",
+          "maxLength": 64,
+          "type": "string"
+        },
+        "primary_breed_id": {
+          "description": "the primary breed identifier from get_dog_breeds",
+          "maximum": 1000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "secondary_breed_ids": {
+          "description": "other breed identifiers from get_dog_breeds. It replaces the current list; an empty list clears it",
+          "items": {
+            "maximum": 1000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 16,
+          "type": "array"
+        },
+        "weight_kg": {
+          "description": "the weight in kilograms",
+          "maximum": 200,
+          "minimum": 0.1,
+          "type": "number"
+        }
+      },
+      "required": [
+        "dog_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "birthdate": {
+          "description": "the birth date, YYYY-MM-DD",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "birthdate_precision": {
+          "description": "day or month",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "dog_id": {
+          "description": "the dog profile identifier",
+          "type": "integer"
+        },
+        "gender": {
+          "description": "male or female, when set",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "is_neutered": {
+          "description": "whether the dog is neutered, when set",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "name": {
+          "description": "the dog's name",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "primary_breed_id": {
+          "description": "the primary breed, from get_dog_breeds",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "secondary_breed_ids": {
+          "description": "other breeds",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "description": "active or retired",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "weight_kg": {
+          "description": "the weight in kilograms, when set",
+          "type": [
+            "null",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "dog_id"
+      ],
       "type": "object"
     }
   },

@@ -234,7 +234,11 @@ const (
 // replay the request after a token refresh, and asks for gzip explicitly so this
 // package, not the transport, owns the decompression bound.
 func (c *Client) newHTTPRequest(ctx context.Context, req Request) (*http.Request, error) {
-	target := req.requestURL(c.hosts.ConnectAPIBase())
+	base := c.hosts.ConnectAPIBase()
+	if req.GCX {
+		base = c.hosts.GCXBase()
+	}
+	target := req.requestURL(base)
 
 	var reader io.Reader
 	if len(req.Body) > 0 {

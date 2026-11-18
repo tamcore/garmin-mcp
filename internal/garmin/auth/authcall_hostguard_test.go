@@ -104,6 +104,7 @@ func TestDoAllowsEveryConfiguredBase(t *testing.T) {
 		"connectapi":         hosts.ConnectAPIBase(),
 		"diauth":             hosts.DIAuthBase(),
 		"mobile integration": hosts.MobileIntegrationBase(),
+		"gcx":                hosts.GCXBase(),
 	}
 
 	for name, base := range bases {
