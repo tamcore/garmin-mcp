@@ -24,7 +24,7 @@ type originAllowlist struct {
 }
 
 // newOriginAllowlist collects the origins of every base hosts exposes: SSO,
-// Connect, ConnectAPI, DIAuth and the mobile integration host. A base that is
+// Connect, ConnectAPI, DIAuth, the mobile integration host and GCX. A base that is
 // empty or unparsable contributes nothing, so a zero Hosts yields an allowlist
 // that permits nothing.
 func newOriginAllowlist(hosts protocol.Hosts) originAllowlist {
@@ -34,6 +34,7 @@ func newOriginAllowlist(hosts protocol.Hosts) originAllowlist {
 		hosts.ConnectAPIBase(),
 		hosts.DIAuthBase(),
 		hosts.MobileIntegrationBase(),
+		hosts.GCXBase(),
 	}
 
 	origins := make(map[string]struct{}, len(bases))

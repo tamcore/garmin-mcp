@@ -24,6 +24,9 @@ func deviceShapes() map[string][]string {
 		tools.ToolGetGear: {
 			"gear_count", "active_count", "retired_count", "defaults", "gear", keyTruncated,
 		},
-		tools.ToolGetDeviceSolarData: {argDeviceID, "solar_data", keyCount, keyTruncated},
+		tools.ToolGetDeviceSolarData:  {argDeviceID, "solar_data", keyCount, keyTruncated},
+		tools.ToolGetDogs:             {"dogs"},
+		tools.ToolGetDogBreeds:        {"breeds"},
+		tools.ToolGetDogActivityStats: {"total", "dogs"},
 	}
 }

@@ -103,6 +103,8 @@ type Request struct {
 	FileTransfer bool
 	// SameOrigin sends Sec-Fetch-Site: same-origin; a flag, so no caller can set other headers.
 	SameOrigin bool
+	// GCX sends the request to the GCX host instead of connectapi.
+	GCX bool
 }
 
 // method is the effective HTTP method.

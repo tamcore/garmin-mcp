@@ -238,13 +238,13 @@ func knownEndpoints() []Endpoint {
 	return slices.Concat(
 		coreEndpoints(), healthEndpoints(), trainingEndpoints(), nutritionEndpoints(), challengesEndpoints(),
 		devicesEndpoints(), weightEndpoints(), womensHealthEndpoints(),
-		courseEndpoints(), dataManagementEndpoints(),
+		courseEndpoints(), dataManagementEndpoints(), dogsEndpoints(),
 	)
 }
 
 func knownOps() []Op {
 	return slices.Concat(
 		coreOps(), healthOps(), trainingOps(), nutritionOps(), challengesOps(), devicesOps(), weightOps(),
-		womensHealthOps(), courseOps(), dataManagementOps(),
+		womensHealthOps(), courseOps(), dataManagementOps(), dogsOps(),
 	)
 }

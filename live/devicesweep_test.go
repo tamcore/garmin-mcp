@@ -16,7 +16,7 @@ import (
 // get_device_settings accepts optionally.
 const argDeviceID = "device_id"
 
-// deviceCalls are the device tools that need no device identifier: each takes no
+// deviceCalls are the device, gear and dog tools that need no device identifier: each takes no
 // argument, or get_device_settings, which defaults to the account's most recently
 // used device when device_id is omitted.
 func deviceCalls() []sweepCall {
@@ -26,6 +26,9 @@ func deviceCalls() []sweepCall {
 		{tools.ToolGetPrimaryTrainingDevice, map[string]any{}},
 		{tools.ToolGetDeviceAlarms, map[string]any{}},
 		{tools.ToolGetGear, map[string]any{}},
+		{tools.ToolGetDogs, map[string]any{}},
+		{tools.ToolGetDogBreeds, map[string]any{}},
+		{tools.ToolGetDogActivityStats, map[string]any{}},
 	}
 }
 
