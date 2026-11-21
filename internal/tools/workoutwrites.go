@@ -45,6 +45,11 @@ func newSavedWorkoutResult(saved api.SavedWorkout) (SavedWorkoutResult, error) {
 	return SavedWorkoutResult{WorkoutID: id.Int64(), Name: name}, nil
 }
 
+// rangeTargetOrderNote tells a caller that either order of a range target is safe.
+const rangeTargetOrderNote = ". A reversed pace.zone, speed.zone or heart.rate.zone " +
+	"range is stored the way Garmin Connect writes it: pace faster first, speed and " +
+	"heart rate lower first. A range already in that order is sent unchanged"
+
 // workoutDataProperty declares one caller-supplied workout document.
 func workoutDataProperty(name, description string) Property {
 	return Property{
@@ -56,8 +61,8 @@ func workoutDataProperty(name, description string) Property {
 }
 
 // uploadWorkoutInput is the single-upload argument set. The document is carried
-// verbatim: Garmin owns the workout schema and it drifts, so this server validates
-// that it is a well-formed, bounded JSON object and nothing more.
+// verbatim apart from range-target order: Garmin owns the workout schema and it
+// drifts, so this server validates that it is a well-formed, bounded JSON object.
 type uploadWorkoutInput struct {
 	WorkoutData json.RawMessage `json:"workout_data" jsonschema:"the Garmin workout document"`
 }
@@ -70,7 +75,7 @@ func uploadWorkoutContract() Contract {
 			Description: "create one workout in Garmin Connect from a Garmin workout " +
 				"document. It creates a new workout every time it is called, so a repeat " +
 				"after a transport failure creates a second workout: read get_workouts " +
-				"before calling again",
+				"before calling again" + rangeTargetOrderNote,
 			Tier:        policy.TierWrite,
 			Category:    categoryHealth,
 			Annotations: writeAnnotations(false),
@@ -130,7 +135,8 @@ func uploadWorkoutsContract() Contract {
 			Title: "Upload several workouts",
 			Description: "create several workouts in one call. Each document is uploaded on " +
 				"its own, so one rejection does not abandon the rest, and every item is " +
-				"reported separately. It creates new workouts every time it is called",
+				"reported separately. It creates new workouts every time it is called" +
+				rangeTargetOrderNote,
 			Tier:        policy.TierWrite,
 			Category:    categoryHealth,
 			Annotations: writeAnnotations(false),
@@ -201,7 +207,8 @@ func updateWorkoutContract() Contract {
 			Description: "replace one workout's content while keeping its identifier, so any " +
 				"calendar entry that already points at it stays valid. The identifier in the " +
 				"document is forced to match the one in the path, and the saved name and " +
-				"identifier Garmin reports back are what this tool returns",
+				"identifier Garmin reports back are what this tool returns" +
+				rangeTargetOrderNote,
 			Tier:        policy.TierWrite,
 			Category:    categoryHealth,
 			Annotations: writeAnnotations(true),
