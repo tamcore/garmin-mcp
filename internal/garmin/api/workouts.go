@@ -39,7 +39,8 @@ func NewWorkouts(rc *client.Client) (*Workouts, error) {
 // interpret: Garmin owns the workout schema and it drifts, so the document is
 // carried verbatim. What is enforced here is everything that does not depend on
 // that schema — it is well-formed JSON, it is an object or an array, and it fits
-// inside MaxRequestBodyBytes.
+// inside MaxRequestBodyBytes. The one exception is range-target order; see
+// orderRangeTargets.
 type WorkoutDocument struct {
 	body []byte
 }
