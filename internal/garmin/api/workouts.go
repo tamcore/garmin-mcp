@@ -61,7 +61,11 @@ func ParseWorkoutDocument(body []byte) (WorkoutDocument, error) {
 		return WorkoutDocument{}, fmt.Errorf("%w: a workout document must be valid JSON",
 			client.ErrValidation)
 	}
-	return WorkoutDocument{body: bytes.Clone(trimmed)}, nil
+	ordered, err := orderRangeTargets(trimmed)
+	if err != nil {
+		return WorkoutDocument{}, err
+	}
+	return WorkoutDocument{body: bytes.Clone(ordered)}, nil
 }
 
 // IsZero reports whether the document is unset.
