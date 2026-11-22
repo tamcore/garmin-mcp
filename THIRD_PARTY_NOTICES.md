@@ -152,7 +152,7 @@ artifact.
 | `modernc.org/libc` | `v1.80.1` | `BSD-3-Clause` |
 | `modernc.org/mathutil` | `v1.7.1` | `BSD-3-Clause` |
 | `modernc.org/memory` | `v1.12.1` | `BSD-3-Clause` |
-| `modernc.org/sqlite` | `v1.62.0` | `BSD-3-Clause` |
+| `modernc.org/sqlite` | `v1.63.0` | `BSD-3-Clause` |
 
 43 modules. Every licence was read from the module cache;
 none was inferred.
@@ -3450,7 +3450,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 https://commons.wikimedia.org/wiki/File:Memory_infra_logo.png
 ```
 
-### `modernc.org/sqlite` v1.62.0
+### `modernc.org/sqlite` v1.63.0
 
 SPDX identifier: `BSD-3-Clause`
 
